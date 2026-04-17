@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes the current rule catalog for `react-css-scanner` and keeps a few near-term future candidates visible without treating them as implemented behavior.
+This document describes the current rule catalog for `scan-react-css` and keeps a few near-term future candidates visible without treating them as implemented behavior.
 
 ## Rule design principles
 

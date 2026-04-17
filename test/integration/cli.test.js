@@ -7,7 +7,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { runCli } from "../support/cliTestUtils.js";
 
 async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-cli-test-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "scan-react-css-cli-test-"));
 
   try {
     await writeProjectFile(
@@ -77,7 +77,7 @@ test("CLI treats the positional path as the project root for config discovery", 
     await writeProjectFile(tempDir, "apps/web/src/styles/global.css", ".app-shell {}");
     await writeProjectFile(
       tempDir,
-      "apps/web/react-css-scanner.json",
+      "apps/web/scan-react-css.json",
       `${JSON.stringify({ rootDir: ".", css: { global: ["src/styles/global.css"] } }, null, 2)}\n`,
     );
 
@@ -121,12 +121,12 @@ test("CLI resolves explicit config paths from the current working directory when
     await writeProjectFile(tempDir, "apps/web/src/styles/global.css", ".app-shell {}");
     await writeProjectFile(
       tempDir,
-      "react-css-scanner.json",
+      "scan-react-css.json",
       `${JSON.stringify({ rootDir: "apps/web", css: { global: ["src/styles/global.css"] } }, null, 2)}\n`,
     );
 
     const result = await runCli(
-      ["--focus", "apps/web/src", "--config", "react-css-scanner.json"],
+      ["--focus", "apps/web/src", "--config", "scan-react-css.json"],
       tempDir,
     );
 
@@ -163,7 +163,7 @@ test("CLI focus filters findings while retaining full-project indexing", async (
     );
     await writeProjectFile(
       tempDir,
-      "apps/web/react-css-scanner.json",
+      "apps/web/scan-react-css.json",
       `${JSON.stringify({ rootDir: ".", ownership: { namingConvention: "sibling" } }, null, 2)}\n`,
     );
 

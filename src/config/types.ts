@@ -23,7 +23,7 @@ export type RuleConfigObject = {
 
 export type RuleConfigValue = RuleSeverity | RuleConfigObject;
 
-export type RawReactCssScannerConfig = {
+export type RawScanReactCssConfig = {
   $schema?: string;
   rootDir?: string;
   source?: {
@@ -62,7 +62,7 @@ export type RawReactCssScannerConfig = {
   rules?: Record<string, RuleConfigValue>;
 };
 
-export type ResolvedReactCssScannerConfig = {
+export type ResolvedScanReactCssConfig = {
   rootDir: string;
   source: {
     include: string[];
@@ -96,7 +96,7 @@ export type ResolvedReactCssScannerConfig = {
   rules: Record<string, RuleConfigValue>;
 };
 
-export const DEFAULT_CONFIG: ResolvedReactCssScannerConfig = {
+export const DEFAULT_CONFIG: ResolvedScanReactCssConfig = {
   rootDir: ".",
   source: {
     include: [],

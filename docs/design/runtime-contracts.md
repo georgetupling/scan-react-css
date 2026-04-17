@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the main runtime-facing contracts for `react-css-scanner`.
+This document defines the main runtime-facing contracts for `scan-react-css`.
 
 It is the operational companion to:
 
@@ -27,9 +27,9 @@ Both use the same analysis engine and the same finding model.
 The scanner resolves config in this order:
 
 1. explicit CLI or API config path
-2. project-root `react-css-scanner.json`
-3. `REACT_CSS_SCANNER_CONFIG_DIR/react-css-scanner.json`
-4. first `react-css-scanner.json` found on the OS `PATH`
+2. project-root `scan-react-css.json`
+3. `SCAN_REACT_CSS_CONFIG_DIR/scan-react-css.json`
+4. first `scan-react-css.json` found on the OS `PATH`
 5. built-in defaults
 
 ### Resolution behavior
@@ -44,18 +44,18 @@ The scanner resolves config in this order:
 ### Core command
 
 ```bash
-react-css-scanner
+scan-react-css
 ```
 
 ### Supported syntax
 
 ```bash
-react-css-scanner [targetPath] [--focus path/to/focus] [--config path/to/react-css-scanner.json] [--json] [--output-min-severity warning] [--output-file ./reports/react-css-scanner.json] [--overwrite-output] [--config-summary default] [--output-mode default]
+scan-react-css [targetPath] [--focus path/to/focus] [--config path/to/scan-react-css.json] [--json] [--output-min-severity warning] [--output-file ./reports/scan-react-css.json] [--overwrite-output] [--config-summary default] [--output-mode default]
 ```
 
 ### Supported flags
 
-- `--config path/to/react-css-scanner.json`
+- `--config path/to/scan-react-css.json`
 - `--focus path/to/focus`
 - `--json`
 - `--output-min-severity info|warning|error`
@@ -95,12 +95,12 @@ type ScanInput = {
   targetPath?: string;
   focusPath?: string;
   configPath?: string;
-  config?: RawReactCssScannerConfig;
+  config?: RawScanReactCssConfig;
   cwd?: string;
 };
 
 type ScanResult = {
-  config: ResolvedReactCssScannerConfig;
+  config: ResolvedScanReactCssConfig;
   configSource: ResolvedConfigSource;
   operationalWarnings: string[];
   findings: Finding[];

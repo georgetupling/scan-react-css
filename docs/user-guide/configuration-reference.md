@@ -1,12 +1,12 @@
 # Configuration Reference
 
-This page lists every supported configuration option in `react-css-scanner.json`.
+This page lists every supported configuration option in `scan-react-css.json`.
 
 ## Top-Level Shape
 
 ```json
 {
-  "$schema": "./node_modules/react-css-scanner/schema.json",
+  "$schema": "./node_modules/scan-react-css/schema.json",
   "rootDir": ".",
   "source": {
     "exclude": ["dist", "build", "coverage", "node_modules"]
@@ -48,7 +48,7 @@ Example:
 
 ```json
 {
-  "$schema": "./node_modules/react-css-scanner/schema.json"
+  "$schema": "./node_modules/scan-react-css/schema.json"
 }
 ```
 

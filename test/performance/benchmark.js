@@ -4,7 +4,7 @@ import {
   buildProjectModel,
   buildScanSummary,
   extractProjectFacts,
-  normalizeReactCssScannerConfig,
+  normalizeScanReactCssConfig,
   runRules,
 } from "../../dist/index.js";
 import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
@@ -38,7 +38,7 @@ for (const scenario of SCENARIOS) {
   const project = await builder.build();
 
   try {
-    const config = normalizeReactCssScannerConfig({});
+    const config = normalizeScanReactCssConfig({});
 
     const factsStart = performance.now();
     const facts = await extractProjectFacts(config, project.rootDir);

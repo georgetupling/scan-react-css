@@ -5,11 +5,11 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import {
   buildProjectModel,
   extractProjectFacts,
-  normalizeReactCssScannerConfig,
+  normalizeScanReactCssConfig,
   runRules,
 } from "../../dist/index.js";
 
-export async function withRuleTempDir(run, prefix = "react-css-scanner-rule-test-") {
+export async function withRuleTempDir(run, prefix = "scan-react-css-rule-test-") {
   const tempDir = await mkdtemp(path.join(os.tmpdir(), prefix));
 
   try {
@@ -31,7 +31,7 @@ export async function writeProjectFile(rootDir, relativePath, content) {
 }
 
 export async function runRuleScenario(tempDir, configOverride = {}) {
-  const config = normalizeReactCssScannerConfig(configOverride);
+  const config = normalizeScanReactCssConfig(configOverride);
   const facts = await extractProjectFacts(config, tempDir);
   const model = buildProjectModel({ config, facts });
   return runRules(model).findings;

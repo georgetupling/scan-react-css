@@ -1,6 +1,6 @@
 # User Guide
 
-This section is the user-facing documentation for `react-css-scanner`.
+This section is the user-facing documentation for `scan-react-css`.
 
 If you are just getting started, read these in order:
 

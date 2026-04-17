@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document describes a proposed architecture for `react-css-scanner` as a standalone React/CSS analysis tool.
+This document describes a proposed architecture for `scan-react-css` as a standalone React/CSS analysis tool.
 
 The goal is to support:
 

@@ -79,11 +79,11 @@ export class TestProjectBuilder {
   }
 
   withConfig(config) {
-    return this.withFile("react-css-scanner.json", `${JSON.stringify(config, null, 2)}\n`);
+    return this.withFile("scan-react-css.json", `${JSON.stringify(config, null, 2)}\n`);
   }
 
   async build() {
-    const rootDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-integration-test-"));
+    const rootDir = await mkdtemp(path.join(os.tmpdir(), "scan-react-css-integration-test-"));
     const templateFiles = TEMPLATE_FILES[this.#selectedTemplate];
 
     for (const [relativePath, content] of Object.entries(templateFiles)) {

@@ -6,13 +6,13 @@ import { mkdtemp, mkdir, writeFile, rm } from "node:fs/promises";
 
 import {
   DEFAULT_CONFIG,
-  ReactCssScannerConfigError,
-  loadReactCssScannerConfig,
-  normalizeReactCssScannerConfig,
+  ScanReactCssConfigError,
+  loadScanReactCssConfig,
+  normalizeScanReactCssConfig,
 } from "../../dist/index.js";
 
 async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-config-test-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "scan-react-css-config-test-"));
 
   try {
     await run(tempDir);
@@ -28,14 +28,14 @@ async function writeJson(filePath, value) {
 
 test("explicit config path overrides project-root discovery", async () => {
   await withTempDir(async (tempDir) => {
-    await writeJson(path.join(tempDir, "react-css-scanner.json"), {
+    await writeJson(path.join(tempDir, "scan-react-css.json"), {
       rootDir: "project-root",
     });
     await writeJson(path.join(tempDir, "custom.json"), {
       rootDir: "explicit",
     });
 
-    const result = await loadReactCssScannerConfig({
+    const result = await loadScanReactCssConfig({
       cwd: tempDir,
       configPath: "./custom.json",
     });
@@ -50,20 +50,20 @@ test("project-root config wins over env-dir and PATH configs", async () => {
     const envDir = path.join(tempDir, "env-config");
     const pathDir = path.join(tempDir, "path-config");
 
-    await writeJson(path.join(tempDir, "react-css-scanner.json"), {
+    await writeJson(path.join(tempDir, "scan-react-css.json"), {
       rootDir: "project-root",
     });
-    await writeJson(path.join(envDir, "react-css-scanner.json"), {
+    await writeJson(path.join(envDir, "scan-react-css.json"), {
       rootDir: "env-dir",
     });
-    await writeJson(path.join(pathDir, "react-css-scanner.json"), {
+    await writeJson(path.join(pathDir, "scan-react-css.json"), {
       rootDir: "path-dir",
     });
 
-    const result = await loadReactCssScannerConfig({
+    const result = await loadScanReactCssConfig({
       cwd: tempDir,
       env: {
-        REACT_CSS_SCANNER_CONFIG_DIR: envDir,
+        SCAN_REACT_CSS_CONFIG_DIR: envDir,
         PATH: pathDir,
       },
     });
@@ -78,17 +78,17 @@ test("env-dir config wins over PATH config", async () => {
     const envDir = path.join(tempDir, "env-config");
     const pathDir = path.join(tempDir, "path-config");
 
-    await writeJson(path.join(envDir, "react-css-scanner.json"), {
+    await writeJson(path.join(envDir, "scan-react-css.json"), {
       rootDir: "env-dir",
     });
-    await writeJson(path.join(pathDir, "react-css-scanner.json"), {
+    await writeJson(path.join(pathDir, "scan-react-css.json"), {
       rootDir: "path-dir",
     });
 
-    const result = await loadReactCssScannerConfig({
+    const result = await loadScanReactCssConfig({
       cwd: tempDir,
       env: {
-        REACT_CSS_SCANNER_CONFIG_DIR: envDir,
+        SCAN_REACT_CSS_CONFIG_DIR: envDir,
         PATH: pathDir,
       },
     });
@@ -103,14 +103,14 @@ test("PATH discovery uses the first matching config file", async () => {
     const firstPathDir = path.join(tempDir, "path-config-1");
     const secondPathDir = path.join(tempDir, "path-config-2");
 
-    await writeJson(path.join(firstPathDir, "react-css-scanner.json"), {
+    await writeJson(path.join(firstPathDir, "scan-react-css.json"), {
       rootDir: "first-path",
     });
-    await writeJson(path.join(secondPathDir, "react-css-scanner.json"), {
+    await writeJson(path.join(secondPathDir, "scan-react-css.json"), {
       rootDir: "second-path",
     });
 
-    const result = await loadReactCssScannerConfig({
+    const result = await loadScanReactCssConfig({
       cwd: tempDir,
       env: {
         PATH: [firstPathDir, secondPathDir].join(path.delimiter),
@@ -124,7 +124,7 @@ test("PATH discovery uses the first matching config file", async () => {
 
 test("falls back to built-in defaults with a warning when no config is found", async () => {
   await withTempDir(async (tempDir) => {
-    const result = await loadReactCssScannerConfig({
+    const result = await loadScanReactCssConfig({
       cwd: tempDir,
       env: {},
     });
@@ -137,7 +137,7 @@ test("falls back to built-in defaults with a warning when no config is found", a
 });
 
 test("supports direct inline config input", async () => {
-  const result = await loadReactCssScannerConfig({
+  const result = await loadScanReactCssConfig({
     config: {
       rootDir: "inline-root",
       policy: {
@@ -153,7 +153,7 @@ test("supports direct inline config input", async () => {
 });
 
 test("normalization fills defaults for omitted sections", () => {
-  const result = normalizeReactCssScannerConfig({
+  const result = normalizeScanReactCssConfig({
     css: {
       global: ["src/styles/global.css"],
     },
@@ -171,15 +171,15 @@ test("normalization fills defaults for omitted sections", () => {
 
 test("invalid config values fail clearly", async () => {
   await withTempDir(async (tempDir) => {
-    const configPath = path.join(tempDir, "react-css-scanner.json");
+    const configPath = path.join(tempDir, "scan-react-css.json");
     await writeJson(configPath, {
       ownership: {
         namingConvention: "bad-mode",
       },
     });
 
-    await assert.rejects(loadReactCssScannerConfig({ cwd: tempDir }), (error) => {
-      assert.ok(error instanceof ReactCssScannerConfigError);
+    await assert.rejects(loadScanReactCssConfig({ cwd: tempDir }), (error) => {
+      assert.ok(error instanceof ScanReactCssConfigError);
       assert.match(error.message, /config\.ownership\.namingConvention/);
       return true;
     });
@@ -189,11 +189,11 @@ test("invalid config values fail clearly", async () => {
 test("unknown config keys are rejected", () => {
   assert.throws(
     () =>
-      normalizeReactCssScannerConfig({
+      normalizeScanReactCssConfig({
         unexpected: true,
       }),
     (error) => {
-      assert.ok(error instanceof ReactCssScannerConfigError);
+      assert.ok(error instanceof ScanReactCssConfigError);
       assert.match(error.message, /Unknown config key "unexpected"/);
       return true;
     },

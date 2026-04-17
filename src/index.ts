@@ -2,15 +2,15 @@ import path from "node:path";
 import type { ScanInput, ScanResult } from "./runtime/types.js";
 import { buildScanSummary } from "./runtime/findings.js";
 import { runRules } from "./rules/engine.js";
-import { loadReactCssScannerConfig } from "./config/load.js";
+import { loadScanReactCssConfig } from "./config/load.js";
 import { extractProjectFacts } from "./facts/extractProjectFacts.js";
 import { normalizePathForMatch } from "./files/pathUtils.js";
 import { buildProjectModel } from "./model/buildProjectModel.js";
 
 export {
-  ReactCssScannerConfigError,
-  loadReactCssScannerConfig,
-  normalizeReactCssScannerConfig,
+  ScanReactCssConfigError,
+  loadScanReactCssConfig,
+  normalizeScanReactCssConfig,
 } from "./config/load.js";
 export { extractProjectFacts } from "./facts/extractProjectFacts.js";
 export { buildProjectModel } from "./model/buildProjectModel.js";
@@ -22,15 +22,15 @@ export type {
   ExternalCssGlobalProviderConfig,
   ExternalCssMode,
   OwnershipNamingConvention,
-  RawReactCssScannerConfig,
-  ResolvedReactCssScannerConfig,
+  RawScanReactCssConfig,
+  ResolvedScanReactCssConfig,
   RuleConfigValue,
   RuleSeverity,
 } from "./config/types.js";
 export type {
   ConfigSourceKind,
-  LoadedReactCssScannerConfig,
-  LoadReactCssScannerConfigOptions,
+  LoadedScanReactCssConfig,
+  LoadScanReactCssConfigOptions,
   ResolvedConfigSource,
 } from "./config/load.js";
 export { DEFAULT_CONFIG } from "./config/types.js";
@@ -84,7 +84,7 @@ export type {
 export async function scanReactCss(input: ScanInput = {}): Promise<ScanResult> {
   const callerCwd = input.cwd ?? process.cwd();
   const cwd = input.targetPath ? path.resolve(callerCwd, input.targetPath) : callerCwd;
-  const loadedConfig = await loadReactCssScannerConfig({
+  const loadedConfig = await loadScanReactCssConfig({
     cwd,
     configPath: input.configPath,
     config: input.config,

@@ -1,4 +1,4 @@
-import type { ResolvedReactCssScannerConfig } from "../config/types.js";
+import type { ResolvedScanReactCssConfig } from "../config/types.js";
 import type { Finding, FindingSeverity, ScanResult } from "../runtime/types.js";
 
 export type ConfigSummaryMode = "off" | "default" | "verbose";
@@ -132,7 +132,7 @@ function groupFindingsBySubject(
   return grouped;
 }
 
-function buildDefaultConfigSummary(config: ResolvedReactCssScannerConfig) {
+function buildDefaultConfigSummary(config: ResolvedScanReactCssConfig) {
   return {
     rootDir: config.rootDir,
     source: config.source,

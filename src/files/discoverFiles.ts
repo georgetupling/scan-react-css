@@ -1,6 +1,6 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ResolvedReactCssScannerConfig } from "../config/types.js";
+import type { ResolvedScanReactCssConfig } from "../config/types.js";
 import { directoryExists } from "./fsUtils.js";
 import {
   isCssFilePath,
@@ -12,7 +12,7 @@ import {
 import type { DiscoveredProjectFile, FileDiscoveryResult } from "./types.js";
 
 export async function discoverProjectFiles(
-  config: ResolvedReactCssScannerConfig,
+  config: ResolvedScanReactCssConfig,
   cwd: string,
 ): Promise<FileDiscoveryResult> {
   const rootDir = path.resolve(cwd, config.rootDir);
@@ -44,7 +44,7 @@ export async function discoverProjectFiles(
 async function walkDirectory(
   currentDir: string,
   rootDir: string,
-  config: ResolvedReactCssScannerConfig,
+  config: ResolvedScanReactCssConfig,
   includePatterns: string[],
   results: DiscoveredProjectFile[],
 ): Promise<void> {

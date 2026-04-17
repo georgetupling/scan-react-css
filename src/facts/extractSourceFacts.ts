@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
-import type { ResolvedReactCssScannerConfig } from "../config/types.js";
+import type { ResolvedScanReactCssConfig } from "../config/types.js";
 import { fileExists } from "../files/fsUtils.js";
 import { isCssFilePath } from "../files/pathUtils.js";
 import type { DiscoveredProjectFile } from "../files/types.js";
@@ -18,7 +18,7 @@ export async function extractSourceFileFacts(
   sourceFile: DiscoveredProjectFile,
   options: {
     rootDir: string;
-    config: ResolvedReactCssScannerConfig;
+    config: ResolvedScanReactCssConfig;
   },
 ): Promise<SourceFileFact> {
   const content = await readFile(sourceFile.absolutePath, "utf8");

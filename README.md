@@ -1,6 +1,6 @@
-# react-css-scanner
+# scan-react-css
 
-`react-css-scanner` audits how React source code uses CSS.
+`scan-react-css` audits how React source code uses CSS.
 
 It scans source files, project CSS, CSS Modules, imported external CSS, and matching HTML-linked external stylesheets, then reports deterministic findings for local development and CI.
 
@@ -21,7 +21,7 @@ Findings always carry both severity and confidence.
 ## Install
 
 ```bash
-npm install --save-dev react-css-scanner
+npm install --save-dev scan-react-css
 ```
 
 Node `20+` is required.
@@ -29,14 +29,14 @@ Node `20+` is required.
 For one-off runs without adding it to the project:
 
 ```bash
-npx react-css-scanner
+npx scan-react-css
 ```
 
 For a globally installed CLI:
 
 ```bash
-npm install -g react-css-scanner
-react-css-scanner
+npm install -g scan-react-css
+scan-react-css
 ```
 
 For full usage and configuration docs, start at [docs/user-guide/README.md](./docs/user-guide/README.md).
@@ -46,7 +46,7 @@ For full usage and configuration docs, start at [docs/user-guide/README.md](./do
 1. Install the package:
 
 ```bash
-npm install --save-dev react-css-scanner
+npm install --save-dev scan-react-css
 ```
 
 2. Add a config file:
@@ -62,13 +62,13 @@ npm install --save-dev react-css-scanner
 3. Run the scanner:
 
 ```bash
-npx react-css-scanner
+npx scan-react-css
 ```
 
 4. Use JSON output in CI or scripts:
 
 ```bash
-npx react-css-scanner --json --output-file ./reports/react-css-scanner.json
+npx scan-react-css --json --output-file ./reports/scan-react-css.json
 ```
 
 ## CLI Usage
@@ -76,13 +76,13 @@ npx react-css-scanner --json --output-file ./reports/react-css-scanner.json
 Scan the current project:
 
 ```bash
-npx react-css-scanner
+npx scan-react-css
 ```
 
 Scan a specific path:
 
 ```bash
-npx react-css-scanner ./packages/web
+npx scan-react-css ./packages/web
 ```
 
 In most cases, prefer running from the project root and using `--focus` for a subdirectory instead of scanning a nested path directly. That keeps full-project imports, reachability, and external usages visible and helps avoid false reports.
@@ -90,24 +90,24 @@ In most cases, prefer running from the project root and using `--focus` for a su
 Focus emitted findings on a subdirectory while still indexing the full project:
 
 ```bash
-npx react-css-scanner ./packages/web --focus src/features/payments
+npx scan-react-css ./packages/web --focus src/features/payments
 ```
 
 Emit JSON:
 
 ```bash
-npx react-css-scanner --json
+npx scan-react-css --json
 ```
 
 Write JSON to a file:
 
 ```bash
-npx react-css-scanner --json --output-file ./reports/react-css-scanner.json
+npx scan-react-css --json --output-file ./reports/scan-react-css.json
 ```
 
 Useful flags:
 
-- `--config path/to/react-css-scanner.json`
+- `--config path/to/scan-react-css.json`
 - `--focus path/to/subdirectory`
 - `--json`
 - `--output-file path/to/report.json`
@@ -118,12 +118,12 @@ Useful flags:
 
 `--output-min-severity` only affects human-readable output and cannot be combined with `--json`.
 
-If the package is installed globally, npm creates the `react-css-scanner` command for you from the package `bin` entry. You do not need to manually add `dist/` to your `PATH`.
+If the package is installed globally, npm creates the `scan-react-css` command for you from the package `bin` entry. You do not need to manually add `dist/` to your `PATH`.
 
 ## Node API
 
 ```ts
-import { scanReactCss } from "react-css-scanner";
+import { scanReactCss } from "scan-react-css";
 
 const result = await scanReactCss({
   targetPath: process.cwd(),
@@ -137,14 +137,14 @@ The package also exports `scan` as an alias.
 
 ## Config
 
-The config file is JSON and defaults to `react-css-scanner.json`.
+The config file is JSON and defaults to `scan-react-css.json`.
 
 Discovery order:
 
 1. explicit `--config` or API `configPath`
-2. project-root `react-css-scanner.json`
-3. `REACT_CSS_SCANNER_CONFIG_DIR/react-css-scanner.json`
-4. the first `react-css-scanner.json` found on the OS `PATH`
+2. project-root `scan-react-css.json`
+3. `SCAN_REACT_CSS_CONFIG_DIR/scan-react-css.json`
+4. the first `scan-react-css.json` found on the OS `PATH`
 5. built-in defaults
 
 Only one config source is loaded. There is no config merging.

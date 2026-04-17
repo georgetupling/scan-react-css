@@ -7,11 +7,11 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import {
   buildProjectModel,
   extractProjectFacts,
-  normalizeReactCssScannerConfig,
+  normalizeScanReactCssConfig,
 } from "../../dist/index.js";
 
 async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-reachability-test-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "scan-react-css-reachability-test-"));
 
   try {
     await writeProjectFile(
@@ -43,7 +43,7 @@ test("direct local css imports are reachable from the importing source file", as
     );
     await writeProjectFile(tempDir, "src/components/Button.css", ".button {}");
 
-    const config = normalizeReactCssScannerConfig({});
+    const config = normalizeScanReactCssConfig({});
     const facts = await extractProjectFacts(config, tempDir);
     const model = buildProjectModel({ config, facts });
     const reachability = model.reachability.get("src/components/Button.tsx");
@@ -65,7 +65,7 @@ test("configured global css is reachable from every source file", async () => {
     );
     await writeProjectFile(tempDir, "src/styles/global.css", ".global {}");
 
-    const config = normalizeReactCssScannerConfig({
+    const config = normalizeScanReactCssConfig({
       css: {
         global: ["src/styles/global.css"],
       },
@@ -103,7 +103,7 @@ test("parent source imports contribute reachable local and external css", async 
     );
     await writeProjectFile(tempDir, "src/styles/page.css", ".page {}");
 
-    const config = normalizeReactCssScannerConfig({});
+    const config = normalizeScanReactCssConfig({});
     const facts = await extractProjectFacts(config, tempDir);
     const model = buildProjectModel({ config, facts });
     const reachability = model.reachability.get("src/components/Button.tsx");
@@ -137,7 +137,7 @@ test("barrel re-exports preserve reachable css from higher-level importers", asy
     );
     await writeProjectFile(tempDir, "src/styles/page.css", ".page {}");
 
-    const config = normalizeReactCssScannerConfig({});
+    const config = normalizeScanReactCssConfig({});
     const facts = await extractProjectFacts(config, tempDir);
     const model = buildProjectModel({ config, facts });
     const reachability = model.reachability.get("src/components/Button.tsx");

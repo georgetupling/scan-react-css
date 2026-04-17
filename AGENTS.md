@@ -2,7 +2,7 @@
 
 ## Project purpose
 
-`react-css-scanner` is a standalone npm tool for auditing how React code uses CSS.
+`scan-react-css` is a standalone npm tool for auditing how React code uses CSS.
 
 The implemented product includes:
 
@@ -61,9 +61,9 @@ If docs disagree with code and tests, do not silently guess. Either align them i
 - Config format is JSON.
 - Discovery order is:
   1. explicit `--config` or API `configPath`
-  2. project-root `react-css-scanner.json`
-  3. `REACT_CSS_SCANNER_CONFIG_DIR/react-css-scanner.json`
-  4. first `react-css-scanner.json` found on OS `PATH`
+  2. project-root `scan-react-css.json`
+  3. `SCAN_REACT_CSS_CONFIG_DIR/scan-react-css.json`
+  4. first `scan-react-css.json` found on OS `PATH`
   5. built-in defaults
 - Only one config source is loaded.
 - No config merging.

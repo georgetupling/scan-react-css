@@ -1,4 +1,4 @@
-import type { ResolvedReactCssScannerConfig } from "../config/types.js";
+import type { ResolvedScanReactCssConfig } from "../config/types.js";
 import type {
   ClassReferenceFact,
   CssClassDefinitionFact,
@@ -116,7 +116,7 @@ export type ReachabilityInfo = {
 };
 
 export type ProjectModel = {
-  config: ResolvedReactCssScannerConfig;
+  config: ResolvedScanReactCssConfig;
   facts: ProjectFactExtractionResult;
   graph: ProjectGraph;
   indexes: ProjectIndexes;
@@ -124,6 +124,6 @@ export type ProjectModel = {
 };
 
 export type BuildProjectModelInput = {
-  config: ResolvedReactCssScannerConfig;
+  config: ResolvedScanReactCssConfig;
   facts: ProjectFactExtractionResult;
 };

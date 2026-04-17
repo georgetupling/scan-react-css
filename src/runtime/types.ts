@@ -1,4 +1,4 @@
-import type { RawReactCssScannerConfig, ResolvedReactCssScannerConfig } from "../config/types.js";
+import type { RawScanReactCssConfig, ResolvedScanReactCssConfig } from "../config/types.js";
 import type { ResolvedConfigSource } from "../config/load.js";
 
 export type FindingSeverity = "info" | "warning" | "error";
@@ -34,7 +34,7 @@ export type ScanInput = {
   targetPath?: string;
   focusPath?: string;
   configPath?: string;
-  config?: RawReactCssScannerConfig;
+  config?: RawScanReactCssConfig;
   cwd?: string;
 };
 
@@ -49,7 +49,7 @@ export type ScanSummary = {
 };
 
 export type ScanResult = {
-  config: ResolvedReactCssScannerConfig;
+  config: ResolvedScanReactCssConfig;
   configSource?: ResolvedConfigSource;
   operationalWarnings?: string[];
   findings: Finding[];

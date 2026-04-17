@@ -1,5 +1,5 @@
 Scan target: <PROJECT_ROOT>
-Config source: project-root (<PROJECT_ROOT>/react-css-scanner.json)
+Config source: project-root (<PROJECT_ROOT>/scan-react-css.json)
 Summary: 3 findings (1 error, 1 warning, 1 info) across 2 files
 Findings:
 - orphan

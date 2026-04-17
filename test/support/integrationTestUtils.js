@@ -13,7 +13,7 @@ export async function withBuiltProject(builder, run) {
 }
 
 export async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-test-support-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "scan-react-css-test-support-"));
 
   try {
     await run(tempDir);

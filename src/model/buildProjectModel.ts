@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ResolvedReactCssScannerConfig } from "../config/types.js";
+import type { ResolvedScanReactCssConfig } from "../config/types.js";
 import type { ProjectFactExtractionResult } from "../facts/types.js";
 import { matchesAnyGlob, normalizePathForMatch } from "../files/pathUtils.js";
 import type {
@@ -68,7 +68,7 @@ function buildSourceFileNodes(
 
 function buildCssFileNodes(
   facts: ProjectFactExtractionResult,
-  config: ResolvedReactCssScannerConfig,
+  config: ResolvedScanReactCssConfig,
   sourceFileByPath: Map<string, SourceFileNode>,
 ): CssFileNode[] {
   return facts.cssFacts
@@ -91,7 +91,7 @@ function buildCssFileNodes(
 function buildExternalCssResources(
   sourceFiles: SourceFileNode[],
   facts: ProjectFactExtractionResult,
-  config: ResolvedReactCssScannerConfig,
+  config: ResolvedScanReactCssConfig,
 ): ExternalCssResourceNode[] {
   const resources = new Map<string, ExternalCssResourceNode>();
   const externalFactsBySpecifier = new Map(
@@ -155,7 +155,7 @@ function buildExternalCssResources(
 }
 
 function buildActiveExternalCssProviders(
-  config: ResolvedReactCssScannerConfig,
+  config: ResolvedScanReactCssConfig,
   facts: ProjectFactExtractionResult,
 ) {
   const activeProviders = new Map<
@@ -491,7 +491,7 @@ function buildReachability(
 }
 
 function getProjectWideExternalCssSpecifiers(
-  config: ResolvedReactCssScannerConfig,
+  config: ResolvedScanReactCssConfig,
   facts: ProjectFactExtractionResult,
 ): string[] {
   if (!config.externalCss.enabled) {
@@ -539,7 +539,7 @@ function collectReachableImporterChain(
 
 function classifyCssOwnership(
   filePath: string,
-  config: ResolvedReactCssScannerConfig,
+  config: ResolvedScanReactCssConfig,
   sourceFileByPath: Map<string, SourceFileNode>,
 ): CssOwnership {
   const normalizedPath = normalizePathForMatch(filePath);

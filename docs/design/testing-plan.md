@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document proposes a testing strategy for `react-css-scanner`.
+This document proposes a testing strategy for `scan-react-css`.
 
 The goal is to balance:
 

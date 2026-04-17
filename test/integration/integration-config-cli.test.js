@@ -63,7 +63,7 @@ test("CLI uses env-dir config when project-root config is absent", async () => {
   await withTempDir(async (configDir) => {
     await mkdir(configDir, { recursive: true });
     await writeFile(
-      path.join(configDir, "react-css-scanner.json"),
+      path.join(configDir, "scan-react-css.json"),
       `${JSON.stringify(
         {
           css: {
@@ -87,7 +87,7 @@ test("CLI uses env-dir config when project-root config is absent", async () => {
     await withBuiltProject(builder, async (project) => {
       const result = await runCliWithOptions([project.rootDir], project.rootDir, {
         env: {
-          REACT_CSS_SCANNER_CONFIG_DIR: configDir,
+          SCAN_REACT_CSS_CONFIG_DIR: configDir,
         },
       });
 
@@ -101,7 +101,7 @@ test("CLI uses env-dir config when project-root config is absent", async () => {
 
 test("CLI --config overrides discovered project-root config", async () => {
   await withTempDir(async (configDir) => {
-    const explicitConfigPath = path.join(configDir, "explicit-react-css-scanner.json");
+    const explicitConfigPath = path.join(configDir, "explicit-scan-react-css.json");
     await writeFile(
       explicitConfigPath,
       `${JSON.stringify(

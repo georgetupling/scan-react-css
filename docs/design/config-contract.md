@@ -14,8 +14,8 @@ The current TypeScript config contract lives in:
 
 ## Main exported types
 
-- `RawReactCssScannerConfig`
-- `ResolvedReactCssScannerConfig`
+- `RawScanReactCssConfig`
+- `ResolvedScanReactCssConfig`
 - `RuleSeverity`
 - `RuleConfigValue`
 - `RuleConfigObject`
@@ -27,8 +27,8 @@ The current TypeScript config contract lives in:
 
 The intended split is:
 
-- `RawReactCssScannerConfig`: what can be read from JSON config files or passed into the API
-- `ResolvedReactCssScannerConfig`: the normalized runtime shape after defaults and validation are applied
+- `RawScanReactCssConfig`: what can be read from JSON config files or passed into the API
+- `ResolvedScanReactCssConfig`: the normalized runtime shape after defaults and validation are applied
 
 Config resolution should load exactly one discovered source.
 It should not merge multiple config files.

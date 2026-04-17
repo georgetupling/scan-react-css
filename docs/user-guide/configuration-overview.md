@@ -1,21 +1,21 @@
 # Configuration Overview
 
-This page explains how `react-css-scanner` configuration works at a practical level.
+This page explains how `scan-react-css` configuration works at a practical level.
 
 ## File Name And Discovery
 
 The default config file name is:
 
 ```json
-react-css-scanner.json
+scan-react-css.json
 ```
 
 The scanner looks for config in this order:
 
-1. `--config path/to/react-css-scanner.json`
-2. `react-css-scanner.json` in the project root
-3. `REACT_CSS_SCANNER_CONFIG_DIR/react-css-scanner.json`
-4. the first `react-css-scanner.json` found on the OS `PATH`
+1. `--config path/to/scan-react-css.json`
+2. `scan-react-css.json` in the project root
+3. `SCAN_REACT_CSS_CONFIG_DIR/scan-react-css.json`
+4. the first `scan-react-css.json` found on the OS `PATH`
 5. built-in defaults
 
 Only one config source is loaded. Config files are not merged.
@@ -38,7 +38,7 @@ If you omit `source.include`, the scanner auto-discovers React source roots by l
 
 ```json
 {
-  "$schema": "./node_modules/react-css-scanner/schema.json",
+  "$schema": "./node_modules/scan-react-css/schema.json",
   "rootDir": ".",
   "source": {
     "include": ["src", "packages/web/src"],

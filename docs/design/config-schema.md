@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document proposes the JSON configuration model for `react-css-scanner`.
+This document proposes the JSON configuration model for `scan-react-css`.
 
 The design goal is:
 
@@ -33,7 +33,7 @@ Everything else should have idiomatic defaults.
 
 Default filename:
 
-- `react-css-scanner.json`
+- `scan-react-css.json`
 
 JSON should be the default and documented path.
 
@@ -43,20 +43,20 @@ The scanner should support predictable config lookup without requiring every pro
 
 ### Default behavior
 
-- Look for `react-css-scanner.json` in the project root.
-- If no project-local config is found, and `REACT_CSS_SCANNER_CONFIG_DIR` is set, look for `react-css-scanner.json` there next.
+- Look for `scan-react-css.json` in the project root.
+- If no project-local config is found, and `SCAN_REACT_CSS_CONFIG_DIR` is set, look for `scan-react-css.json` there next.
 
 ### Alternate/global location
 
-- Support a global config directory via `REACT_CSS_SCANNER_CONFIG_DIR`.
+- Support a global config directory via `SCAN_REACT_CSS_CONFIG_DIR`.
 - Support an explicit CLI/API override such as `--config path/to/file.json`.
-- If neither of those produces a config, search the OS `PATH` for the first file named `react-css-scanner.json`.
+- If neither of those produces a config, search the OS `PATH` for the first file named `scan-react-css.json`.
 
 Example:
 
-- if `REACT_CSS_SCANNER_CONFIG_DIR=/Users/alice/.config/react-css-scanner`
-- and there is no `react-css-scanner.json` in the project root
-- then the scanner should look for `/Users/alice/.config/react-css-scanner/react-css-scanner.json`
+- if `SCAN_REACT_CSS_CONFIG_DIR=/Users/alice/.config/scan-react-css`
+- and there is no `scan-react-css.json` in the project root
+- then the scanner should look for `/Users/alice/.config/scan-react-css/scan-react-css.json`
 
 ### Why this matters
 
@@ -67,9 +67,9 @@ Example:
 ### Proposed precedence
 
 1. explicit config path from CLI or API
-2. project-root `react-css-scanner.json`
-3. `REACT_CSS_SCANNER_CONFIG_DIR/react-css-scanner.json`
-4. first matching `react-css-scanner.json` found on the OS `PATH`
+2. project-root `scan-react-css.json`
+3. `SCAN_REACT_CSS_CONFIG_DIR/scan-react-css.json`
+4. first matching `scan-react-css.json` found on the OS `PATH`
 5. built-in defaults
 
 ### Resolution model
@@ -82,7 +82,7 @@ Example:
 
 ```json
 {
-  "$schema": "./node_modules/react-css-scanner/schema.json",
+  "$schema": "./node_modules/scan-react-css/schema.json",
   "rootDir": ".",
   "source": {
     "exclude": ["dist", "build", "coverage", "node_modules"]

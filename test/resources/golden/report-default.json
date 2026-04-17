@@ -86,7 +86,7 @@
     }
   ],
   "operationalWarnings": [
-    "No react-css-scanner.json config file was found; built-in defaults were used. Create a config file to make scanner behavior explicit."
+    "No scan-react-css.json config file was found; built-in defaults were used. Create a config file to make scanner behavior explicit."
   ],
   "config": {
     "rootDir": ".",

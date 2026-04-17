@@ -8,11 +8,11 @@ import {
   DEFAULT_CONFIG,
   discoverProjectFiles,
   extractProjectFacts,
-  normalizeReactCssScannerConfig,
+  normalizeScanReactCssConfig,
 } from "../../dist/index.js";
 
 async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-facts-test-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "scan-react-css-facts-test-"));
 
   try {
     await writeProjectFile(
@@ -114,7 +114,7 @@ test("explicit source.include bypasses React auto-discovery", async () => {
     await writeProjectFile(tempDir, "package.json", '{\n  "name": "explicit-include-test"\n}\n');
     await writeProjectFile(tempDir, "custom/App.tsx", "export function App() { return null; }");
 
-    const config = normalizeReactCssScannerConfig({
+    const config = normalizeScanReactCssConfig({
       source: {
         include: ["custom"],
       },
@@ -419,7 +419,7 @@ test("extracts html stylesheet facts for linked external stylesheets", async () 
     );
 
     const result = await extractProjectFacts(
-      normalizeReactCssScannerConfig({
+      normalizeScanReactCssConfig({
         source: {
           include: ["src"],
         },

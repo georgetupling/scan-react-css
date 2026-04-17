@@ -8,11 +8,11 @@ import {
   DEFAULT_CONFIG,
   buildProjectModel,
   extractProjectFacts,
-  normalizeReactCssScannerConfig,
+  normalizeScanReactCssConfig,
 } from "../../dist/index.js";
 
 async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-model-test-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "scan-react-css-model-test-"));
 
   try {
     await writeProjectFile(
@@ -67,7 +67,7 @@ test("classifies ownership using configured global, utility, page, and component
     await writeProjectFile(tempDir, "src/styles/utilities.css", ".u-flex {}");
     await writeProjectFile(tempDir, "src/components/Button.css", ".button {}");
 
-    const config = normalizeReactCssScannerConfig({
+    const config = normalizeScanReactCssConfig({
       css: {
         global: ["src/styles/global.css"],
         utilities: ["**/utilities.css"],
@@ -102,7 +102,7 @@ test("sibling naming convention can classify css as component-local", async () =
     await writeProjectFile(tempDir, "src/components/Button.css", ".button {}");
     await writeProjectFile(tempDir, "src/components/Loose.css", ".loose {}");
 
-    const config = normalizeReactCssScannerConfig({
+    const config = normalizeScanReactCssConfig({
       ownership: {
         namingConvention: "sibling",
       },

@@ -1,5 +1,5 @@
 import path from "node:path";
-import type { ResolvedReactCssScannerConfig } from "../config/types.js";
+import type { ResolvedScanReactCssConfig } from "../config/types.js";
 import { discoverProjectFiles } from "../files/discoverFiles.js";
 import { fileExists } from "../files/fsUtils.js";
 import { extractCssFileFacts, extractExternalCssFacts } from "./extractCssFacts.js";
@@ -9,7 +9,7 @@ import { extractSourceFileFacts } from "./extractSourceFacts.js";
 import type { ProjectFactExtractionResult } from "./types.js";
 
 export async function extractProjectFacts(
-  config: ResolvedReactCssScannerConfig,
+  config: ResolvedScanReactCssConfig,
   cwd: string,
 ): Promise<ProjectFactExtractionResult> {
   const discoveredFiles = await discoverProjectFiles(config, cwd);

@@ -9,14 +9,14 @@ import {
   buildScanSummary,
   createFinding,
   extractProjectFacts,
-  normalizeReactCssScannerConfig,
+  normalizeScanReactCssConfig,
   runRules,
   scanReactCss,
   sortFindings,
 } from "../../dist/index.js";
 
 async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-rules-test-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "scan-react-css-rules-test-"));
 
   try {
     await writeProjectFile(
@@ -123,7 +123,7 @@ test("rule engine runs registered rules against the project model without reread
     );
     await writeProjectFile(tempDir, "src/App.css", ".button {}");
 
-    const config = normalizeReactCssScannerConfig({});
+    const config = normalizeScanReactCssConfig({});
     const facts = await extractProjectFacts(config, tempDir);
     const model = buildProjectModel({ config, facts });
     let invocations = 0;

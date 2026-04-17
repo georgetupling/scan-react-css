@@ -6,14 +6,14 @@ import {
   type ExternalCssGlobalProviderConfig,
   type ExternalCssMode,
   type OwnershipNamingConvention,
-  type RawReactCssScannerConfig,
-  type ResolvedReactCssScannerConfig,
+  type RawScanReactCssConfig,
+  type ResolvedScanReactCssConfig,
   type RuleConfigObject,
   type RuleConfigValue,
   type RuleSeverity,
 } from "./types.js";
 
-const CONFIG_FILE_NAME = "react-css-scanner.json";
+const CONFIG_FILE_NAME = "scan-react-css.json";
 
 const TOP_LEVEL_KEYS = new Set([
   "$schema",
@@ -61,37 +61,37 @@ export type ResolvedConfigSource = {
   filePath?: string;
 };
 
-export type LoadReactCssScannerConfigOptions = {
+export type LoadScanReactCssConfigOptions = {
   cwd?: string;
-  config?: RawReactCssScannerConfig;
+  config?: RawScanReactCssConfig;
   configPath?: string;
   env?: Record<string, string | undefined>;
 };
 
-export type LoadedReactCssScannerConfig = {
-  config: ResolvedReactCssScannerConfig;
+export type LoadedScanReactCssConfig = {
+  config: ResolvedScanReactCssConfig;
   source: ResolvedConfigSource;
   warnings: string[];
 };
 
-export class ReactCssScannerConfigError extends Error {
+export class ScanReactCssConfigError extends Error {
   readonly filePath?: string;
   readonly path?: string;
 
   constructor(message: string, options?: { filePath?: string; path?: string }) {
     super(message);
-    this.name = "ReactCssScannerConfigError";
+    this.name = "ScanReactCssConfigError";
     this.filePath = options?.filePath;
     this.path = options?.path;
   }
 }
 
-export async function loadReactCssScannerConfig(
-  options: LoadReactCssScannerConfigOptions = {},
-): Promise<LoadedReactCssScannerConfig> {
+export async function loadScanReactCssConfig(
+  options: LoadScanReactCssConfigOptions = {},
+): Promise<LoadedScanReactCssConfig> {
   if (options.config !== undefined) {
     return {
-      config: normalizeReactCssScannerConfig(options.config),
+      config: normalizeScanReactCssConfig(options.config),
       source: { kind: "inline" },
       warnings: [],
     };
@@ -110,7 +110,7 @@ export async function loadReactCssScannerConfig(
       config: cloneResolvedConfig(DEFAULT_CONFIG),
       source: { kind: "built-in-defaults" },
       warnings: [
-        "No react-css-scanner.json config file was found; built-in defaults were used. Create a config file to make scanner behavior explicit.",
+        "No scan-react-css.json config file was found; built-in defaults were used. Create a config file to make scanner behavior explicit.",
       ],
     };
   }
@@ -118,7 +118,7 @@ export async function loadReactCssScannerConfig(
   const configFilePath = discoveredConfig.filePath;
 
   if (!configFilePath) {
-    throw new ReactCssScannerConfigError(
+    throw new ScanReactCssConfigError(
       `Resolved config source "${discoveredConfig.kind}" is missing a file path`,
     );
   }
@@ -126,7 +126,7 @@ export async function loadReactCssScannerConfig(
   const rawConfig = await readRawConfigFile(configFilePath);
 
   return {
-    config: normalizeReactCssScannerConfig(rawConfig, {
+    config: normalizeScanReactCssConfig(rawConfig, {
       filePath: configFilePath,
     }),
     source: discoveredConfig,
@@ -134,10 +134,10 @@ export async function loadReactCssScannerConfig(
   };
 }
 
-export function normalizeReactCssScannerConfig(
-  rawConfig: RawReactCssScannerConfig,
+export function normalizeScanReactCssConfig(
+  rawConfig: RawScanReactCssConfig,
   options: { filePath?: string } = {},
-): ResolvedReactCssScannerConfig {
+): ResolvedScanReactCssConfig {
   assertPlainObject(rawConfig, "config", options.filePath);
   assertKnownKeys(rawConfig, TOP_LEVEL_KEYS, "config", options.filePath);
 
@@ -173,7 +173,7 @@ export function normalizeReactCssScannerConfig(
 
   if (externalCss?.globals !== undefined) {
     if (!Array.isArray(externalCss.globals)) {
-      throw new ReactCssScannerConfigError(`Expected config.externalCss.globals to be an array`, {
+      throw new ScanReactCssConfigError(`Expected config.externalCss.globals to be an array`, {
         filePath: options.filePath,
         path: "config.externalCss.globals",
       });
@@ -311,7 +311,7 @@ async function discoverConfigFile(options: {
     const explicitPath = path.resolve(options.cwd, options.configPath);
 
     if (!(await fileExists(explicitPath))) {
-      throw new ReactCssScannerConfigError(`Explicit config path does not exist: ${explicitPath}`, {
+      throw new ScanReactCssConfigError(`Explicit config path does not exist: ${explicitPath}`, {
         filePath: explicitPath,
       });
     }
@@ -330,7 +330,7 @@ async function discoverConfigFile(options: {
     };
   }
 
-  const envConfigDir = options.env.REACT_CSS_SCANNER_CONFIG_DIR;
+  const envConfigDir = options.env.SCAN_REACT_CSS_CONFIG_DIR;
   if (envConfigDir) {
     const envConfigPath = path.resolve(options.cwd, envConfigDir, CONFIG_FILE_NAME);
     if (await fileExists(envConfigPath)) {
@@ -361,13 +361,13 @@ async function discoverConfigFile(options: {
   return undefined;
 }
 
-async function readRawConfigFile(filePath: string): Promise<RawReactCssScannerConfig> {
+async function readRawConfigFile(filePath: string): Promise<RawScanReactCssConfig> {
   let rawText: string;
 
   try {
     rawText = await readFile(filePath, "utf8");
   } catch {
-    throw new ReactCssScannerConfigError(`Could not read config file: ${filePath}`, { filePath });
+    throw new ScanReactCssConfigError(`Could not read config file: ${filePath}`, { filePath });
   }
 
   let parsed: unknown;
@@ -375,16 +375,16 @@ async function readRawConfigFile(filePath: string): Promise<RawReactCssScannerCo
   try {
     parsed = JSON.parse(rawText) as unknown;
   } catch {
-    throw new ReactCssScannerConfigError(`Config file is not valid JSON: ${filePath}`, {
+    throw new ScanReactCssConfigError(`Config file is not valid JSON: ${filePath}`, {
       filePath,
     });
   }
 
-  return parsed as RawReactCssScannerConfig;
+  return parsed as RawScanReactCssConfig;
 }
 
 function normalizeRules(
-  rules: RawReactCssScannerConfig["rules"],
+  rules: RawScanReactCssConfig["rules"],
   filePath?: string,
 ): Record<string, RuleConfigValue> {
   const resolvedRules: Record<string, RuleConfigValue> = {};
@@ -413,7 +413,7 @@ function normalizeRuleConfigValue(
     const normalizedSeverity = normalizeEnum(value, RULE_SEVERITIES, valuePath, filePath);
 
     if (!normalizedSeverity) {
-      throw new ReactCssScannerConfigError(
+      throw new ScanReactCssConfigError(
         `Expected ${valuePath} to be one of: ${RULE_SEVERITIES.join(", ")}`,
         { filePath, path: valuePath },
       );
@@ -433,10 +433,10 @@ function normalizeRuleConfigValue(
   );
 
   if (severity === undefined) {
-    throw new ReactCssScannerConfigError(
-      `Missing required rule severity at ${valuePath}.severity`,
-      { filePath, path: `${valuePath}.severity` },
-    );
+    throw new ScanReactCssConfigError(`Missing required rule severity at ${valuePath}.severity`, {
+      filePath,
+      path: `${valuePath}.severity`,
+    });
   }
 
   const normalizedRule: RuleConfigObject = { severity };
@@ -476,7 +476,7 @@ function normalizeRuleConfigValue(
   return normalizedRule;
 }
 
-function cloneResolvedConfig(config: ResolvedReactCssScannerConfig): ResolvedReactCssScannerConfig {
+function cloneResolvedConfig(config: ResolvedScanReactCssConfig): ResolvedScanReactCssConfig {
   return {
     rootDir: config.rootDir,
     source: {
@@ -539,7 +539,7 @@ function normalizeString(value: unknown, valuePath: string, filePath?: string): 
   }
 
   if (typeof value !== "string" || value.length === 0) {
-    throw new ReactCssScannerConfigError(`Expected ${valuePath} to be a non-empty string`, {
+    throw new ScanReactCssConfigError(`Expected ${valuePath} to be a non-empty string`, {
       filePath,
       path: valuePath,
     });
@@ -558,7 +558,7 @@ function normalizeBoolean(
   }
 
   if (typeof value !== "boolean") {
-    throw new ReactCssScannerConfigError(`Expected ${valuePath} to be a boolean`, {
+    throw new ScanReactCssConfigError(`Expected ${valuePath} to be a boolean`, {
       filePath,
       path: valuePath,
     });
@@ -577,7 +577,7 @@ function normalizeStringArray(
   }
 
   if (!Array.isArray(value) || value.some((item) => typeof item !== "string")) {
-    throw new ReactCssScannerConfigError(`Expected ${valuePath} to be an array of strings`, {
+    throw new ScanReactCssConfigError(`Expected ${valuePath} to be an array of strings`, {
       filePath,
       path: valuePath,
     });
@@ -596,7 +596,7 @@ function normalizeExternalCssGlobals(
   }
 
   if (!Array.isArray(value)) {
-    throw new ReactCssScannerConfigError(`Expected ${valuePath} to be an array`, {
+    throw new ScanReactCssConfigError(`Expected ${valuePath} to be an array`, {
       filePath,
       path: valuePath,
     });
@@ -610,7 +610,7 @@ function normalizeExternalCssGlobals(
     const match = normalizeStringArray(entry.match, `${valuePath}[${index}].match`, filePath);
 
     if (!provider) {
-      throw new ReactCssScannerConfigError(
+      throw new ScanReactCssConfigError(
         `Missing required provider at ${valuePath}[${index}].provider`,
         {
           filePath,
@@ -620,7 +620,7 @@ function normalizeExternalCssGlobals(
     }
 
     if (!match || match.length === 0) {
-      throw new ReactCssScannerConfigError(
+      throw new ScanReactCssConfigError(
         `Expected ${valuePath}[${index}].match to contain at least one pattern`,
         {
           filePath,
@@ -646,7 +646,7 @@ function normalizeExternalCssGlobals(
 
 function normalizePositiveInteger(value: unknown, valuePath: string, filePath?: string): number {
   if (!Number.isInteger(value) || (value as number) <= 0) {
-    throw new ReactCssScannerConfigError(`Expected ${valuePath} to be a positive integer`, {
+    throw new ScanReactCssConfigError(`Expected ${valuePath} to be a positive integer`, {
       filePath,
       path: valuePath,
     });
@@ -666,7 +666,7 @@ function normalizeEnum<T extends string>(
   }
 
   if (typeof value !== "string" || !allowedValues.includes(value as T)) {
-    throw new ReactCssScannerConfigError(
+    throw new ScanReactCssConfigError(
       `Expected ${valuePath} to be one of: ${allowedValues.join(", ")}`,
       { filePath, path: valuePath },
     );
@@ -681,7 +681,7 @@ function assertPlainObject(
   filePath?: string,
 ): asserts value is Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new ReactCssScannerConfigError(`Expected ${valuePath} to be an object`, {
+    throw new ScanReactCssConfigError(`Expected ${valuePath} to be an object`, {
       filePath,
       path: valuePath,
     });
@@ -696,7 +696,7 @@ function assertKnownKeys(
 ): void {
   for (const key of Object.keys(value)) {
     if (!allowedKeys.has(key)) {
-      throw new ReactCssScannerConfigError(`Unknown config key "${key}" at ${valuePath}`, {
+      throw new ScanReactCssConfigError(`Unknown config key "${key}" at ${valuePath}`, {
         filePath,
         path: `${valuePath}.${key}`,
       });
