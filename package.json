@@ -1,0 +1,41 @@
+{
+  "name": "react-css-scanner",
+  "version": "0.1.0",
+  "description": "CLI and Node API for auditing React CSS usage.",
+  "type": "module",
+  "bin": {
+    "react-css-scanner": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "check": "tsc --noEmit",
+    "prepublishOnly": "npm run check && npm run build"
+  },
+  "keywords": [
+    "react",
+    "css",
+    "audit",
+    "cli",
+    "typescript"
+  ],
+  "license": "UNLICENSED",
+  "devDependencies": {
+    "tsdown": "^0.14.2",
+    "typescript": "^5.9.3"
+  }
+}
