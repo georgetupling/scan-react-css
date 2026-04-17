@@ -160,7 +160,7 @@ test("rule engine runs registered rules against the project model without reread
   });
 });
 
-test("scanReactCss returns the structured runtime shape even before tier-1 rules are added", async () => {
+test("scanReactCss returns the structured runtime shape even before default rules emit findings", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(tempDir, "src/App.tsx", "export function App() { return null; }");
     await writeProjectFile(tempDir, "src/App.css", "");

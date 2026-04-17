@@ -1,8 +1,16 @@
 import type { RuleDefinition } from "./types.js";
-import { TIER_1_RULE_DEFINITIONS } from "./tier1.js";
-import { TIER_2_RULE_DEFINITIONS } from "./tier2.js";
+import { cssModuleRules } from "./css-modules/index.js";
+import { definitionAndUsageIntegrityRules } from "./definition-and-usage-integrity/index.js";
+import { dynamicAnalysisRules } from "./dynamic-analysis/index.js";
+import { externalCssRules } from "./external-css/index.js";
+import { optimizationAndMigrationRules } from "./optimization-and-migration/index.js";
+import { ownershipAndOrganizationRules } from "./ownership-and-organization/index.js";
 
 export const RULE_DEFINITIONS: RuleDefinition[] = [
-  ...TIER_1_RULE_DEFINITIONS,
-  ...TIER_2_RULE_DEFINITIONS,
+  ...definitionAndUsageIntegrityRules,
+  ...ownershipAndOrganizationRules,
+  ...dynamicAnalysisRules,
+  ...cssModuleRules,
+  ...externalCssRules,
+  ...optimizationAndMigrationRules,
 ];

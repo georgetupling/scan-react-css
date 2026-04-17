@@ -12,13 +12,13 @@ import {
 } from "../dist/index.js";
 
 async function withTempDir(run) {
-  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-tier1-test-"));
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "react-css-scanner-rules-group-a-test-"));
 
   try {
     await writeProjectFile(
       tempDir,
       "package.json",
-      '{\n  "name": "tier1-test",\n  "dependencies": {\n    "react": "^18.0.0"\n  }\n}\n',
+      '{\n  "name": "rules-group-a-test",\n  "dependencies": {\n    "react": "^18.0.0"\n  }\n}\n',
     );
     await run(tempDir);
   } finally {
