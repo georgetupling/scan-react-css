@@ -19,6 +19,7 @@ export { runRules } from "./rules/engine.js";
 export { RULE_DEFINITIONS } from "./rules/catalog.js";
 export type {
   ConfidenceLevel,
+  ExternalCssGlobalProviderConfig,
   ExternalCssMode,
   OwnershipNamingConvention,
   RawReactCssScannerConfig,
@@ -40,6 +41,8 @@ export type {
   CssFileFact,
   CssImportFact,
   CssModuleImportFact,
+  HtmlFileFact,
+  HtmlStylesheetLinkFact,
   ProjectFactExtractionResult,
   SourceFileFact,
   SourceImportFact,
@@ -47,6 +50,7 @@ export type {
 export type { DiscoveredProjectFile, FileDiscoveryResult, ProjectFileKind } from "./files/types.js";
 export type {
   BuildProjectModelInput,
+  ActiveExternalCssProvider,
   CssFileNode,
   CssOwnership,
   CssResourceCategory,
@@ -108,8 +112,8 @@ export async function scanReactCss(input: ScanInput = {}): Promise<ScanResult> {
     config: loadedConfig.config,
     configSource: loadedConfig.source,
     operationalWarnings: focusWarning
-      ? [...loadedConfig.warnings, focusWarning]
-      : loadedConfig.warnings,
+      ? [...loadedConfig.warnings, ...facts.operationalWarnings, focusWarning]
+      : [...loadedConfig.warnings, ...facts.operationalWarnings],
     findings,
     summary,
   };

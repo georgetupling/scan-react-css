@@ -64,9 +64,21 @@ export type ExternalCssFact = {
   imports: CssImportFact[];
 };
 
+export type HtmlStylesheetLinkFact = {
+  href: string;
+  isRemote: boolean;
+};
+
+export type HtmlFileFact = {
+  filePath: string;
+  stylesheetLinks: HtmlStylesheetLinkFact[];
+};
+
 export type ProjectFactExtractionResult = {
   rootDir: string;
   sourceFacts: SourceFileFact[];
   cssFacts: CssFileFact[];
   externalCssFacts: ExternalCssFact[];
+  htmlFacts: HtmlFileFact[];
+  operationalWarnings: string[];
 };

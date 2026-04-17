@@ -57,7 +57,7 @@ That is enough for many projects.
   },
   "externalCss": {
     "enabled": true,
-    "mode": "imported-only"
+    "mode": "declared-globals"
   },
   "classComposition": {
     "helpers": ["classnames", "clsx"]
@@ -115,7 +115,11 @@ Controls how CSS is classified as page-level or component-level.
 
 ### `externalCss`
 
-Controls whether imported dependency CSS is parsed.
+Controls how dependency CSS and HTML-linked external stylesheets are modeled.
+
+- `imported-only` limits analysis to explicit source imports.
+- `declared-globals` also activates matching declared global providers from HTML stylesheet links.
+- `fetch-remote` adds opt-in direct fetching of remote HTML-linked stylesheets for the current scan.
 
 ### `classComposition`
 
@@ -155,7 +159,7 @@ If no config file is found, the scanner behaves like this:
   },
   "externalCss": {
     "enabled": true,
-    "mode": "imported-only"
+    "mode": "declared-globals"
   },
   "classComposition": {
     "helpers": ["classnames", "clsx"]

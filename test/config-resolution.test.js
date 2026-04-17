@@ -162,6 +162,8 @@ test("normalization fills defaults for omitted sections", () => {
   assert.deepEqual(result.css.global, ["src/styles/global.css"]);
   assert.deepEqual(result.source.include, DEFAULT_CONFIG.source.include);
   assert.deepEqual(result.classComposition.helpers, DEFAULT_CONFIG.classComposition.helpers);
+  assert.equal(result.externalCss.mode, "declared-globals");
+  assert.ok(result.externalCss.globals.some((entry) => entry.provider === "font-awesome"));
 });
 
 test("invalid config values fail clearly", async () => {

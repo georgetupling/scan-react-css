@@ -445,3 +445,39 @@ test("imported external css class definitions prevent false missing-css-class fi
     );
   });
 });
+
+test("html-linked built-in external css providers prevent false missing-css-class findings", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "index.html",
+      [
+        "<!doctype html>",
+        '<html><head><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" /></head><body></body></html>',
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      'export function App() { return <div className="fa-solid fa-plus missing" />; }',
+    );
+
+    const findings = await runScenario(tempDir);
+
+    for (const className of ["fa-solid", "fa-plus"]) {
+      assert.ok(
+        !findings.some(
+          (finding) =>
+            finding.ruleId === "missing-css-class" && finding.subject?.className === className,
+        ),
+      );
+    }
+
+    assert.ok(
+      findings.some(
+        (finding) =>
+          finding.ruleId === "missing-css-class" && finding.subject?.className === "missing",
+      ),
+    );
+  });
+});

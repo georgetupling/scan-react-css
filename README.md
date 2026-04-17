@@ -2,7 +2,7 @@
 
 `react-css-scanner` audits how React source code uses CSS.
 
-It scans source files, project CSS, CSS Modules, and imported external CSS, then reports deterministic findings for local development and CI.
+It scans source files, project CSS, CSS Modules, imported external CSS, and matching HTML-linked external stylesheets, then reports deterministic findings for local development and CI.
 
 ## What It Checks
 
@@ -85,6 +85,8 @@ Scan a specific path:
 npx react-css-scanner ./packages/web
 ```
 
+In most cases, prefer running from the project root and using `--focus` for a subdirectory instead of scanning a nested path directly. That keeps full-project imports, reachability, and external usages visible and helps avoid false reports.
+
 Focus emitted findings on a subdirectory while still indexing the full project:
 
 ```bash
@@ -147,7 +149,9 @@ Discovery order:
 
 Only one config source is loaded. There is no config merging.
 
-Built-in defaults assume a typical `src`-based React project, enable CSS Modules by convention, understand `classnames` and `clsx`, and fail on `error` findings by default.
+Built-in defaults assume a typical `src`-based React project, enable CSS Modules by convention, understand `classnames` and `clsx`, recognize common HTML-linked external providers such as Font Awesome, and fail on `error` findings by default.
+
+If you want the scanner to fetch remote HTML-linked stylesheets directly for a scan, set `externalCss.mode` to `fetch-remote`. Fetch failures surface as operational warnings and fall back to external-css heuristics instead of crashing the scan.
 
 Example:
 

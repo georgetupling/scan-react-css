@@ -44,7 +44,9 @@ That currently captures the default product assumptions:
 - CSS Modules enabled by convention
 - utility CSS detection defaults
 - ownership defaults for pages and component-convention behavior
-- external CSS mode set to `imported-only`
+- external CSS mode set to `declared-globals`
+- built-in declared external global providers such as Font Awesome
+- opt-in `fetch-remote` support for remote HTML-linked stylesheet URLs
 - native helper support for `classnames` and `clsx`
 - policy default of `failOnSeverity: "error"`
 - per-rule object config for rules that need thresholds

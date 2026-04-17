@@ -103,7 +103,7 @@ Example:
   },
   "externalCss": {
     "enabled": true,
-    "mode": "imported-only"
+    "mode": "declared-globals"
   },
   "classComposition": {
     "helpers": ["classnames", "clsx"]
@@ -265,7 +265,15 @@ Proposed shape:
 {
   "externalCss": {
     "enabled": true,
-    "mode": "imported-only"
+    "mode": "declared-globals",
+    "globals": [
+      {
+        "provider": "font-awesome",
+        "match": ["**/cdnjs.cloudflare.com/ajax/libs/font-awesome/**/css/*.css"],
+        "classPrefixes": ["fa-"],
+        "classNames": ["fa", "fa-solid", "fa-regular", "fa-brands"]
+      }
+    ]
   }
 }
 ```
@@ -273,11 +281,19 @@ Proposed shape:
 Defaults:
 
 - `enabled`: `true`
-- `mode`: `"imported-only"`
+- `mode`: `"declared-globals"`
+
+Allowed modes:
+
+- `"imported-only"`
+- `"declared-globals"`
+- `"fetch-remote"`
 
 Meaning:
 
-- only external CSS files that are actually imported by the project are resolved and parsed
+- imported external CSS files are resolved and parsed from source imports
+- matching HTML-linked stylesheets can activate declared global providers such as Font Awesome
+- `fetch-remote` additionally fetches remote HTML-linked stylesheets directly for the current scan
 
 Why:
 
@@ -490,7 +506,7 @@ If no config file is present, the scanner should behave roughly like this:
   },
   "externalCss": {
     "enabled": true,
-    "mode": "imported-only"
+    "mode": "declared-globals"
   },
   "ownership": {
     "pagePatterns": ["src/pages/**/*", "src/routes/**/*"],
@@ -563,7 +579,7 @@ The proposed JSON schema should:
 - treat CSS Modules as enabled by convention
 - detect common utility CSS via filenames such as `utilities.css`
 - support explicit ownership classification for page and component CSS
-- treat external CSS as `imported-only`
+- treat external CSS as imported CSS plus declared HTML-linked globals by default
 - support `classnames` and `clsx` natively
 - load exactly one config source based on a predictable precedence order
 - use top-level structure config instead of per-rule duplication

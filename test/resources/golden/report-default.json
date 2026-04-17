@@ -47,6 +47,9 @@
       "metadata": {}
     }
   ],
+  "operationalWarnings": [
+    "No react-css-scanner.json config file was found; built-in defaults were used. Create a config file to make scanner behavior explicit."
+  ],
   "config": {
     "rootDir": ".",
     "source": {
@@ -63,7 +66,28 @@
     },
     "externalCss": {
       "enabled": true,
-      "mode": "imported-only"
+      "mode": "declared-globals",
+      "globals": [
+        {
+          "provider": "font-awesome",
+          "match": [
+            "**/font-awesome/**/css/*.css",
+            "**/fontawesome/**/css/*.css",
+            "**/cdnjs.cloudflare.com/ajax/libs/font-awesome/**/css/*.css",
+            "**/use.fontawesome.com/**.css"
+          ],
+          "classPrefixes": ["fa-"],
+          "classNames": [
+            "fa",
+            "fa-solid",
+            "fa-regular",
+            "fa-brands",
+            "fa-light",
+            "fa-thin",
+            "fa-duotone"
+          ]
+        }
+      ]
     },
     "policy": {
       "failOnSeverity": "error"

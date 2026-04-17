@@ -1,6 +1,7 @@
 import type { RuleDefinition } from "./types.js";
 import {
   DYNAMIC_REFERENCE_KINDS,
+  getDeclaredExternalProviderForClass,
   getOwningSourceFiles,
   getProjectClassDefinitions,
   getRuleNumberConfig,
@@ -95,6 +96,13 @@ export const TIER_2_RULE_DEFINITIONS: RuleDefinition[] = [
             : [];
 
           if (candidateDefinitions.length > 0 || reachableDefinitions.length > 0) {
+            continue;
+          }
+
+          if (
+            reference.className &&
+            getDeclaredExternalProviderForClass(context.model, reference.className)
+          ) {
             continue;
           }
 
@@ -254,6 +262,14 @@ export const TIER_2_RULE_DEFINITIONS: RuleDefinition[] = [
           );
 
           if (reachableProjectDefinitions.length > 0) {
+            continue;
+          }
+
+          const declaredExternalProvider = getDeclaredExternalProviderForClass(
+            context.model,
+            reference.className,
+          );
+          if (declaredExternalProvider) {
             continue;
           }
 

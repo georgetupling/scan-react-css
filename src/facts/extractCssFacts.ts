@@ -21,6 +21,24 @@ export async function extractExternalCssFacts(input: {
 }): Promise<ExternalCssFact> {
   const content = await readFile(input.resolvedPath, "utf8");
 
+  return buildExternalCssFact(input, content);
+}
+
+export function extractExternalCssFactsFromContent(input: {
+  specifier: string;
+  resolvedPath: string;
+  content: string;
+}): ExternalCssFact {
+  return buildExternalCssFact(input, input.content);
+}
+
+function buildExternalCssFact(
+  input: {
+    specifier: string;
+    resolvedPath: string;
+  },
+  content: string,
+): ExternalCssFact {
   return {
     specifier: input.specifier,
     resolvedPath: input.resolvedPath,

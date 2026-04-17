@@ -20,10 +20,21 @@ export function buildProjectModel({ config, facts }: BuildProjectModelInput): Pr
   const sourceFileByPath = new Map(sourceFiles.map((sourceFile) => [sourceFile.path, sourceFile]));
 
   const cssFiles = buildCssFileNodes(facts, config, sourceFileByPath);
-  const externalCssResources = buildExternalCssResources(sourceFiles, facts);
+  const externalCssResources = buildExternalCssResources(sourceFiles, facts, config);
+  const activeExternalCssProviders = buildActiveExternalCssProviders(config, facts);
   const edges = buildGraphEdges(sourceFiles, cssFiles, externalCssResources);
-  const reachability = buildReachability(sourceFiles, cssFiles);
-  const indexes = buildProjectIndexes(sourceFiles, cssFiles, externalCssResources, reachability);
+  const reachability = buildReachability(
+    sourceFiles,
+    cssFiles,
+    getProjectWideExternalCssSpecifiers(config, facts),
+  );
+  const indexes = buildProjectIndexes(
+    sourceFiles,
+    cssFiles,
+    externalCssResources,
+    activeExternalCssProviders,
+    reachability,
+  );
 
   return {
     config,
@@ -79,6 +90,7 @@ function buildCssFileNodes(
 function buildExternalCssResources(
   sourceFiles: SourceFileNode[],
   facts: ProjectFactExtractionResult,
+  config: ResolvedReactCssScannerConfig,
 ): ExternalCssResourceNode[] {
   const resources = new Map<string, ExternalCssResourceNode>();
   const externalFactsBySpecifier = new Map(
@@ -108,9 +120,105 @@ function buildExternalCssResources(
     }
   }
 
+  if (config.externalCss.enabled && config.externalCss.mode === "fetch-remote") {
+    for (const htmlFact of facts.htmlFacts) {
+      for (const stylesheetLink of htmlFact.stylesheetLinks) {
+        const externalFact = externalFactsBySpecifier.get(stylesheetLink.href);
+        if (!externalFact) {
+          continue;
+        }
+
+        const existing = resources.get(stylesheetLink.href);
+        if (existing) {
+          continue;
+        }
+
+        resources.set(stylesheetLink.href, {
+          specifier: stylesheetLink.href,
+          resolvedPath: externalFact.resolvedPath,
+          importedBy: [],
+          category: "external",
+          ownership: "external",
+          classDefinitions: [...externalFact.classDefinitions],
+          imports: [...externalFact.imports],
+        });
+      }
+    }
+  }
+
   return [...resources.values()].sort((left, right) =>
     left.specifier.localeCompare(right.specifier),
   );
+}
+
+function buildActiveExternalCssProviders(
+  config: ResolvedReactCssScannerConfig,
+  facts: ProjectFactExtractionResult,
+) {
+  const activeProviders = new Map<
+    string,
+    {
+      provider: string;
+      match: string[];
+      classPrefixes: string[];
+      classNames: string[];
+      matchedStylesheets: Array<{
+        filePath: string;
+        href: string;
+        isRemote: boolean;
+      }>;
+    }
+  >();
+
+  if (
+    !config.externalCss.enabled ||
+    (config.externalCss.mode !== "declared-globals" && config.externalCss.mode !== "fetch-remote")
+  ) {
+    return activeProviders;
+  }
+
+  for (const htmlFact of facts.htmlFacts) {
+    for (const stylesheetLink of htmlFact.stylesheetLinks) {
+      for (const provider of config.externalCss.globals) {
+        if (!matchesAnyGlob(stylesheetLink.href, provider.match)) {
+          continue;
+        }
+
+        const existingProvider = activeProviders.get(provider.provider);
+        if (existingProvider) {
+          existingProvider.matchedStylesheets.push({
+            filePath: htmlFact.filePath,
+            href: stylesheetLink.href,
+            isRemote: stylesheetLink.isRemote,
+          });
+          existingProvider.matchedStylesheets.sort((left, right) => {
+            if (left.filePath === right.filePath) {
+              return left.href.localeCompare(right.href);
+            }
+
+            return left.filePath.localeCompare(right.filePath);
+          });
+          continue;
+        }
+
+        activeProviders.set(provider.provider, {
+          provider: provider.provider,
+          match: [...provider.match],
+          classPrefixes: [...provider.classPrefixes],
+          classNames: [...provider.classNames],
+          matchedStylesheets: [
+            {
+              filePath: htmlFact.filePath,
+              href: stylesheetLink.href,
+              isRemote: stylesheetLink.isRemote,
+            },
+          ],
+        });
+      }
+    }
+  }
+
+  return activeProviders;
 }
 
 function buildGraphEdges(
@@ -219,6 +327,10 @@ function buildProjectIndexes(
   sourceFiles: SourceFileNode[],
   cssFiles: CssFileNode[],
   externalCssResources: ExternalCssResourceNode[],
+  activeExternalCssProviders: Map<
+    string,
+    ProjectIndexes["activeExternalCssProviders"] extends Map<string, infer V> ? V : never
+  >,
   reachability: Map<string, ReachabilityInfo>,
 ): ProjectIndexes {
   const sourceFileByPath = new Map(sourceFiles.map((sourceFile) => [sourceFile.path, sourceFile]));
@@ -287,6 +399,7 @@ function buildProjectIndexes(
     sourceFileByPath,
     cssFileByPath,
     externalCssBySpecifier,
+    activeExternalCssProviders,
     classDefinitionsByName,
     classReferencesByName,
     reachabilityBySourceFile: reachability,
@@ -297,6 +410,7 @@ function buildProjectIndexes(
 function buildReachability(
   sourceFiles: SourceFileNode[],
   cssFiles: CssFileNode[],
+  projectWideExternalCssSpecifiers: string[],
 ): Map<string, ReachabilityInfo> {
   const sourceFileByPath = new Map(sourceFiles.map((sourceFile) => [sourceFile.path, sourceFile]));
   const cssFileByPath = new Map(cssFiles.map((cssFile) => [cssFile.path, cssFile]));
@@ -359,6 +473,10 @@ function buildReachability(
       }
     }
 
+    for (const externalCssSpecifier of projectWideExternalCssSpecifiers) {
+      externalCss.add(externalCssSpecifier);
+    }
+
     reachabilityBySourceFile.set(sourceFile.path, {
       localCss: new Set([...localCss].sort((left, right) => left.localeCompare(right))),
       globalCss: new Set(globalCssPaths),
@@ -367,6 +485,28 @@ function buildReachability(
   }
 
   return reachabilityBySourceFile;
+}
+
+function getProjectWideExternalCssSpecifiers(
+  config: ResolvedReactCssScannerConfig,
+  facts: ProjectFactExtractionResult,
+): string[] {
+  if (!config.externalCss.enabled) {
+    return [];
+  }
+
+  if (config.externalCss.mode !== "fetch-remote") {
+    return [];
+  }
+
+  return [
+    ...new Set(
+      facts.htmlFacts
+        .flatMap((htmlFact) => htmlFact.stylesheetLinks)
+        .filter((stylesheetLink) => stylesheetLink.isRemote)
+        .map((stylesheetLink) => stylesheetLink.href),
+    ),
+  ].sort((left, right) => left.localeCompare(right));
 }
 
 function collectReachableImporterChain(

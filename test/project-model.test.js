@@ -156,3 +156,36 @@ test("graph edges are deterministic and include css-module relationships", async
     );
   });
 });
+
+test("activates declared external css providers from matching html stylesheet links", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "index.html",
+      [
+        "<!doctype html>",
+        '<html><head><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" /></head><body></body></html>',
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      'export function App() { return <i className="fa-solid fa-plus" />; }',
+    );
+
+    const facts = await extractProjectFacts(DEFAULT_CONFIG, tempDir);
+    const model = buildProjectModel({ config: DEFAULT_CONFIG, facts });
+    const provider = model.indexes.activeExternalCssProviders.get("font-awesome");
+
+    assert.ok(provider);
+    assert.deepEqual(provider.classPrefixes, ["fa-"]);
+    assert.ok(provider.classNames.includes("fa-solid"));
+    assert.deepEqual(provider.matchedStylesheets, [
+      {
+        filePath: "index.html",
+        href: "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css",
+        isRemote: true,
+      },
+    ]);
+  });
+});

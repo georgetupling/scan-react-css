@@ -16,6 +16,10 @@ export function formatJsonOutput(result: ScanResult, configSummaryMode: ConfigSu
     findings: result.findings,
   };
 
+  if ((result.operationalWarnings?.length ?? 0) > 0) {
+    payload.operationalWarnings = result.operationalWarnings;
+  }
+
   if (configSummaryMode === "default") {
     payload.config = buildDefaultConfigSummary(result.config);
   } else if (configSummaryMode === "verbose") {

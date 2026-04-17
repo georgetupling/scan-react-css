@@ -2,6 +2,7 @@ import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import {
   DEFAULT_CONFIG,
+  type ExternalCssGlobalProviderConfig,
   type ExternalCssMode,
   type OwnershipNamingConvention,
   type RawReactCssScannerConfig,
@@ -29,7 +30,8 @@ const SOURCE_KEYS = new Set(["include", "exclude"]);
 const CSS_KEYS = new Set(["global", "utilities", "modules"]);
 const CSS_MODULE_KEYS = new Set(["enabled", "patterns"]);
 const OWNERSHIP_KEYS = new Set(["pagePatterns", "componentCssPatterns", "namingConvention"]);
-const EXTERNAL_CSS_KEYS = new Set(["enabled", "mode"]);
+const EXTERNAL_CSS_KEYS = new Set(["enabled", "mode", "globals"]);
+const EXTERNAL_CSS_GLOBAL_KEYS = new Set(["provider", "match", "classPrefixes", "classNames"]);
 const CLASS_COMPOSITION_KEYS = new Set(["helpers"]);
 const POLICY_KEYS = new Set(["failOnSeverity"]);
 const RULE_OBJECT_KEYS = new Set([
@@ -43,7 +45,7 @@ const RULE_OBJECT_KEYS = new Set([
 const RULE_SEVERITIES: RuleSeverity[] = ["off", "info", "warning", "error"];
 const FAIL_ON_SEVERITIES: Array<Exclude<RuleSeverity, "off">> = ["info", "warning", "error"];
 const OWNERSHIP_NAMING_CONVENTIONS: OwnershipNamingConvention[] = ["off", "sibling"];
-const EXTERNAL_CSS_MODES: ExternalCssMode[] = ["imported-only"];
+const EXTERNAL_CSS_MODES: ExternalCssMode[] = ["imported-only", "declared-globals", "fetch-remote"];
 
 export type ConfigSourceKind =
   | "inline"
@@ -168,6 +170,25 @@ export function normalizeReactCssScannerConfig(
     assertKnownKeys(externalCss, EXTERNAL_CSS_KEYS, "config.externalCss", options.filePath);
   }
 
+  if (externalCss?.globals !== undefined) {
+    if (!Array.isArray(externalCss.globals)) {
+      throw new ReactCssScannerConfigError(`Expected config.externalCss.globals to be an array`, {
+        filePath: options.filePath,
+        path: "config.externalCss.globals",
+      });
+    }
+
+    for (const [index, globalEntry] of externalCss.globals.entries()) {
+      assertPlainObject(globalEntry, `config.externalCss.globals[${index}]`, options.filePath);
+      assertKnownKeys(
+        globalEntry,
+        EXTERNAL_CSS_GLOBAL_KEYS,
+        `config.externalCss.globals[${index}]`,
+        options.filePath,
+      );
+    }
+  }
+
   const classComposition = rawConfig.classComposition;
   if (classComposition !== undefined) {
     assertPlainObject(classComposition, "config.classComposition", options.filePath);
@@ -252,6 +273,12 @@ export function normalizeReactCssScannerConfig(
           "config.externalCss.mode",
           options.filePath,
         ) ?? DEFAULT_CONFIG.externalCss.mode,
+      globals:
+        normalizeExternalCssGlobals(
+          externalCss?.globals,
+          "config.externalCss.globals",
+          options.filePath,
+        ) ?? cloneExternalCssGlobals(DEFAULT_CONFIG.externalCss.globals),
     },
     classComposition: {
       helpers: normalizeStringArray(
@@ -470,6 +497,7 @@ function cloneResolvedConfig(config: ResolvedReactCssScannerConfig): ResolvedRea
     externalCss: {
       enabled: config.externalCss.enabled,
       mode: config.externalCss.mode,
+      globals: cloneExternalCssGlobals(config.externalCss.globals),
     },
     classComposition: {
       helpers: [...config.classComposition.helpers],
@@ -489,6 +517,17 @@ function cloneRuleConfigValue(value: RuleConfigValue): RuleConfigValue {
   }
 
   return { ...value };
+}
+
+function cloneExternalCssGlobals(
+  globals: ExternalCssGlobalProviderConfig[],
+): ExternalCssGlobalProviderConfig[] {
+  return globals.map((entry) => ({
+    provider: entry.provider,
+    match: [...entry.match],
+    classPrefixes: [...entry.classPrefixes],
+    classNames: [...entry.classNames],
+  }));
 }
 
 function normalizeString(value: unknown, valuePath: string, filePath?: string): string | undefined {
@@ -542,6 +581,64 @@ function normalizeStringArray(
   }
 
   return [...value];
+}
+
+function normalizeExternalCssGlobals(
+  value: unknown,
+  valuePath: string,
+  filePath?: string,
+): ExternalCssGlobalProviderConfig[] | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (!Array.isArray(value)) {
+    throw new ReactCssScannerConfigError(`Expected ${valuePath} to be an array`, {
+      filePath,
+      path: valuePath,
+    });
+  }
+
+  return value.map((entry, index) => {
+    assertPlainObject(entry, `${valuePath}[${index}]`, filePath);
+    assertKnownKeys(entry, EXTERNAL_CSS_GLOBAL_KEYS, `${valuePath}[${index}]`, filePath);
+
+    const provider = normalizeString(entry.provider, `${valuePath}[${index}].provider`, filePath);
+    const match = normalizeStringArray(entry.match, `${valuePath}[${index}].match`, filePath);
+
+    if (!provider) {
+      throw new ReactCssScannerConfigError(
+        `Missing required provider at ${valuePath}[${index}].provider`,
+        {
+          filePath,
+          path: `${valuePath}[${index}].provider`,
+        },
+      );
+    }
+
+    if (!match || match.length === 0) {
+      throw new ReactCssScannerConfigError(
+        `Expected ${valuePath}[${index}].match to contain at least one pattern`,
+        {
+          filePath,
+          path: `${valuePath}[${index}].match`,
+        },
+      );
+    }
+
+    return {
+      provider,
+      match,
+      classPrefixes:
+        normalizeStringArray(
+          entry.classPrefixes,
+          `${valuePath}[${index}].classPrefixes`,
+          filePath,
+        ) ?? [],
+      classNames:
+        normalizeStringArray(entry.classNames, `${valuePath}[${index}].classNames`, filePath) ?? [],
+    };
+  });
 }
 
 function normalizePositiveInteger(value: unknown, valuePath: string, filePath?: string): number {

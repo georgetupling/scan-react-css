@@ -47,6 +47,18 @@ export type ExternalCssResourceNode = {
   imports: ExternalCssFact["imports"];
 };
 
+export type ActiveExternalCssProvider = {
+  provider: string;
+  match: string[];
+  classPrefixes: string[];
+  classNames: string[];
+  matchedStylesheets: Array<{
+    filePath: string;
+    href: string;
+    isRemote: boolean;
+  }>;
+};
+
 export type ProjectGraphEdgeType =
   | "source-import"
   | "css-import"
@@ -73,6 +85,7 @@ export type ProjectIndexes = {
   sourceFileByPath: Map<string, SourceFileNode>;
   cssFileByPath: Map<string, CssFileNode>;
   externalCssBySpecifier: Map<string, ExternalCssResourceNode>;
+  activeExternalCssProviders: Map<string, ActiveExternalCssProvider>;
   classDefinitionsByName: Map<
     string,
     Array<{

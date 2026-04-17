@@ -60,6 +60,23 @@ export function isCssModuleFile(model: ProjectModel, cssFilePath: string): boole
   return false;
 }
 
+export function getDeclaredExternalProviderForClass(
+  model: ProjectModel,
+  className: string,
+): string | undefined {
+  for (const provider of model.indexes.activeExternalCssProviders.values()) {
+    if (provider.classNames.includes(className)) {
+      return provider.provider;
+    }
+
+    if (provider.classPrefixes.some((prefix) => className.startsWith(prefix))) {
+      return provider.provider;
+    }
+  }
+
+  return undefined;
+}
+
 export function getOwningSourceFiles(model: ProjectModel, cssFilePath: string): Set<string> {
   const owners = new Set<string>();
   const siblingOwners = getSiblingOwnerSources(model, cssFilePath);

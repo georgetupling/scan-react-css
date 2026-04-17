@@ -4,7 +4,14 @@ export type ConfidenceLevel = "low" | "medium" | "high";
 
 export type OwnershipNamingConvention = "off" | "sibling";
 
-export type ExternalCssMode = "imported-only";
+export type ExternalCssMode = "imported-only" | "declared-globals" | "fetch-remote";
+
+export type ExternalCssGlobalProviderConfig = {
+  provider: string;
+  match: string[];
+  classPrefixes: string[];
+  classNames: string[];
+};
 
 export type RuleConfigObject = {
   severity: RuleSeverity;
@@ -39,6 +46,12 @@ export type RawReactCssScannerConfig = {
   externalCss?: {
     enabled?: boolean;
     mode?: ExternalCssMode;
+    globals?: Array<{
+      provider?: string;
+      match?: string[];
+      classPrefixes?: string[];
+      classNames?: string[];
+    }>;
   };
   classComposition?: {
     helpers?: string[];
@@ -71,6 +84,7 @@ export type ResolvedReactCssScannerConfig = {
   externalCss: {
     enabled: boolean;
     mode: ExternalCssMode;
+    globals: ExternalCssGlobalProviderConfig[];
   };
   classComposition: {
     helpers: string[];
@@ -102,7 +116,28 @@ export const DEFAULT_CONFIG: ResolvedReactCssScannerConfig = {
   },
   externalCss: {
     enabled: true,
-    mode: "imported-only",
+    mode: "declared-globals",
+    globals: [
+      {
+        provider: "font-awesome",
+        match: [
+          "**/font-awesome/**/css/*.css",
+          "**/fontawesome/**/css/*.css",
+          "**/cdnjs.cloudflare.com/ajax/libs/font-awesome/**/css/*.css",
+          "**/use.fontawesome.com/**.css",
+        ],
+        classPrefixes: ["fa-"],
+        classNames: [
+          "fa",
+          "fa-solid",
+          "fa-regular",
+          "fa-brands",
+          "fa-light",
+          "fa-thin",
+          "fa-duotone",
+        ],
+      },
+    ],
   },
   classComposition: {
     helpers: ["classnames", "clsx"],

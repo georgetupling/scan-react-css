@@ -209,6 +209,8 @@ Config summary modes:
 
 `--output-min-severity` does not affect JSON output. JSON always includes the full unfiltered result for the run.
 
+When present, `operationalWarnings` are also included in JSON output.
+
 ## Determinism contract
 
 For the same file tree, config, and CLI options, the scanner should produce:
@@ -225,3 +227,10 @@ Warnings that are not findings should be used sparingly.
 The main expected operational warning is:
 
 - no config file discovered, built-in defaults used
+
+## External CSS behavior
+
+- Imported external CSS from source files is modeled when it is discoverable from the project import graph.
+- HTML files under the scan root are inspected for stylesheet links.
+- In the default `declared-globals` mode, matching HTML-linked provider presets such as Font Awesome can satisfy known external class families without network fetches.
+- In `fetch-remote` mode, remote HTML-linked stylesheet URLs are fetched directly for the current scan and failures degrade to operational warnings plus fallback external-css behavior.

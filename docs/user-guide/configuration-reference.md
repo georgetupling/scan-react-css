@@ -27,7 +27,7 @@ This page lists every supported configuration option in `react-css-scanner.json`
   },
   "externalCss": {
     "enabled": true,
-    "mode": "imported-only"
+    "mode": "declared-globals"
   },
   "classComposition": {
     "helpers": ["classnames", "clsx"]
@@ -297,13 +297,46 @@ Example:
 
 ### `externalCss.mode`
 
-Type: `"imported-only"`
+Type: `"imported-only" | "declared-globals" | "fetch-remote"`
 
 Default:
 
 ```json
-"imported-only"
+"declared-globals"
 ```
+
+`"imported-only"` limits external CSS modeling to explicit source imports.
+
+`"declared-globals"` also allows matching HTML-linked stylesheets to activate declared global providers such as the built-in Font Awesome preset.
+
+`"fetch-remote"` includes declared-global behavior and also fetches matching remote HTML-linked stylesheets directly so their real class definitions can be indexed for that scan.
+
+### `externalCss.globals`
+
+Type: `Array<{ provider: string; match: string[]; classPrefixes: string[]; classNames: string[] }>`
+
+Default:
+
+- built-in Font Awesome provider preset
+
+Example:
+
+```json
+{
+  "externalCss": {
+    "globals": [
+      {
+        "provider": "font-awesome",
+        "match": ["**/cdnjs.cloudflare.com/ajax/libs/font-awesome/**/css/*.css"],
+        "classPrefixes": ["fa-"],
+        "classNames": ["fa", "fa-solid", "fa-regular", "fa-brands"]
+      }
+    ]
+  }
+}
+```
+
+These entries are matched against HTML stylesheet URLs or paths using glob matching.
 
 ## `classComposition`
 

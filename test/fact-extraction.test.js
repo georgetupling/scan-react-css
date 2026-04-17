@@ -26,6 +26,11 @@ test("discovers source and css files deterministically with include/exclude rule
   await withTempDir(async (tempDir) => {
     await writeProjectFile(tempDir, "src/App.tsx", "export const App = () => null;");
     await writeProjectFile(tempDir, "src/components/Button.css", ".button {}");
+    await writeProjectFile(
+      tempDir,
+      "index.html",
+      '<link rel="stylesheet" href="https://example.com/app.css" />',
+    );
     await writeProjectFile(tempDir, "build/Ignore.tsx", "export const Ignore = () => null;");
     await writeProjectFile(tempDir, "src/notes.txt", "ignore");
 
@@ -38,6 +43,10 @@ test("discovers source and css files deterministically with include/exclude rule
     assert.deepEqual(
       result.cssFiles.map((file) => file.relativePath),
       ["src/components/Button.css"],
+    );
+    assert.deepEqual(
+      result.htmlFiles.map((file) => file.relativePath),
+      ["index.html"],
     );
   });
 });
@@ -202,5 +211,38 @@ test("extracts imported external css facts from node_modules only when reference
       ),
     );
     assert.ok(!result.externalCssFacts.some((fact) => fact.specifier === "unused/styles.css"));
+  });
+});
+
+test("extracts html stylesheet facts for linked external stylesheets", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "index.html",
+      [
+        "<!doctype html>",
+        '<html><head><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />',
+        '<link rel="stylesheet" href="/assets/app.css?v=1" />',
+        '<link rel="preconnect" href="https://fonts.googleapis.com" /></head><body></body></html>',
+      ].join("\n"),
+    );
+
+    const result = await extractProjectFacts(DEFAULT_CONFIG, tempDir);
+
+    assert.deepEqual(result.htmlFacts, [
+      {
+        filePath: "index.html",
+        stylesheetLinks: [
+          {
+            href: "/assets/app.css?v=1",
+            isRemote: false,
+          },
+          {
+            href: "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css",
+            isRemote: true,
+          },
+        ],
+      },
+    ]);
   });
 });

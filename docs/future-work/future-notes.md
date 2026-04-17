@@ -27,7 +27,22 @@ Potential future architecture extensions:
 - more advanced CSS Modules handling
 - deeper dependency inspection
 - additional style formats
+- broader CSS-loading discovery beyond source imports and basic HTML stylesheet links
 - future autofix metadata and execution support
+
+### CSS-loading gaps after HTML external CSS support
+
+Even after adding HTML-linked stylesheet support and declared external global providers, the scanner will still have important blind spots that should remain future work until they are intentionally designed.
+
+Likely next steps:
+
+- framework-aware entry document discovery beyond plain `*.html`
+- server-template stylesheet discovery for non-React app shells
+- local public-asset stylesheet modeling from HTML links
+- recursive external CSS `@import` handling for linked stylesheets
+- persistent caching for remote stylesheet fetches across scans
+- framework/plugin-injected stylesheet support where CSS is added without explicit source imports or HTML links
+- runtime-injected CSS handling for tools such as styled-components or Emotion
 
 Example future autofix metadata:
 

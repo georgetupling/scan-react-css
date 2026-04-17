@@ -3,6 +3,7 @@ import path from "node:path";
 import type { ResolvedReactCssScannerConfig } from "../config/types.js";
 import {
   isCssFilePath,
+  isHtmlFilePath,
   isSourceFilePath,
   matchesAnyGlob,
   normalizePathForMatch,
@@ -23,11 +24,15 @@ export async function discoverProjectFiles(
   const cssFiles = discoveredFiles
     .filter((file) => file.kind === "css")
     .sort(compareDiscoveredFiles);
+  const htmlFiles = discoveredFiles
+    .filter((file) => file.kind === "html")
+    .sort(compareDiscoveredFiles);
 
   return {
     rootDir,
     sourceFiles,
     cssFiles,
+    htmlFiles,
   };
 }
 
@@ -60,12 +65,12 @@ async function walkDirectory(
       continue;
     }
 
-    if (!shouldIncludePath(relativePath, config.source.include)) {
+    const kind = getFileKind(relativePath);
+    if (!kind) {
       continue;
     }
 
-    const kind = getFileKind(relativePath);
-    if (!kind) {
+    if (kind !== "html" && !shouldIncludePath(relativePath, config.source.include)) {
       continue;
     }
 
@@ -110,6 +115,10 @@ function getFileKind(relativePath: string): DiscoveredProjectFile["kind"] | unde
 
   if (isCssFilePath(relativePath)) {
     return "css";
+  }
+
+  if (isHtmlFilePath(relativePath)) {
+    return "html";
   }
 
   return undefined;

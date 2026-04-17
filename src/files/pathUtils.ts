@@ -2,6 +2,7 @@ import path from "node:path";
 
 export const SOURCE_FILE_EXTENSIONS = new Set([".js", ".jsx", ".ts", ".tsx"]);
 export const CSS_FILE_EXTENSIONS = new Set([".css"]);
+export const HTML_FILE_EXTENSIONS = new Set([".html"]);
 
 export function normalizePathForMatch(value: string): string {
   return value.split(path.sep).join("/");
@@ -13,6 +14,10 @@ export function isSourceFilePath(filePath: string): boolean {
 
 export function isCssFilePath(filePath: string): boolean {
   return CSS_FILE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+}
+
+export function isHtmlFilePath(filePath: string): boolean {
+  return HTML_FILE_EXTENSIONS.has(path.extname(filePath).toLowerCase());
 }
 
 export function globToRegExp(globPattern: string): RegExp {

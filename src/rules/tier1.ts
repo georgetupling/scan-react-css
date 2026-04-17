@@ -1,6 +1,7 @@
 import type { RuleDefinition } from "./types.js";
 import {
   DYNAMIC_REFERENCE_KINDS,
+  getDeclaredExternalProviderForClass,
   getDeclarationOverlap,
   getOwningSourceFiles,
   getProjectClassDefinitions,
@@ -53,6 +54,21 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
           }
 
           if (candidateDefinitions.length > 0) {
+            continue;
+          }
+
+          const declaredExternalProvider = getDeclaredExternalProviderForClass(
+            context.model,
+            reference.className,
+          );
+          if (declaredExternalProvider) {
+            continue;
+          }
+
+          const hasReachableRemoteExternalCss = [...reachability.externalCss].some(
+            (specifier) => specifier.startsWith("http://") || specifier.startsWith("https://"),
+          );
+          if (hasReachableRemoteExternalCss) {
             continue;
           }
 
