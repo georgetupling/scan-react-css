@@ -39,6 +39,8 @@ npm install -g react-css-scanner
 react-css-scanner
 ```
 
+For full usage and configuration docs, start at [docs/user-guide/README.md](./docs/user-guide/README.md).
+
 ## Quick Start
 
 1. Install the package:
@@ -157,7 +159,7 @@ Example:
 }
 ```
 
-For a fuller config reference, see [docs/design/config-schema.md](./docs/design/config-schema.md) and [docs/design/config-contract.md](./docs/design/config-contract.md).
+For full configuration docs, see [docs/user-guide/README.md](./docs/user-guide/README.md).
 
 ## Output And CI
 
@@ -169,23 +171,3 @@ Default policy:
 - `warning` and `info` do not
 
 Human-readable output is stable and terminal-friendly. JSON output is deterministic and intended for tooling and CI.
-
-## Development
-
-Repo commands:
-
-- `npm run build`
-- `npm run check`
-- `npm run lint`
-- `npm run format`
-- `npm test`
-- `npm run benchmark`
-
-## Docs
-
-- [docs/README.md](./docs/README.md)
-- [docs/design/architecture.md](./docs/design/architecture.md)
-- [docs/design/runtime-contracts.md](./docs/design/runtime-contracts.md)
-- [docs/design/config-contract.md](./docs/design/config-contract.md)
-- [docs/design/rules.md](./docs/design/rules.md)
-- [docs/future-work/post-mvp-ideas.md](./docs/future-work/post-mvp-ideas.md)
