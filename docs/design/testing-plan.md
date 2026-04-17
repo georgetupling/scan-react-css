@@ -49,6 +49,8 @@ Unit tests should cover small deterministic pieces with minimal filesystem setup
 - import parsing helpers
 - CSS selector/class extraction
 - selector-branch normalization for standalone, compound, contextual, and complex selector cases
+- stylesheet rule extraction with preserved at-rule context and declaration property/value pairs
+- exact-match redundancy detection that treats at-rule context as part of block identity
 - class-composition parsing
 - `classnames` and `clsx` helper handling
 - CSS Module reference extraction

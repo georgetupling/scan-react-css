@@ -491,6 +491,7 @@ The scanner is class-focused, but it must tolerate CSS beyond simple `.className
 - preserve selector and at-rule context
 - distinguish standalone, compound, contextual, and complex selector branches
 - treat compound and contextual selector branches conservatively rather than flattening every mentioned class into a direct definition
+- preserve parsed declaration property/value pairs for each extracted style rule
 
 This prevents the analysis from overclaiming confidence in complex CSS cases.
 

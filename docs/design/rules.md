@@ -95,6 +95,8 @@ These rules capture uncertainty explicitly instead of falling back to a vague ma
 
 ### Optimization and migration
 
+- `empty-css-rule`: a selector block contains no CSS declarations
+- `redundant-css-declaration-block`: a simple root class block repeats the exact same declarations in the same selector and at-rule context
 - `utility-class-replacement`: a custom class may be replaceable with configured utility CSS already available in the project
 
 Duplicate-definition reporting should stay conservative:

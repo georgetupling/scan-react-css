@@ -53,12 +53,32 @@ export type CssSelectorBranchFact = {
   hasUnknownSemantics: boolean;
 };
 
+export type CssAtRuleContextFact = {
+  name: string;
+  params: string;
+};
+
+export type CssDeclarationFact = {
+  property: string;
+  value: string;
+};
+
+export type CssStyleRuleFact = {
+  selector: string;
+  selectorBranches: CssSelectorBranchFact[];
+  declarations: CssDeclarationFact[];
+  line: number;
+  atRuleContext: CssAtRuleContextFact[];
+};
+
 export type CssClassDefinitionFact = {
   className: string;
   selector: string;
   selectorBranch: CssSelectorBranchFact;
   declarations: string[];
+  declarationDetails: CssDeclarationFact[];
   line: number;
+  atRuleContext: CssAtRuleContextFact[];
 };
 
 export type CssImportFact = {
@@ -68,6 +88,7 @@ export type CssImportFact = {
 
 export type CssFileFact = {
   filePath: string;
+  styleRules: CssStyleRuleFact[];
   classDefinitions: CssClassDefinitionFact[];
   imports: CssImportFact[];
 };
@@ -75,6 +96,7 @@ export type CssFileFact = {
 export type ExternalCssFact = {
   specifier: string;
   resolvedPath: string;
+  styleRules: CssStyleRuleFact[];
   classDefinitions: CssClassDefinitionFact[];
   imports: CssImportFact[];
 };

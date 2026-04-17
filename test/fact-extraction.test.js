@@ -313,6 +313,55 @@ test("extracts selector branch semantics for standalone, compound, and contextua
   });
 });
 
+test("extracts at-rule context and declaration values for style rules", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/styles/responsive.css",
+      [
+        ".card { display: flex; gap: 1rem; }",
+        "@media (min-width: 768px) {",
+        "  .card { display: grid; gap: 2rem; }",
+        "  .card__empty {}",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = await extractProjectFacts(DEFAULT_CONFIG, tempDir);
+    const cssFacts = result.cssFacts.find((fact) => fact.filePath === "src/styles/responsive.css");
+
+    assert.ok(cssFacts);
+    assert.equal(cssFacts.styleRules.length, 3);
+
+    const rootCardRule = cssFacts.styleRules.find(
+      (styleRule) => styleRule.selector === ".card" && styleRule.atRuleContext.length === 0,
+    );
+    assert.deepEqual(rootCardRule?.declarations, [
+      { property: "display", value: "flex" },
+      { property: "gap", value: "1rem" },
+    ]);
+
+    const mediaCardRule = cssFacts.styleRules.find(
+      (styleRule) => styleRule.selector === ".card" && styleRule.atRuleContext.length === 1,
+    );
+    assert.deepEqual(mediaCardRule?.atRuleContext, [
+      { name: "media", params: "(min-width: 768px)" },
+    ]);
+    assert.deepEqual(mediaCardRule?.declarations, [
+      { property: "display", value: "grid" },
+      { property: "gap", value: "2rem" },
+    ]);
+
+    const emptyCardDefinition = cssFacts.classDefinitions.find(
+      (definition) => definition.className === "card__empty",
+    );
+    assert.deepEqual(emptyCardDefinition?.declarationDetails, []);
+    assert.deepEqual(emptyCardDefinition?.atRuleContext, [
+      { name: "media", params: "(min-width: 768px)" },
+    ]);
+  });
+});
+
 test("extracts imported external css facts from node_modules only when referenced", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(

@@ -3,10 +3,10 @@
     "fileCount": 2,
     "sourceFileCount": 1,
     "cssFileCount": 1,
-    "findingCount": 2,
+    "findingCount": 4,
     "errorCount": 1,
     "warningCount": 1,
-    "infoCount": 0
+    "infoCount": 2
   },
   "findings": [
     {
@@ -45,6 +45,44 @@
         "cssFilePath": "src/App.css"
       },
       "metadata": {}
+    },
+    {
+      "ruleId": "empty-css-rule",
+      "family": "optimization-and-migration",
+      "severity": "info",
+      "confidence": "high",
+      "message": "Selector \".unused\" in \"src/App.css\" does not contain any CSS declarations.",
+      "primaryLocation": {
+        "filePath": "src/App.css",
+        "line": 2
+      },
+      "relatedLocations": [],
+      "subject": {
+        "cssFilePath": "src/App.css"
+      },
+      "metadata": {
+        "selector": ".unused",
+        "atRuleContext": []
+      }
+    },
+    {
+      "ruleId": "empty-css-rule",
+      "family": "optimization-and-migration",
+      "severity": "info",
+      "confidence": "high",
+      "message": "Selector \".used\" in \"src/App.css\" does not contain any CSS declarations.",
+      "primaryLocation": {
+        "filePath": "src/App.css",
+        "line": 1
+      },
+      "relatedLocations": [],
+      "subject": {
+        "cssFilePath": "src/App.css"
+      },
+      "metadata": {
+        "selector": ".used",
+        "atRuleContext": []
+      }
     }
   ],
   "operationalWarnings": [

@@ -285,6 +285,106 @@ test("missing-external-css-class ignores classes satisfied by html-linked declar
   });
 });
 
+test("empty-css-rule reports empty selector blocks and preserves at-rule context", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.css",
+      [".filled { color: red; }", ".empty {}", "@media (min-width: 768px) { .responsive-empty {} }"].join(
+        "\n",
+      ),
+    );
+
+    const findings = await runScenario(tempDir);
+    const emptyFindings = findings.filter((finding) => finding.ruleId === "empty-css-rule");
+
+    assert.equal(emptyFindings.length, 2);
+    assert.deepEqual(
+      emptyFindings.map((finding) => ({
+        line: finding.primaryLocation?.line,
+        selector: finding.metadata.selector,
+        atRuleContext: finding.metadata.atRuleContext,
+      })),
+      [
+        {
+          line: 2,
+          selector: ".empty",
+          atRuleContext: [],
+        },
+        {
+          line: 3,
+          selector: ".responsive-empty",
+          atRuleContext: [{ name: "media", params: "(min-width: 768px)" }],
+        },
+      ],
+    );
+  });
+});
+
+test("redundant-css-declaration-block reports exact same-file duplicates in the same context", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.css",
+      [
+        ".button { display: flex; gap: 1rem; }",
+        ".button { gap: 1rem; display: flex; }",
+        "@media (min-width: 768px) { .button { display: flex; gap: 1rem; } }",
+      ].join("\n"),
+    );
+
+    const findings = await runScenario(tempDir);
+    const finding = findings.find(
+      (entry) =>
+        entry.ruleId === "redundant-css-declaration-block" &&
+        entry.subject?.className === "button",
+    );
+
+    assert.ok(finding);
+    assert.equal(finding.primaryLocation?.filePath, "src/App.css");
+    assert.equal(finding.primaryLocation?.line, 1);
+    assert.deepEqual(finding.relatedLocations, [{ filePath: "src/App.css", line: 2 }]);
+    assert.deepEqual(finding.metadata.duplicateLocations, [
+      {
+        filePath: "src/App.css",
+        line: 1,
+        selector: ".button",
+        atRuleContext: [],
+      },
+      {
+        filePath: "src/App.css",
+        line: 2,
+        selector: ".button",
+        atRuleContext: [],
+      },
+    ]);
+  });
+});
+
+test("redundant-css-declaration-block ignores breakpoint and selector-context differences", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.css",
+      [
+        ".button { display: flex; }",
+        "@media (min-width: 768px) { .button { display: flex; } }",
+        ".panel .button { display: flex; }",
+        ".button:hover { display: flex; }",
+      ].join("\n"),
+    );
+
+    const findings = await runScenario(tempDir);
+    const finding = findings.find(
+      (entry) =>
+        entry.ruleId === "redundant-css-declaration-block" &&
+        entry.subject?.className === "button",
+    );
+
+    assert.equal(finding, undefined);
+  });
+});
+
 test("duplicate-css-class-definition reports duplicate project class names once", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(tempDir, "src/A.css", ".shared {}");

@@ -1,4 +1,4 @@
-import type { CssSelectorBranchFact } from "./types.js";
+import type { CssSelectorBranchFact } from "../facts/types.js";
 
 type SelectorSegment = {
   classNames: string[];

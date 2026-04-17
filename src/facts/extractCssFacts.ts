@@ -1,16 +1,18 @@
 import { readFile } from "node:fs/promises";
 import type { DiscoveredProjectFile } from "../files/types.js";
+import { extractCssStyleRules } from "../parser/parseCssStyleRules.js";
 import type { CssFileFact, CssImportFact, ExternalCssFact } from "./types.js";
-import { extractSelectorBranchFacts } from "./parseCssSelectors.js";
 
 const CSS_IMPORT_PATTERN = /@import\s+(?:url\()?["']([^"']+)["']\)?/g;
 
 export async function extractCssFileFacts(cssFile: DiscoveredProjectFile): Promise<CssFileFact> {
   const content = await readFile(cssFile.absolutePath, "utf8");
+  const styleRules = extractCssStyleRules(content);
 
   return {
     filePath: cssFile.relativePath,
-    classDefinitions: extractClassDefinitions(content),
+    styleRules,
+    classDefinitions: extractClassDefinitions(styleRules),
     imports: extractCssImports(content),
   };
 }
@@ -39,49 +41,39 @@ function buildExternalCssFact(
   },
   content: string,
 ): ExternalCssFact {
+  const styleRules = extractCssStyleRules(content);
   return {
     specifier: input.specifier,
     resolvedPath: input.resolvedPath,
-    classDefinitions: extractClassDefinitions(content),
+    styleRules,
+    classDefinitions: extractClassDefinitions(styleRules),
     imports: extractCssImports(content),
   };
 }
 
-function extractClassDefinitions(content: string): CssFileFact["classDefinitions"] {
+function extractClassDefinitions(
+  styleRules: CssFileFact["styleRules"],
+): CssFileFact["classDefinitions"] {
   const definitions = new Map<
     string,
     CssFileFact["classDefinitions"][number]
   >();
-  const blockPattern = /([^{}]+)\{([^{}]*)\}/g;
-  let match: RegExpExecArray | null;
 
-  while ((match = blockPattern.exec(content)) !== null) {
-    const selectorStartOffset = match.index + getLeadingWhitespaceLength(match[1]);
-    const selectorStartLine = getLineNumberAtOffset(content, selectorStartOffset);
-    const selectorText = match[1]
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0 && !line.startsWith("@import"))
-      .join(" ")
-      .trim();
+  for (const styleRule of styleRules) {
+    const declarations = extractDeclarationNames(styleRule.declarations);
 
-    if (!selectorText || selectorText.startsWith("@")) {
-      continue;
-    }
-
-    const declarations = extractDeclarationNames(match[2]);
-    const selectorBranches = extractSelectorBranchFacts(selectorText);
-
-    for (const selectorBranch of selectorBranches) {
+    for (const selectorBranch of styleRule.selectorBranches) {
       for (const className of selectorBranch.subjectClassNames) {
-        const definitionKey = `${selectorBranch.raw}::${className}`;
+        const definitionKey = `${selectorBranch.raw}::${className}::${serializeAtRuleContext(styleRule.atRuleContext)}`;
         if (!definitions.has(definitionKey)) {
           definitions.set(definitionKey, {
             className,
             selector: selectorBranch.raw,
             selectorBranch,
             declarations,
-            line: selectorStartLine,
+            declarationDetails: [...styleRule.declarations],
+            line: styleRule.line,
+            atRuleContext: [...styleRule.atRuleContext],
           });
         }
       }
@@ -101,13 +93,10 @@ function extractClassDefinitions(content: string): CssFileFact["classDefinitions
   });
 }
 
-function extractDeclarationNames(blockBody: string): string[] {
+function extractDeclarationNames(blockBody: Array<{ property: string }>): string[] {
   const declarationNames = new Set<string>();
-  const declarationPattern = /([a-zA-Z-]+)\s*:/g;
-  let match: RegExpExecArray | null;
-
-  while ((match = declarationPattern.exec(blockBody)) !== null) {
-    declarationNames.add(match[1]);
+  for (const declaration of blockBody) {
+    declarationNames.add(declaration.property);
   }
 
   return [...declarationNames].sort((left, right) => left.localeCompare(right));
@@ -130,19 +119,8 @@ function extractCssImports(content: string): CssImportFact[] {
   return imports;
 }
 
-function getLineNumberAtOffset(content: string, offset: number): number {
-  let line = 1;
-
-  for (let index = 0; index < offset; index += 1) {
-    if (content[index] === "\n") {
-      line += 1;
-    }
-  }
-
-  return line;
-}
-
-function getLeadingWhitespaceLength(value: string): number {
-  const match = /^\s*/.exec(value);
-  return match?.[0].length ?? 0;
+function serializeAtRuleContext(
+  atRuleContext: Array<{ name: string; params: string }>,
+): string {
+  return atRuleContext.map((entry) => `${entry.name}:${entry.params}`).join("|");
 }

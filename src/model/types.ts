@@ -33,6 +33,7 @@ export type CssFileNode = {
   path: string;
   category: CssResourceCategory;
   ownership: CssOwnership;
+  styleRules: CssFileFact["styleRules"];
   classDefinitions: CssClassDefinitionFact[];
   imports: CssFileFact["imports"];
 };
@@ -43,6 +44,7 @@ export type ExternalCssResourceNode = {
   importedBy: string[];
   category: "external";
   ownership: "external";
+  styleRules: ExternalCssFact["styleRules"];
   classDefinitions: CssClassDefinitionFact[];
   imports: ExternalCssFact["imports"];
 };
