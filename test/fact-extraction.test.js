@@ -248,7 +248,68 @@ test("extracts css facts for class definitions and css imports", async () => {
     assert.ok(
       cssFacts.classDefinitions.some((definition) => definition.className === "buttonPrimary"),
     );
+    const buttonDefinition = cssFacts.classDefinitions.find(
+      (definition) => definition.className === "button",
+    );
+    assert.equal(buttonDefinition?.selector, ".page .button");
+    assert.equal(buttonDefinition?.selectorBranch.matchKind, "contextual");
+    assert.deepEqual(buttonDefinition?.selectorBranch.contextClassNames, ["page"]);
+
+    const buttonPrimaryDefinition = cssFacts.classDefinitions.find(
+      (definition) => definition.className === "buttonPrimary",
+    );
+    assert.equal(buttonPrimaryDefinition?.selector, ".buttonPrimary:hover");
+    assert.equal(buttonPrimaryDefinition?.selectorBranch.matchKind, "standalone");
+    assert.equal(buttonPrimaryDefinition?.selectorBranch.hasSubjectModifiers, true);
     assert.ok(cssFacts.classDefinitions.every((definition) => typeof definition.line === "number"));
+  });
+});
+
+test("extracts selector branch semantics for standalone, compound, and contextual selectors", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/styles/selector-shapes.css",
+      [
+        ".button {}",
+        ".button.button--primary {}",
+        ".toolbar .button__icon {}",
+        ".button:not(.button--disabled) {}",
+      ].join("\n"),
+    );
+
+    const result = await extractProjectFacts(DEFAULT_CONFIG, tempDir);
+    const cssFacts = result.cssFacts.find((fact) => fact.filePath === "src/styles/selector-shapes.css");
+
+    assert.ok(cssFacts);
+
+    const baseButton = cssFacts.classDefinitions.find(
+      (definition) => definition.className === "button" && definition.selector === ".button",
+    );
+    assert.equal(baseButton?.selectorBranch.matchKind, "standalone");
+
+    const compoundButton = cssFacts.classDefinitions.find(
+      (definition) =>
+        definition.className === "button" && definition.selector === ".button.button--primary",
+    );
+    assert.equal(compoundButton?.selectorBranch.matchKind, "compound");
+    assert.deepEqual(compoundButton?.selectorBranch.requiredClassNames, [
+      "button",
+      "button--primary",
+    ]);
+
+    const contextualIcon = cssFacts.classDefinitions.find(
+      (definition) => definition.className === "button__icon",
+    );
+    assert.equal(contextualIcon?.selectorBranch.matchKind, "contextual");
+    assert.deepEqual(contextualIcon?.selectorBranch.contextClassNames, ["toolbar"]);
+
+    const negatedButton = cssFacts.classDefinitions.find(
+      (definition) =>
+        definition.className === "button" && definition.selector === ".button:not(.button--disabled)",
+    );
+    assert.equal(negatedButton?.selectorBranch.matchKind, "standalone");
+    assert.deepEqual(negatedButton?.selectorBranch.negativeClassNames, ["button--disabled"]);
   });
 });
 

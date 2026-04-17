@@ -39,9 +39,24 @@ export type SourceFileFact = {
   helperImports: string[];
 };
 
+export type CssSelectorMatchKind = "standalone" | "compound" | "contextual" | "complex";
+
+export type CssSelectorBranchFact = {
+  raw: string;
+  matchKind: CssSelectorMatchKind;
+  subjectClassNames: string[];
+  requiredClassNames: string[];
+  contextClassNames: string[];
+  negativeClassNames: string[];
+  hasCombinators: boolean;
+  hasSubjectModifiers: boolean;
+  hasUnknownSemantics: boolean;
+};
+
 export type CssClassDefinitionFact = {
   className: string;
   selector: string;
+  selectorBranch: CssSelectorBranchFact;
   declarations: string[];
   line: number;
 };

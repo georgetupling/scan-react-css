@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises";
 import type { DiscoveredProjectFile } from "../files/types.js";
 import type { CssFileFact, CssImportFact, ExternalCssFact } from "./types.js";
+import { extractSelectorBranchFacts } from "./parseCssSelectors.js";
 
-const CSS_CLASS_NAME_PATTERN = /\.([_a-zA-Z]+[\w-]*)/g;
 const CSS_IMPORT_PATTERN = /@import\s+(?:url\()?["']([^"']+)["']\)?/g;
 
 export async function extractCssFileFacts(cssFile: DiscoveredProjectFile): Promise<CssFileFact> {
@@ -50,7 +50,7 @@ function buildExternalCssFact(
 function extractClassDefinitions(content: string): CssFileFact["classDefinitions"] {
   const definitions = new Map<
     string,
-    { className: string; selector: string; declarations: string[]; line: number }
+    CssFileFact["classDefinitions"][number]
   >();
   const blockPattern = /([^{}]+)\{([^{}]*)\}/g;
   let match: RegExpExecArray | null;
@@ -70,19 +70,20 @@ function extractClassDefinitions(content: string): CssFileFact["classDefinitions
     }
 
     const declarations = extractDeclarationNames(match[2]);
-    let classMatch: RegExpExecArray | null;
-    CSS_CLASS_NAME_PATTERN.lastIndex = 0;
+    const selectorBranches = extractSelectorBranchFacts(selectorText);
 
-    while ((classMatch = CSS_CLASS_NAME_PATTERN.exec(selectorText)) !== null) {
-      const className = classMatch[1];
-
-      if (!definitions.has(`${selectorText}::${className}`)) {
-        definitions.set(`${selectorText}::${className}`, {
-          className,
-          selector: selectorText,
-          declarations,
-          line: selectorStartLine,
-        });
+    for (const selectorBranch of selectorBranches) {
+      for (const className of selectorBranch.subjectClassNames) {
+        const definitionKey = `${selectorBranch.raw}::${className}`;
+        if (!definitions.has(definitionKey)) {
+          definitions.set(definitionKey, {
+            className,
+            selector: selectorBranch.raw,
+            selectorBranch,
+            declarations,
+            line: selectorStartLine,
+          });
+        }
       }
     }
   }

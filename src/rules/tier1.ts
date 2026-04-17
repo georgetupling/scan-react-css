@@ -7,6 +7,8 @@ import {
   getProjectClassDefinitions,
   getRuleNumberConfig,
   getUsingSourceFiles,
+  isPlainClassDefinition,
+  isSimpleRootClassDefinition,
   isCssModuleFile,
   isCssModuleReference,
   isDefinitionReachable,
@@ -186,6 +188,10 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
         }
 
         for (const definition of cssFile.classDefinitions) {
+          if (!isPlainClassDefinition(definition)) {
+            continue;
+          }
+
           const references =
             context.model.indexes.classReferencesByName.get(definition.className) ?? [];
           const convincingReferences = references.filter((entry) => {
@@ -351,14 +357,16 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
         2,
       );
 
-      const utilityDefinitions = context.model.graph.cssFiles
-        .filter((cssFile) => cssFile.ownership === "utility")
-        .flatMap((cssFile) =>
-          cssFile.classDefinitions.map((definition) => ({
-            cssFile: cssFile.path,
-            definition,
-          })),
-        );
+        const utilityDefinitions = context.model.graph.cssFiles
+          .filter((cssFile) => cssFile.ownership === "utility")
+          .flatMap((cssFile) =>
+            cssFile.classDefinitions
+              .filter((definition) => isSimpleRootClassDefinition(definition))
+              .map((definition) => ({
+                cssFile: cssFile.path,
+                definition,
+              })),
+          );
 
       if (utilityDefinitions.length === 0) {
         return [];
@@ -372,6 +380,10 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
         }
 
         for (const definition of cssFile.classDefinitions) {
+          if (!isSimpleRootClassDefinition(definition)) {
+            continue;
+          }
+
           let bestMatch:
             | { cssFile: string; className: string; overlap: number; line: number }
             | undefined;

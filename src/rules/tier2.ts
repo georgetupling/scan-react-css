@@ -9,6 +9,8 @@ import {
   isCssModuleFile,
   isCssModuleReference,
   isDefinitionReachable,
+  isPlainClassDefinition,
+  isSimpleRootClassDefinition,
 } from "./helpers.js";
 
 export const TIER_2_RULE_DEFINITIONS: RuleDefinition[] = [
@@ -239,7 +241,9 @@ export const TIER_2_RULE_DEFINITIONS: RuleDefinition[] = [
           }
 
           const definitions =
-            context.model.indexes.classDefinitionsByName.get(reference.className) ?? [];
+            (context.model.indexes.classDefinitionsByName.get(reference.className) ?? []).filter(
+              (definition) => isPlainClassDefinition(definition.definition),
+            );
           const reachableExternalDefinitions = definitions.filter(
             (definition) =>
               definition.externalSpecifier &&
@@ -324,7 +328,9 @@ export const TIER_2_RULE_DEFINITIONS: RuleDefinition[] = [
       ] of context.model.indexes.classDefinitionsByName.entries()) {
         const projectDefinitions = definitions.filter(
           (definition) =>
-            !definition.externalSpecifier && !isCssModuleFile(context.model, definition.cssFile),
+            !definition.externalSpecifier &&
+            !isCssModuleFile(context.model, definition.cssFile) &&
+            isSimpleRootClassDefinition(definition.definition),
         );
 
         if (projectDefinitions.length < 2) {

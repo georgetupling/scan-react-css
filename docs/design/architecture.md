@@ -487,9 +487,10 @@ The scanner is class-focused, but it must tolerate CSS beyond simple `.className
 
 ### MVP handling
 
-- extract class definitions where possible
+- parse selector lists into normalized selector branches
 - preserve selector and at-rule context
-- allow broad/non-class selectors to reduce certainty where appropriate
+- distinguish standalone, compound, contextual, and complex selector branches
+- treat compound and contextual selector branches conservatively rather than flattening every mentioned class into a direct definition
 
 This prevents the analysis from overclaiming confidence in complex CSS cases.
 

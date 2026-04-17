@@ -65,6 +65,9 @@ These rules answer whether a class is defined, used, and reachable where it is r
 - `unused-css-class`: a class is defined in CSS but has no convincing usage
 - `unreachable-css`: a referenced class exists, but not in CSS that is reachable for the module using it
 
+For plain React class references, direct evidence comes from standalone selector branches.
+Compound selectors such as `.a.b` and contextual selectors such as `.scope .a` are preserved in the model, but they do not automatically satisfy plain class-definition checks.
+
 ### Ownership and organization
 
 These rules look at whether CSS appears to live in the right scope.
@@ -93,6 +96,9 @@ These rules capture uncertainty explicitly instead of falling back to a vague ma
 ### Optimization and migration
 
 - `utility-class-replacement`: a custom class may be replaceable with configured utility CSS already available in the project
+
+Duplicate-definition reporting should stay conservative:
+same-file variant layering and contextual selectors should not be treated like straightforward duplicate root-class redefinitions.
 - `duplicate-css-class-definition`: the same class name is defined in multiple project CSS locations in a way that is likely confusing or redundant
 
 ## Known future candidates

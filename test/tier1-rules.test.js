@@ -208,6 +208,79 @@ test("unused-css-class does not report classes that are used through const-backe
   });
 });
 
+test("compound and contextual selectors do not satisfy plain missing-css-class references", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      ['import "./App.css";', 'export function App() { return <div className="button icon" />; }'].join(
+        "\n",
+      ),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/App.css",
+      [".button.button--primary {}", ".toolbar .icon {}"].join("\n"),
+    );
+
+    const findings = await runScenario(tempDir);
+
+    assert.ok(
+      findings.some(
+        (finding) =>
+          finding.ruleId === "missing-css-class" && finding.subject?.className === "button",
+      ),
+    );
+    assert.ok(
+      findings.some(
+        (finding) => finding.ruleId === "missing-css-class" && finding.subject?.className === "icon",
+      ),
+    );
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "unreachable-css" && finding.subject?.className === "button",
+      ),
+    );
+  });
+});
+
+test("compound and contextual selectors are excluded from plain unused-css-class evidence", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      ['import "./App.css";', 'export function App() { return <div className="button icon" />; }'].join(
+        "\n",
+      ),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/App.css",
+      [".button.button--primary {}", ".toolbar .icon {}", ".button {}", ".used:hover {}"].join("\n"),
+    );
+
+    const findings = await runScenario(tempDir);
+
+    assert.ok(
+      !findings.some(
+        (finding) => finding.ruleId === "unused-css-class" && finding.subject?.className === "icon",
+      ),
+    );
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "unused-css-class" && finding.subject?.className === "button--primary",
+      ),
+    );
+    assert.ok(
+      !findings.some(
+        (finding) => finding.ruleId === "unused-css-class" && finding.subject?.className === "button",
+      ),
+    );
+  });
+});
+
 test("component-style-cross-component reports component css used by another source", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(

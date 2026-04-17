@@ -1,5 +1,6 @@
 import type { RuleConfigObject } from "../config/types.js";
 import { matchesAnyGlob } from "../files/pathUtils.js";
+import type { CssClassDefinitionFact } from "../facts/types.js";
 import type { CssFileNode, ProjectModel } from "../model/types.js";
 
 export const DYNAMIC_REFERENCE_KINDS = new Set([
@@ -11,7 +12,8 @@ export const DYNAMIC_REFERENCE_KINDS = new Set([
 
 export function getProjectClassDefinitions(model: ProjectModel, className: string) {
   return (model.indexes.classDefinitionsByName.get(className) ?? []).filter(
-    (definition) => !isCssModuleFile(model, definition.cssFile),
+    (definition) =>
+      !isCssModuleFile(model, definition.cssFile) && isPlainClassDefinition(definition.definition),
   );
 }
 
@@ -100,6 +102,10 @@ export function getUsingSourceFiles(model: ProjectModel, cssFile: CssFileNode): 
   const usingSources = new Set<string>();
 
   for (const definition of cssFile.classDefinitions) {
+    if (!isPlainClassDefinition(definition)) {
+      continue;
+    }
+
     const references = model.indexes.classReferencesByName.get(definition.className) ?? [];
     for (const entry of references) {
       if (isCssModuleReference(entry.reference.kind) && !isCssModuleFile(model, cssFile.path)) {
@@ -136,6 +142,14 @@ export function getRuleNumberConfig(
 export function getDeclarationOverlap(left: string[], right: string[]): number {
   const rightSet = new Set(right);
   return left.filter((declaration) => rightSet.has(declaration)).length;
+}
+
+export function isPlainClassDefinition(definition: CssClassDefinitionFact): boolean {
+  return definition.selectorBranch.matchKind === "standalone" && !definition.selectorBranch.hasUnknownSemantics;
+}
+
+export function isSimpleRootClassDefinition(definition: CssClassDefinitionFact): boolean {
+  return isPlainClassDefinition(definition) && !definition.selectorBranch.hasSubjectModifiers;
 }
 
 export function getBaseName(filePath: string): string {

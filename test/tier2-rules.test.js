@@ -306,7 +306,7 @@ test("duplicate-css-class-definition reports duplicate project class names once"
   });
 });
 
-test("duplicate-css-class-definition reports repeated selectors from the same file with line numbers", async () => {
+test("duplicate-css-class-definition ignores same-file compound and attribute variants", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(
       tempDir,
@@ -320,13 +320,7 @@ test("duplicate-css-class-definition reports repeated selectors from the same fi
         entry.ruleId === "duplicate-css-class-definition" && entry.subject?.className === "button",
     );
 
-    assert.ok(finding);
-    assert.equal(finding.primaryLocation?.filePath, "src/Button.css");
-    assert.equal(finding.primaryLocation?.line, 1);
-    assert.deepEqual(finding.relatedLocations, [
-      { filePath: "src/Button.css", line: 3 },
-      { filePath: "src/Button.css", line: 4 },
-    ]);
+    assert.equal(finding, undefined);
   });
 });
 
