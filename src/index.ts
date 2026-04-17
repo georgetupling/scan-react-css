@@ -4,6 +4,16 @@ import type {
   AuditFinding,
   AuditOptions,
 } from "./legacy.js";
+export type {
+  ConfidenceLevel,
+  ExternalCssMode,
+  OwnershipNamingConvention,
+  RawReactCssScannerConfig,
+  ResolvedReactCssScannerConfig,
+  RuleConfigValue,
+  RuleSeverity,
+} from "./config/types.js";
+export { DEFAULT_CONFIG } from "./config/types.js";
 
 type LayoutAuditResult = {
   context: { repoRoot: string; targetDirectory: string };
