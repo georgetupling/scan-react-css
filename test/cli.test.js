@@ -74,6 +74,66 @@ test("CLI writes JSON output to a suffixed file when overwrite is disabled", asy
   });
 });
 
+test("CLI resolves explicit config paths from the current working directory when targeting a subdirectory", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "apps/web/src/App.tsx",
+      'export function App() { return <div className="app-shell" />; }',
+    );
+    await writeProjectFile(tempDir, "apps/web/src/styles/global.css", ".app-shell {}");
+    await writeProjectFile(
+      tempDir,
+      "react-css-scanner.json",
+      `${JSON.stringify({ rootDir: "apps/web", css: { global: ["src/styles/global.css"] } }, null, 2)}\n`,
+    );
+
+    const result = await runCli(["apps/web/src", "--config", "react-css-scanner.json"], tempDir);
+
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /Config source: explicit-path/);
+    assert.doesNotMatch(result.stdout, /missing-css-class/);
+  });
+});
+
+test("CLI scans only the targeted subtree when config rootDir points at a nested app", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "apps/web/src/feature/Feature.tsx",
+      [
+        'import "./Feature.css";',
+        'export function Feature() { return <div className="feature" />; }',
+      ].join("\n"),
+    );
+    await writeProjectFile(tempDir, "apps/web/src/feature/Feature.css", ".feature {}");
+    await writeProjectFile(
+      tempDir,
+      "apps/web/src/other/Other.tsx",
+      'export function Other() { return <div className="missing" />; }',
+    );
+    await writeProjectFile(
+      tempDir,
+      "react-css-scanner.json",
+      `${JSON.stringify({ rootDir: "apps/web" }, null, 2)}\n`,
+    );
+
+    const result = await runCli(["apps/web/src/feature", "--json"], tempDir);
+
+    assert.equal(result.code, 0);
+    const payload = JSON.parse(result.stdout);
+    assert.equal(payload.summary.sourceFileCount, 1);
+    assert.equal(payload.summary.cssFileCount, 1);
+    assert.ok(
+      !payload.findings.some(
+        (finding) =>
+          finding.ruleId === "missing-css-class" &&
+          finding.subject?.sourceFilePath === "src/other/Other.tsx",
+      ),
+    );
+  });
+});
+
 test("CLI supports config summary modes for JSON output", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(tempDir, "src/App.tsx", "export function App() { return null; }");

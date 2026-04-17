@@ -1,3 +1,4 @@
+import path from "node:path";
 import type { ScanInput, ScanResult } from "./runtime/types.js";
 import { buildScanSummary } from "./runtime/findings.js";
 import { runRules } from "./rules/engine.js";
@@ -76,13 +77,16 @@ export type {
 } from "./rules/types.js";
 
 export async function scanReactCss(input: ScanInput = {}): Promise<ScanResult> {
-  const cwd = input.targetPath ?? process.cwd();
+  const cwd = input.cwd ?? input.targetPath ?? process.cwd();
+  const scanTargetPath = input.targetPath
+    ? path.resolve(input.cwd ?? process.cwd(), input.targetPath)
+    : undefined;
   const loadedConfig = await loadReactCssScannerConfig({
     cwd,
     configPath: input.configPath,
     config: input.config,
   });
-  const facts = await extractProjectFacts(loadedConfig.config, cwd);
+  const facts = await extractProjectFacts(loadedConfig.config, cwd, scanTargetPath);
   const model = buildProjectModel({
     config: loadedConfig.config,
     facts,

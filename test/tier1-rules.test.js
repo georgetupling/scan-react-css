@@ -59,6 +59,13 @@ test("missing-css-class reports missing raw class references but not valid impor
           finding.ruleId === "missing-css-class" && finding.subject?.className === "missing",
       ),
     );
+    const missingFinding = findings.find(
+      (finding) =>
+        finding.ruleId === "missing-css-class" && finding.subject?.className === "missing",
+    );
+    assert.equal(missingFinding?.primaryLocation?.filePath, "src/Missing.tsx");
+    assert.equal(missingFinding?.primaryLocation?.line, 1);
+    assert.ok(typeof missingFinding?.primaryLocation?.column === "number");
     assert.ok(
       !findings.some(
         (finding) =>
@@ -124,6 +131,73 @@ test("unused-css-class reports unused project css classes but not used ones", as
     assert.ok(
       !findings.some(
         (finding) => finding.ruleId === "unused-css-class" && finding.subject?.className === "used",
+      ),
+    );
+  });
+});
+
+test("unused-css-class includes the CSS definition line number", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      ['import "./App.css";', 'export function App() { return <div className="used" />; }'].join(
+        "\n",
+      ),
+    );
+    await writeProjectFile(tempDir, "src/App.css", ".used {}\n.unused {}\n");
+
+    const findings = await runScenario(tempDir);
+    const finding = findings.find(
+      (entry) => entry.ruleId === "unused-css-class" && entry.subject?.className === "unused",
+    );
+
+    assert.ok(finding);
+    assert.equal(finding.primaryLocation?.filePath, "src/App.css");
+    assert.equal(finding.primaryLocation?.line, 2);
+  });
+});
+
+test("unused-css-class does not report classes that are used through const-backed composition", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/Button.tsx",
+      [
+        'import "./Button.css";',
+        "const variant = 'primary';",
+        "const isLoading = true;",
+        "const buttonClassName = `button button--${variant}`;",
+        "export function Button() {",
+        "  return (",
+        "    <button className={buttonClassName}>",
+        '      {isLoading && <span className={isLoading && "button__spinner"} />}',
+        "    </button>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Button.css",
+      ".button {}\n.button--primary {}\n.button__spinner {}\n.button--ghost {}\n",
+    );
+
+    const findings = await runScenario(tempDir);
+
+    for (const className of ["button", "button--primary", "button__spinner"]) {
+      assert.ok(
+        !findings.some(
+          (finding) =>
+            finding.ruleId === "unused-css-class" && finding.subject?.className === className,
+        ),
+      );
+    }
+
+    assert.ok(
+      findings.some(
+        (finding) =>
+          finding.ruleId === "unused-css-class" && finding.subject?.className === "button--ghost",
       ),
     );
   });
@@ -247,6 +321,36 @@ test("utility-class-replacement reports utility overlap above threshold but not 
   });
 });
 
+test("utility-class-replacement includes line numbers for both class locations", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/styles/utilities.css",
+      ".u-stack { display: flex; gap: 8px; }",
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/components/Card.css",
+      ".cardStack { display: flex; gap: 8px; color: red; }",
+    );
+
+    const findings = await runScenario(tempDir, {
+      css: {
+        utilities: ["src/styles/utilities.css"],
+      },
+    });
+    const finding = findings.find(
+      (entry) =>
+        entry.ruleId === "utility-class-replacement" && entry.subject?.className === "cardStack",
+    );
+
+    assert.ok(finding);
+    assert.equal(finding.primaryLocation?.filePath, "src/components/Card.css");
+    assert.equal(finding.primaryLocation?.line, 1);
+    assert.deepEqual(finding.relatedLocations, [{ filePath: "src/styles/utilities.css", line: 1 }]);
+  });
+});
+
 test("dynamic-class-reference reports unresolved dynamic composition but not fully static classes", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(
@@ -266,6 +370,10 @@ test("dynamic-class-reference reports unresolved dynamic composition but not ful
     const findings = await runScenario(tempDir);
 
     assert.ok(findings.some((finding) => finding.ruleId === "dynamic-class-reference"));
+    const dynamicFinding = findings.find((finding) => finding.ruleId === "dynamic-class-reference");
+    assert.equal(dynamicFinding?.primaryLocation?.filePath, "src/App.tsx");
+    assert.equal(dynamicFinding?.primaryLocation?.line, 2);
+    assert.ok(typeof dynamicFinding?.primaryLocation?.column === "number");
     assert.ok(
       !findings.some(
         (finding) =>

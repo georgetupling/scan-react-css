@@ -93,7 +93,7 @@ These rules capture uncertainty explicitly instead of falling back to a vague ma
 ### Optimization and migration
 
 - `utility-class-replacement`: a custom class may be replaceable with configured utility CSS already available in the project
-- `duplicate-css-class-definition`: the same class name is defined in multiple places in a way that is likely confusing or redundant
+- `duplicate-css-class-definition`: the same class name is defined in multiple project CSS locations in a way that is likely confusing or redundant
 
 ## Known future candidates
 

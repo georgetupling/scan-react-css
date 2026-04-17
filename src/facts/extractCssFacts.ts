@@ -32,12 +32,14 @@ export async function extractExternalCssFacts(input: {
 function extractClassDefinitions(content: string): CssFileFact["classDefinitions"] {
   const definitions = new Map<
     string,
-    { className: string; selector: string; declarations: string[] }
+    { className: string; selector: string; declarations: string[]; line: number }
   >();
   const blockPattern = /([^{}]+)\{([^{}]*)\}/g;
   let match: RegExpExecArray | null;
 
   while ((match = blockPattern.exec(content)) !== null) {
+    const selectorStartOffset = match.index + getLeadingWhitespaceLength(match[1]);
+    const selectorStartLine = getLineNumberAtOffset(content, selectorStartOffset);
     const selectorText = match[1]
       .split("\n")
       .map((line) => line.trim())
@@ -61,6 +63,7 @@ function extractClassDefinitions(content: string): CssFileFact["classDefinitions
           className,
           selector: selectorText,
           declarations,
+          line: selectorStartLine,
         });
       }
     }
@@ -68,7 +71,11 @@ function extractClassDefinitions(content: string): CssFileFact["classDefinitions
 
   return [...definitions.values()].sort((left, right) => {
     if (left.className === right.className) {
-      return left.selector.localeCompare(right.selector);
+      if (left.line === right.line) {
+        return left.selector.localeCompare(right.selector);
+      }
+
+      return left.line - right.line;
     }
 
     return left.className.localeCompare(right.className);
@@ -102,4 +109,21 @@ function extractCssImports(content: string): CssImportFact[] {
   }
 
   return imports;
+}
+
+function getLineNumberAtOffset(content: string, offset: number): number {
+  let line = 1;
+
+  for (let index = 0; index < offset; index += 1) {
+    if (content[index] === "\n") {
+      line += 1;
+    }
+  }
+
+  return line;
+}
+
+function getLeadingWhitespaceLength(value: string): number {
+  const match = /^\s*/.exec(value);
+  return match?.[0].length ?? 0;
 }

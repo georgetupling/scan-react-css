@@ -5,10 +5,12 @@ export async function writeOutputFile(input: {
   filePath: string;
   content: string;
   overwrite: boolean;
+  cwd: string;
 }): Promise<string> {
+  const requestedPath = path.resolve(input.cwd, input.filePath);
   const targetPath = input.overwrite
-    ? input.filePath
-    : await resolveAvailableOutputPath(input.filePath);
+    ? requestedPath
+    : await resolveAvailableOutputPath(requestedPath);
 
   await mkdir(path.dirname(targetPath), { recursive: true });
   await writeFile(targetPath, input.content, "utf8");

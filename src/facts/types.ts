@@ -26,6 +26,8 @@ export type ClassReferenceFact = {
   kind: ClassReferenceKind;
   confidence: "low" | "medium" | "high";
   source: string;
+  line: number;
+  column: number;
   metadata?: Record<string, unknown>;
 };
 
@@ -41,6 +43,7 @@ export type CssClassDefinitionFact = {
   className: string;
   selector: string;
   declarations: string[];
+  line: number;
 };
 
 export type CssImportFact = {

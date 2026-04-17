@@ -16,7 +16,9 @@
       "confidence": "high",
       "message": "Class \"missing\" is referenced in React code but no matching reachable CSS class definition was found.",
       "primaryLocation": {
-        "filePath": "src/App.tsx"
+        "filePath": "src/App.tsx",
+        "line": 2,
+        "column": 47
       },
       "relatedLocations": [],
       "subject": {
@@ -34,7 +36,8 @@
       "confidence": "high",
       "message": "CSS class \"unused\" does not have any convincing reachable React usage.",
       "primaryLocation": {
-        "filePath": "src/App.css"
+        "filePath": "src/App.css",
+        "line": 2
       },
       "relatedLocations": [],
       "subject": {

@@ -34,6 +34,7 @@ export type ScanInput = {
   targetPath?: string;
   configPath?: string;
   config?: RawReactCssScannerConfig;
+  cwd?: string;
 };
 
 export type ScanSummary = {

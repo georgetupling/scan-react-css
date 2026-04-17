@@ -9,8 +9,9 @@ import type { ProjectFactExtractionResult } from "./types.js";
 export async function extractProjectFacts(
   config: ResolvedReactCssScannerConfig,
   cwd: string,
+  scanTargetPath?: string,
 ): Promise<ProjectFactExtractionResult> {
-  const discoveredFiles = await discoverProjectFiles(config, cwd);
+  const discoveredFiles = await discoverProjectFiles(config, cwd, scanTargetPath);
 
   const [sourceFacts, cssFacts] = await Promise.all([
     Promise.all(

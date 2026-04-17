@@ -13,6 +13,7 @@ export async function runCli(argv: string[]): Promise<void> {
     const result = await scanReactCss({
       targetPath: parsedArgs.targetPath,
       configPath: parsedArgs.configPath,
+      cwd: process.cwd(),
     });
 
     for (const warning of result.operationalWarnings ?? []) {
@@ -27,6 +28,7 @@ export async function runCli(argv: string[]): Promise<void> {
           filePath: parsedArgs.outputFile,
           content,
           overwrite: parsedArgs.overwriteOutput,
+          cwd: process.cwd(),
         });
         console.log(writtenPath);
       } else {

@@ -87,7 +87,9 @@ test("extracts source facts for local css, external css, helpers, and css module
         (reference) =>
           reference.className === "app" &&
           reference.kind === "helper-call" &&
-          reference.confidence === "high",
+          reference.confidence === "high" &&
+          typeof reference.line === "number" &&
+          typeof reference.column === "number",
       ),
     );
     assert.ok(
@@ -99,6 +101,43 @@ test("extracts source facts for local css, external css, helpers, and css module
       appFacts.classReferences.some(
         (reference) => reference.kind === "css-module-dynamic-property",
       ),
+    );
+  });
+});
+
+test("extracts class references through const indirection and boolean-gated expressions", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/Button.tsx",
+      [
+        "const variant = 'primary';",
+        "const iconOnly = true;",
+        "const buttonClassName = `button button--${variant}`;",
+        "export function Button() {",
+        "  return (",
+        "    <button className={buttonClassName}>",
+        '      {iconOnly && <span className={iconOnly && "button__spinner"} />}',
+        "    </button>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = await extractProjectFacts(DEFAULT_CONFIG, tempDir);
+    const buttonFacts = result.sourceFacts.find((fact) => fact.filePath === "src/Button.tsx");
+
+    assert.ok(buttonFacts);
+    assert.ok(buttonFacts.classReferences.some((reference) => reference.className === "button"));
+    assert.ok(
+      buttonFacts.classReferences.some((reference) => reference.className === "button--primary"),
+    );
+    assert.ok(
+      buttonFacts.classReferences.some((reference) => reference.className === "button__spinner"),
+    );
+    assert.ok(buttonFacts.classReferences.every((reference) => typeof reference.line === "number"));
+    assert.ok(
+      buttonFacts.classReferences.every((reference) => typeof reference.column === "number"),
     );
   });
 });
@@ -130,6 +169,7 @@ test("extracts css facts for class definitions and css imports", async () => {
     assert.ok(
       cssFacts.classDefinitions.some((definition) => definition.className === "buttonPrimary"),
     );
+    assert.ok(cssFacts.classDefinitions.every((definition) => typeof definition.line === "number"));
   });
 });
 

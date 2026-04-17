@@ -65,6 +65,8 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
               message: `Class "${reference.className}" is referenced in React code but no matching reachable CSS class definition was found.`,
               primaryLocation: {
                 filePath: sourceFile.path,
+                line: reference.line,
+                column: reference.column,
               },
               subject: {
                 className: reference.className,
@@ -128,9 +130,12 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
               message: `Class "${reference.className}" exists in project CSS, but not in CSS reachable from "${sourceFile.path}".`,
               primaryLocation: {
                 filePath: sourceFile.path,
+                line: reference.line,
+                column: reference.column,
               },
               relatedLocations: candidateDefinitions.map((definition) => ({
                 filePath: definition.cssFile,
+                line: definition.definition.line,
               })),
               subject: {
                 className: reference.className,
@@ -188,6 +193,7 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
               message: `CSS class "${definition.className}" does not have any convincing reachable React usage.`,
               primaryLocation: {
                 filePath: cssFile.path,
+                line: definition.line,
               },
               subject: {
                 className: definition.className,
@@ -350,7 +356,9 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
         }
 
         for (const definition of cssFile.classDefinitions) {
-          let bestMatch: { cssFile: string; className: string; overlap: number } | undefined;
+          let bestMatch:
+            | { cssFile: string; className: string; overlap: number; line: number }
+            | undefined;
 
           for (const utilityDefinition of utilityDefinitions) {
             if (utilityDefinition.definition.className === definition.className) {
@@ -370,6 +378,7 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
                 cssFile: utilityDefinition.cssFile,
                 className: utilityDefinition.definition.className,
                 overlap,
+                line: utilityDefinition.definition.line,
               };
             }
           }
@@ -387,10 +396,12 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
               message: `Class "${definition.className}" overlaps with utility class "${bestMatch.className}" and may be replaceable.`,
               primaryLocation: {
                 filePath: cssFile.path,
+                line: definition.line,
               },
               relatedLocations: [
                 {
                   filePath: bestMatch.cssFile,
+                  line: bestMatch.line,
                 },
               ],
               subject: {
@@ -437,6 +448,8 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
               message: `Dynamic class composition in "${sourceFile.path}" could not be resolved with full confidence.`,
               primaryLocation: {
                 filePath: sourceFile.path,
+                line: reference.line,
+                column: reference.column,
               },
               subject: {
                 className: reference.className,
@@ -509,6 +522,8 @@ export const TIER_1_RULE_DEFINITIONS: RuleDefinition[] = [
               message: `CSS Module reference "${moduleLocalName}.${reference.className}" does not exist in "${cssFile.path}".`,
               primaryLocation: {
                 filePath: sourceFile.path,
+                line: reference.line,
+                column: reference.column,
               },
               relatedLocations: [
                 {

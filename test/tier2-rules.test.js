@@ -107,6 +107,14 @@ test("dynamic-missing-css-class reports unresolved dynamic classes with no defin
           finding.metadata.sourceExpression === 'state && "missingDynamic"',
       ),
     );
+    const finding = findings.find(
+      (entry) =>
+        entry.ruleId === "dynamic-missing-css-class" &&
+        entry.metadata.sourceExpression === 'state && "missingDynamic"',
+    );
+    assert.equal(finding?.primaryLocation?.filePath, "src/App.tsx");
+    assert.equal(finding?.primaryLocation?.line, 3);
+    assert.ok(typeof finding?.primaryLocation?.column === "number");
   });
 });
 
@@ -136,6 +144,27 @@ test("unused-css-module-class reports unused module classes but not referenced o
           finding.ruleId === "unused-css-module-class" && finding.subject?.className === "used",
       ),
     );
+  });
+});
+
+test("unused-css-module-class includes the CSS definition line number", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/Button.tsx",
+      "import styles from './Button.module.css';\nexport function Button() { return <div className={styles.used} />; }",
+    );
+    await writeProjectFile(tempDir, "src/Button.module.css", ".used {}\n.unused {}\n");
+
+    const findings = await runScenario(tempDir);
+    const finding = findings.find(
+      (entry) =>
+        entry.ruleId === "unused-css-module-class" && entry.subject?.className === "unused",
+    );
+
+    assert.ok(finding);
+    assert.equal(finding.primaryLocation?.filePath, "src/Button.module.css");
+    assert.equal(finding.primaryLocation?.line, 2);
   });
 });
 
@@ -187,6 +216,34 @@ test("duplicate-css-class-definition reports duplicate project class names once"
 
     assert.equal(duplicateFindings.length, 1);
     assert.deepEqual(duplicateFindings[0].metadata.duplicateCssFiles, ["src/A.css", "src/B.css"]);
+    assert.deepEqual(duplicateFindings[0].metadata.duplicateLocations, [
+      { filePath: "src/A.css", line: 1, selector: ".shared" },
+      { filePath: "src/B.css", line: 1, selector: ".shared" },
+    ]);
+  });
+});
+
+test("duplicate-css-class-definition reports repeated selectors from the same file with line numbers", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/Button.css",
+      ".button {}\n.other {}\n.button.button--sm {}\n.button[data-kind='primary'] {}",
+    );
+
+    const findings = await runScenario(tempDir);
+    const finding = findings.find(
+      (entry) =>
+        entry.ruleId === "duplicate-css-class-definition" && entry.subject?.className === "button",
+    );
+
+    assert.ok(finding);
+    assert.equal(finding.primaryLocation?.filePath, "src/Button.css");
+    assert.equal(finding.primaryLocation?.line, 1);
+    assert.deepEqual(finding.relatedLocations, [
+      { filePath: "src/Button.css", line: 3 },
+      { filePath: "src/Button.css", line: 4 },
+    ]);
   });
 });
 
