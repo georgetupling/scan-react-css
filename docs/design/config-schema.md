@@ -119,6 +119,7 @@ Example:
     "css-class-missing-in-some-contexts": "info",
     "unreachable-css": "info",
     "unused-css-class": "info",
+    "unused-compound-selector-branch": "info",
     "global-css-not-global": "warning",
     "component-css-should-be-global": {
       "severity": "info",

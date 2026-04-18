@@ -769,7 +769,7 @@ test("unused-css-class falls back when unresolved template matching is disabled"
   });
 });
 
-test("compound and contextual selectors do not satisfy plain missing-css-class references", async () => {
+test("compound selectors satisfy plain missing-css-class references but contextual selectors do not", async () => {
   await withRuleTempDir(async (tempDir) => {
     await writeProjectFile(
       tempDir,
@@ -788,7 +788,7 @@ test("compound and contextual selectors do not satisfy plain missing-css-class r
     const findings = await runRuleScenario(tempDir);
 
     assert.ok(
-      findings.some(
+      !findings.some(
         (finding) =>
           finding.ruleId === "missing-css-class" && finding.subject?.className === "button",
       ),
@@ -803,6 +803,11 @@ test("compound and contextual selectors do not satisfy plain missing-css-class r
       !findings.some(
         (finding) =>
           finding.ruleId === "unreachable-css" && finding.subject?.className === "button",
+      ),
+    );
+    assert.ok(
+      !findings.some(
+        (finding) => finding.ruleId === "unreachable-css" && finding.subject?.className === "icon",
       ),
     );
   });

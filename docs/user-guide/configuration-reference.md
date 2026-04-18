@@ -479,4 +479,5 @@ Each rule can use either:
 - `unused-css-module-class`
 - `missing-external-css-class`
 - `duplicate-css-class-definition`
+- `unused-compound-selector-branch`
 - `component-css-should-be-global`

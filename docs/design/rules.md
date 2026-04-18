@@ -58,6 +58,7 @@ The product preserves the intent of the earlier Loremaster-style audit while usi
 - `component-css-should-be-global` - `info`
 - `empty-css-rule` - `warning`
 - `redundant-css-declaration-block` - `info`
+- `unused-compound-selector-branch` - `info`
 
 ## Rule notes
 
@@ -70,8 +71,8 @@ These rules answer whether a class is defined, used, and reachable where it is r
 - `unused-css-class`: a class is defined in CSS but has no React usage evidence at all
 - `unreachable-css`: a referenced class exists, but not in CSS that is reachable for the module using it in any known context
 
-For plain React class references, direct evidence comes from standalone selector branches.
-Compound selectors such as `.a.b` and contextual selectors such as `.scope .a` are preserved in the model, but they do not automatically satisfy plain class-definition checks.
+For plain React class references, direct evidence comes from standalone selector branches and compound selector branches such as `.a.b`.
+Contextual selectors such as `.scope .a` are preserved in the model, but they do not automatically satisfy plain class-definition checks.
 
 ### Ownership and organization
 
@@ -102,6 +103,7 @@ These rules capture uncertainty explicitly instead of falling back to a vague ma
 
 - `empty-css-rule`: a selector block contains no CSS declarations
 - `redundant-css-declaration-block`: a simple root class block repeats the exact same declarations in the same selector and at-rule context
+- `unused-compound-selector-branch`: a compound selector branch such as `.a.b` has no convincing reachable React usage where all required classes appear together in the same class expression
 - `utility-class-replacement`: a custom class may be exactly replaceable by a small composition of configured utility CSS already available in the project
 
 Duplicate-definition reporting should stay conservative:

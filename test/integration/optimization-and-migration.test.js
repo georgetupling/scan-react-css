@@ -56,3 +56,28 @@ test("integration scans report duplicate css class definitions", async () => {
     },
   );
 });
+
+test("integration scans report unused compound selector branches when React never emits the full class set together", async () => {
+  await withBuiltProject(
+    new TestProjectBuilder()
+      .withTemplate("basic-react-app")
+      .withSourceFile(
+        "src/App.tsx",
+        ['import "./App.css";', 'export function App() { return <div className="panel" />; }'].join(
+          "\n",
+        ),
+      )
+      .withCssFile("src/App.css", ".panel {}\n.panel.is-open {}\n"),
+    async (project) => {
+      const result = await scanReactCss({ targetPath: project.rootDir });
+
+      assert.ok(
+        result.findings.some(
+          (finding) =>
+            finding.ruleId === "unused-compound-selector-branch" &&
+            finding.metadata?.selector === ".panel.is-open",
+        ),
+      );
+    },
+  );
+});

@@ -1,7 +1,7 @@
 import type { RuleConfigObject } from "../config/types.js";
 import { matchesAnyGlob } from "../files/pathUtils.js";
 import type { CssFileNode, ProjectModel } from "../model/types.js";
-import { isPlainClassDefinition } from "./cssDefinitionUtils.js";
+import { isPlainClassDefinition, satisfiesPlainClassReference } from "./cssDefinitionUtils.js";
 import { isDefinitionReachable } from "./reachability.js";
 
 export const DYNAMIC_REFERENCE_KINDS = new Set([
@@ -14,7 +14,8 @@ export const DYNAMIC_REFERENCE_KINDS = new Set([
 export function getProjectClassDefinitions(model: ProjectModel, className: string) {
   return (model.indexes.classDefinitionsByName.get(className) ?? []).filter(
     (definition) =>
-      !isCssModuleFile(model, definition.cssFile) && isPlainClassDefinition(definition.definition),
+      !isCssModuleFile(model, definition.cssFile) &&
+      satisfiesPlainClassReference(definition.definition),
   );
 }
 

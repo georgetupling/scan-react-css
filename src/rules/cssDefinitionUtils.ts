@@ -27,6 +27,14 @@ export function isPlainClassDefinition(definition: CssClassDefinitionFact): bool
   );
 }
 
+export function satisfiesPlainClassReference(definition: CssClassDefinitionFact): boolean {
+  return (
+    (definition.selectorBranch.matchKind === "standalone" ||
+      definition.selectorBranch.matchKind === "compound") &&
+    !definition.selectorBranch.hasUnknownSemantics
+  );
+}
+
 export function isSimpleRootClassDefinition(definition: CssClassDefinitionFact): boolean {
   return isPlainClassDefinition(definition) && !definition.selectorBranch.hasSubjectModifiers;
 }

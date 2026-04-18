@@ -221,6 +221,95 @@ test("utility-class-replacement respects maxUtilityClasses for utility compositi
   });
 });
 
+test("unused-compound-selector-branch reports compound selector branches with no matching React co-usage", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      ['import "./App.css";', 'export function App() { return <div className="panel" />; }'].join(
+        "\n",
+      ),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/App.css",
+      [".panel {}", ".panel.is-open {}", ".card.is-dragging {}"].join("\n"),
+    );
+
+    const findings = await runRuleScenario(tempDir);
+    const isOpenFinding = findings.find(
+      (entry) =>
+        entry.ruleId === "unused-compound-selector-branch" &&
+        entry.metadata?.selector === ".panel.is-open",
+    );
+    const isDraggingFinding = findings.find(
+      (entry) =>
+        entry.ruleId === "unused-compound-selector-branch" &&
+        entry.metadata?.selector === ".card.is-dragging",
+    );
+
+    assert.ok(isOpenFinding);
+    assert.ok(isDraggingFinding);
+    assert.deepEqual(isOpenFinding.metadata?.requiredClassNames, ["panel", "is-open"]);
+    assert.equal(isOpenFinding.primaryLocation?.line, 2);
+  });
+});
+
+test("unused-compound-selector-branch stays quiet when all required classes appear together in one expression", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        'import "./App.css";',
+        'export function App() { return <div className="panel is-open" />; }',
+      ].join("\n"),
+    );
+    await writeProjectFile(tempDir, "src/App.css", ".panel.is-open {}\n.panel.is-closed {}");
+
+    const findings = await runRuleScenario(tempDir);
+
+    assert.ok(
+      !findings.some(
+        (entry) =>
+          entry.ruleId === "unused-compound-selector-branch" &&
+          entry.metadata?.selector === ".panel.is-open",
+      ),
+    );
+    assert.ok(
+      findings.some(
+        (entry) =>
+          entry.ruleId === "unused-compound-selector-branch" &&
+          entry.metadata?.selector === ".panel.is-closed",
+      ),
+    );
+  });
+});
+
+test("unused-compound-selector-branch stays quiet when render-context usage can supply the full compound class set", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/pages/Page.tsx",
+      [
+        'import "./Page.css";',
+        'import { Child } from "../components/Child";',
+        "export function Page() { return <Child />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/components/Child.tsx",
+      'export function Child() { return <div className="panel is-open" />; }',
+    );
+    await writeProjectFile(tempDir, "src/pages/Page.css", ".panel.is-open {}");
+
+    const findings = await runRuleScenario(tempDir);
+
+    assert.ok(!findings.some((entry) => entry.ruleId === "unused-compound-selector-branch"));
+  });
+});
+
 test("empty-css-rule reports empty selector blocks and preserves at-rule context", async () => {
   await withRuleTempDir(async (tempDir) => {
     await writeProjectFile(
