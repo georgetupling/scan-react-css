@@ -296,6 +296,7 @@ function collectExpressionFacts(
         kind: dynamicExpression.kind,
         confidence: dynamicExpression.confidence,
         source: dynamicExpression.source,
+        metadata: dynamicExpression.metadata,
       }),
     );
   }

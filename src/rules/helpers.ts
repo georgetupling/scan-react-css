@@ -1,11 +1,8 @@
 import type { RuleConfigObject } from "../config/types.js";
 import { matchesAnyGlob } from "../files/pathUtils.js";
-import type {
-  CssAtRuleContextFact,
-  CssClassDefinitionFact,
-  CssDeclarationFact,
-} from "../facts/types.js";
 import type { CssFileNode, ProjectModel } from "../model/types.js";
+import { isPlainClassDefinition } from "./cssDefinitionUtils.js";
+import { isDefinitionReachable } from "./reachability.js";
 
 export const DYNAMIC_REFERENCE_KINDS = new Set([
   "template-literal",
@@ -19,66 +16,6 @@ export function getProjectClassDefinitions(model: ProjectModel, className: strin
     (definition) =>
       !isCssModuleFile(model, definition.cssFile) && isPlainClassDefinition(definition.definition),
   );
-}
-
-export function isDefinitionReachable(
-  model: ProjectModel,
-  sourceFilePath: string,
-  cssFilePath: string,
-  externalSpecifier?: string,
-): boolean {
-  return (
-    getDefinitionReachabilityStatus(model, sourceFilePath, cssFilePath, externalSpecifier) !==
-    "unreachable"
-  );
-}
-
-export function getDefinitionReachabilityStatus(
-  model: ProjectModel,
-  sourceFilePath: string,
-  cssFilePath: string,
-  externalSpecifier?: string,
-):
-  | "direct"
-  | "import-context"
-  | "render-context-definite"
-  | "render-context-possible"
-  | "unreachable" {
-  const reachability = model.reachability.get(sourceFilePath);
-  const cssFile = model.indexes.cssFileByPath.get(cssFilePath);
-  if (!reachability) {
-    return "unreachable";
-  }
-
-  if (externalSpecifier) {
-    return reachability.externalCss.has(externalSpecifier) ? "direct" : "unreachable";
-  }
-
-  if (!cssFile) {
-    return "unreachable";
-  }
-
-  if (cssFile.category === "global") {
-    return reachability.globalCss.has(cssFilePath) ? "direct" : "unreachable";
-  }
-
-  if (reachability.directLocalCss.has(cssFilePath)) {
-    return "direct";
-  }
-
-  if (reachability.renderContextDefiniteLocalCss.has(cssFilePath)) {
-    return "render-context-definite";
-  }
-
-  if (reachability.renderContextPossibleLocalCss.has(cssFilePath)) {
-    return "render-context-possible";
-  }
-
-  if (reachability.importContextLocalCss.has(cssFilePath)) {
-    return "import-context";
-  }
-
-  return "unreachable";
 }
 
 export function isCssModuleReference(kind: string): boolean {
@@ -174,33 +111,6 @@ export function getRuleNumberConfig(
   }
 
   return fallback;
-}
-
-export function getDeclarationOverlap(left: string[], right: string[]): number {
-  const rightSet = new Set(right);
-  return left.filter((declaration) => rightSet.has(declaration)).length;
-}
-
-export function getDeclarationSignature(declarations: CssDeclarationFact[]): string {
-  return declarations
-    .map((declaration) => `${declaration.property}:${declaration.value}`)
-    .sort((left, right) => left.localeCompare(right))
-    .join("|");
-}
-
-export function getAtRuleContextSignature(atRuleContext: CssAtRuleContextFact[]): string {
-  return atRuleContext.map((entry) => `${entry.name}:${entry.params}`).join("|");
-}
-
-export function isPlainClassDefinition(definition: CssClassDefinitionFact): boolean {
-  return (
-    definition.selectorBranch.matchKind === "standalone" &&
-    !definition.selectorBranch.hasUnknownSemantics
-  );
-}
-
-export function isSimpleRootClassDefinition(definition: CssClassDefinitionFact): boolean {
-  return isPlainClassDefinition(definition) && !definition.selectorBranch.hasSubjectModifiers;
 }
 
 export function getBaseName(filePath: string): string {

@@ -31,6 +31,7 @@ export type DynamicEvaluation = {
   confidence: ClassReferenceFact["confidence"];
   source: string;
   anchorNode: ts.Node;
+  metadata?: Record<string, unknown>;
 };
 
 export type ClassExpressionEvaluation = {
@@ -82,6 +83,7 @@ export type EvaluationHelpers = {
     anchorNode: ts.Node,
     kind: ClassReferenceFact["kind"],
     confidence: ClassReferenceFact["confidence"],
+    metadata?: Record<string, unknown>,
   ) => ClassExpressionEvaluation;
   emptyEvaluation: () => ClassExpressionEvaluation;
   resolveBooleanValue: (

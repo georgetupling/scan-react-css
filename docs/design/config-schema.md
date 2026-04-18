@@ -391,7 +391,11 @@ Proposed shape:
 ```json
 {
   "classComposition": {
-    "helpers": ["classnames", "clsx"]
+    "helpers": ["classnames", "clsx"],
+    "partialTemplateMatching": {
+      "enabled": true,
+      "maxCandidates": 12
+    }
   }
 }
 ```
@@ -399,11 +403,15 @@ Proposed shape:
 Defaults:
 
 - `helpers`: `["classnames", "clsx"]`
+- `partialTemplateMatching.enabled`: `true`
+- `partialTemplateMatching.maxCandidates`: `12`
 
 Why:
 
 - These are common enough to support natively.
 - Most projects should not have to configure them manually.
+- A small amount of low-confidence variant-prefix matching helps reduce false `unused-css-class`
+  and `dynamic-missing-css-class` noise without pretending the runtime variant value is known.
 
 ### `policy`
 
@@ -551,7 +559,11 @@ If no config file is present, the scanner should behave roughly like this:
     "namingConvention": "off"
   },
   "classComposition": {
-    "helpers": ["classnames", "clsx"]
+    "helpers": ["classnames", "clsx"],
+    "partialTemplateMatching": {
+      "enabled": true,
+      "maxCandidates": 12
+    }
   },
   "policy": {
     "failOnSeverity": "error"

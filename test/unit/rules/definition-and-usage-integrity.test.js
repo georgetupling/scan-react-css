@@ -705,6 +705,70 @@ test("unused-css-class does not report classes that are used through const-backe
   });
 });
 
+test("unused-css-class treats unresolved template variant matches as low-confidence possible usage", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/Button.tsx",
+      [
+        'import "./Button.css";',
+        "export function Button() { return <button className={`button--${variant}`} />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Button.css",
+      ".button--primary {}\n.button--ghost {}\n.button--destructive {}\n",
+    );
+
+    const findings = await runRuleScenario(tempDir);
+
+    for (const className of ["button--primary", "button--ghost", "button--destructive"]) {
+      assert.ok(
+        !findings.some(
+          (finding) =>
+            finding.ruleId === "unused-css-class" && finding.subject?.className === className,
+        ),
+      );
+    }
+  });
+});
+
+test("unused-css-class falls back when unresolved template matching is disabled", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/Button.tsx",
+      [
+        'import "./Button.css";',
+        "export function Button() { return <button className={`button--${variant}`} />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(tempDir, "src/Button.css", ".button--primary {}\n.button--ghost {}\n");
+
+    const findings = await runRuleScenario(tempDir, {
+      classComposition: {
+        partialTemplateMatching: {
+          enabled: false,
+        },
+      },
+    });
+
+    assert.ok(
+      findings.some(
+        (finding) =>
+          finding.ruleId === "unused-css-class" && finding.subject?.className === "button--primary",
+      ),
+    );
+    assert.ok(
+      findings.some(
+        (finding) =>
+          finding.ruleId === "unused-css-class" && finding.subject?.className === "button--ghost",
+      ),
+    );
+  });
+});
+
 test("compound and contextual selectors do not satisfy plain missing-css-class references", async () => {
   await withRuleTempDir(async (tempDir) => {
     await writeProjectFile(

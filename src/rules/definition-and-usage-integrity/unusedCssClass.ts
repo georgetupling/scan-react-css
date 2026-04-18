@@ -1,10 +1,8 @@
 import type { RuleDefinition } from "../types.js";
-import {
-  getDefinitionReachabilityStatus,
-  isCssModuleFile,
-  isCssModuleReference,
-  isPlainClassDefinition,
-} from "../helpers.js";
+import { isCssModuleFile, isCssModuleReference } from "../helpers.js";
+import { isPlainClassDefinition } from "../cssDefinitionUtils.js";
+import { getDefinitionReachabilityStatus } from "../reachability.js";
+import { getReferenceDefinitionCandidates } from "../referenceMatching.js";
 
 export const unusedCssClassRule: RuleDefinition = {
   ruleId: "unused-css-class",
@@ -62,6 +60,39 @@ export const unusedCssClassRule: RuleDefinition = {
           (entry) => entry.status === "render-context-possible",
         );
         if (possibleRenderContextReferences.length > 0) {
+          continue;
+        }
+        let hasMatchedCandidateUsage = false;
+
+        for (const sourceFile of context.model.graph.sourceFiles) {
+          for (const reference of sourceFile.classReferences) {
+            if (isCssModuleReference(reference.kind)) {
+              continue;
+            }
+
+            const candidates = getReferenceDefinitionCandidates(
+              context.model,
+              sourceFile.path,
+              reference,
+            );
+            if (
+              candidates.some(
+                (candidate) =>
+                  candidate.cssFile === cssFile.path &&
+                  candidate.className === definition.className,
+              )
+            ) {
+              hasMatchedCandidateUsage = true;
+              break;
+            }
+          }
+
+          if (hasMatchedCandidateUsage) {
+            break;
+          }
+        }
+
+        if (hasMatchedCandidateUsage) {
           continue;
         }
 

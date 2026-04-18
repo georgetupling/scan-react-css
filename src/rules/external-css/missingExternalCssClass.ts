@@ -1,10 +1,7 @@
 import type { RuleDefinition } from "../types.js";
-import {
-  getDeclaredExternalProviderForClass,
-  isCssModuleReference,
-  isDefinitionReachable,
-  isPlainClassDefinition,
-} from "../helpers.js";
+import { getDeclaredExternalProviderForClass, isCssModuleReference } from "../helpers.js";
+import { isPlainClassDefinition } from "../cssDefinitionUtils.js";
+import { isDefinitionReachable } from "../reachability.js";
 
 export const missingExternalCssClassRule: RuleDefinition = {
   ruleId: "missing-external-css-class",

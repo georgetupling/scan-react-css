@@ -137,3 +137,65 @@ test("fully provable helper-composed classes fall through to missing-css-class i
     );
   });
 });
+
+test("dynamic-missing-css-class is suppressed when unresolved template variants have reachable low-confidence matches", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        'import "./App.css";',
+        "export function App() { return <button className={`button--${variant}`} />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(tempDir, "src/App.css", ".button--primary {}\n.button--ghost {}\n");
+
+    const findings = await runRuleScenario(tempDir);
+
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "dynamic-missing-css-class" &&
+          finding.primaryLocation?.filePath === "src/App.tsx",
+      ),
+    );
+    assert.ok(findings.some((finding) => finding.ruleId === "dynamic-class-reference"));
+  });
+});
+
+test("dynamic-missing-css-class falls back when partial template matching is disabled or capped out", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        'import "./App.css";',
+        "export function App() { return <button className={`button--${variant}`} />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/App.css",
+      ".button--primary {}\n.button--ghost {}\n.button--destructive {}\n",
+    );
+
+    const disabledFindings = await runRuleScenario(tempDir, {
+      classComposition: {
+        partialTemplateMatching: {
+          enabled: false,
+        },
+      },
+    });
+    const cappedFindings = await runRuleScenario(tempDir, {
+      classComposition: {
+        partialTemplateMatching: {
+          enabled: true,
+          maxCandidates: 2,
+        },
+      },
+    });
+
+    assert.ok(disabledFindings.some((finding) => finding.ruleId === "dynamic-missing-css-class"));
+    assert.ok(cappedFindings.some((finding) => finding.ruleId === "dynamic-missing-css-class"));
+  });
+});

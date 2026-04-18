@@ -34,7 +34,8 @@ const CSS_MODULE_KEYS = new Set(["enabled", "patterns"]);
 const OWNERSHIP_KEYS = new Set(["pagePatterns", "componentCssPatterns", "namingConvention"]);
 const EXTERNAL_CSS_KEYS = new Set(["enabled", "mode", "globals"]);
 const EXTERNAL_CSS_GLOBAL_KEYS = new Set(["provider", "match", "classPrefixes", "classNames"]);
-const CLASS_COMPOSITION_KEYS = new Set(["helpers"]);
+const CLASS_COMPOSITION_KEYS = new Set(["helpers", "partialTemplateMatching"]);
+const PARTIAL_TEMPLATE_MATCHING_KEYS = new Set(["enabled", "maxCandidates"]);
 const POLICY_KEYS = new Set(["failOnSeverity"]);
 const OUTPUT_KEYS = new Set(["minSeverity"]);
 const RULE_OBJECT_KEYS = new Set([
@@ -213,6 +214,21 @@ export function normalizeScanReactCssConfig(
     );
   }
 
+  const partialTemplateMatching = classComposition?.partialTemplateMatching;
+  if (partialTemplateMatching !== undefined) {
+    assertPlainObject(
+      partialTemplateMatching,
+      "config.classComposition.partialTemplateMatching",
+      options.filePath,
+    );
+    assertKnownKeys(
+      partialTemplateMatching,
+      PARTIAL_TEMPLATE_MATCHING_KEYS,
+      "config.classComposition.partialTemplateMatching",
+      options.filePath,
+    );
+  }
+
   const policy = rawConfig.policy;
   if (policy !== undefined) {
     assertPlainObject(policy, "config.policy", options.filePath);
@@ -306,6 +322,22 @@ export function normalizeScanReactCssConfig(
         "config.classComposition.helpers",
         options.filePath,
       ) ?? [...DEFAULT_CONFIG.classComposition.helpers],
+      partialTemplateMatching: {
+        enabled:
+          normalizeBoolean(
+            partialTemplateMatching?.enabled,
+            "config.classComposition.partialTemplateMatching.enabled",
+            options.filePath,
+          ) ?? DEFAULT_CONFIG.classComposition.partialTemplateMatching.enabled,
+        maxCandidates:
+          partialTemplateMatching?.maxCandidates !== undefined
+            ? normalizePositiveInteger(
+                partialTemplateMatching.maxCandidates,
+                "config.classComposition.partialTemplateMatching.maxCandidates",
+                options.filePath,
+              )
+            : DEFAULT_CONFIG.classComposition.partialTemplateMatching.maxCandidates,
+      },
     },
     policy: {
       failOnSeverity:
@@ -531,6 +563,10 @@ function cloneResolvedConfig(config: ResolvedScanReactCssConfig): ResolvedScanRe
     },
     classComposition: {
       helpers: [...config.classComposition.helpers],
+      partialTemplateMatching: {
+        enabled: config.classComposition.partialTemplateMatching.enabled,
+        maxCandidates: config.classComposition.partialTemplateMatching.maxCandidates,
+      },
     },
     policy: {
       failOnSeverity: config.policy.failOnSeverity,

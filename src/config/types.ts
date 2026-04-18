@@ -55,6 +55,10 @@ export type RawScanReactCssConfig = {
   };
   classComposition?: {
     helpers?: string[];
+    partialTemplateMatching?: {
+      enabled?: boolean;
+      maxCandidates?: number;
+    };
   };
   policy?: {
     failOnSeverity?: Exclude<RuleSeverity, "off" | "debug">;
@@ -92,6 +96,10 @@ export type ResolvedScanReactCssConfig = {
   };
   classComposition: {
     helpers: string[];
+    partialTemplateMatching: {
+      enabled: boolean;
+      maxCandidates: number;
+    };
   };
   policy: {
     failOnSeverity: Exclude<RuleSeverity, "off" | "debug">;
@@ -204,6 +212,10 @@ export const DEFAULT_CONFIG: ResolvedScanReactCssConfig = {
   },
   classComposition: {
     helpers: ["classnames", "clsx"],
+    partialTemplateMatching: {
+      enabled: true,
+      maxCandidates: 12,
+    },
   },
   policy: {
     failOnSeverity: "error",

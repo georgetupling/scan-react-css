@@ -90,7 +90,7 @@ test("integration scans do not emit placeholder missing classes for unresolved t
       .withTemplate("basic-react-app")
       .withSourceFile(
         "src/App.tsx",
-        'export function App() { return <button className={`button--${variant}`} />; }\n',
+        "export function App() { return <button className={`button--${variant}`} />; }\n",
       )
       .withCssFile("src/App.css", ".button--primary {}\n.button--ghost {}\n"),
     async (project) => {
@@ -109,6 +109,31 @@ test("integration scans do not emit placeholder missing classes for unresolved t
         ),
       );
       assert.ok(result.findings.some((finding) => finding.ruleId === "dynamic-class-reference"));
+    },
+  );
+});
+
+test("integration scans treat unresolved template variants with reachable matches as dynamic but not missing", async () => {
+  await withBuiltProject(
+    new TestProjectBuilder()
+      .withTemplate("basic-react-app")
+      .withSourceFile(
+        "src/App.tsx",
+        [
+          'import "./App.css";',
+          "export function App() { return <button className={`button--${variant}`} />; }",
+        ].join("\n"),
+      )
+      .withCssFile("src/App.css", ".button--primary {}\n.button--ghost {}\n"),
+    async (project) => {
+      const result = await scanReactCss({
+        targetPath: project.rootDir,
+        outputMinSeverity: "debug",
+      });
+
+      assert.ok(result.findings.some((finding) => finding.ruleId === "dynamic-class-reference"));
+      assert.ok(!result.findings.some((finding) => finding.ruleId === "dynamic-missing-css-class"));
+      assert.ok(!result.findings.some((finding) => finding.ruleId === "unused-css-class"));
     },
   );
 });

@@ -1,9 +1,6 @@
 import type { RuleDefinition } from "../types.js";
-import {
-  getDefinitionReachabilityStatus,
-  getProjectClassDefinitions,
-  isCssModuleReference,
-} from "../helpers.js";
+import { getProjectClassDefinitions, isCssModuleReference } from "../helpers.js";
+import { getDefinitionReachabilityStatus } from "../reachability.js";
 
 export const unreachableCssRule: RuleDefinition = {
   ruleId: "unreachable-css",

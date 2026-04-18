@@ -1,11 +1,7 @@
 import type { CssClassDefinitionFact, CssDeclarationFact } from "../../facts/types.js";
 import type { RuleDefinition } from "../types.js";
-import {
-  getAtRuleContextSignature,
-  getRuleNumberConfig,
-  isCssModuleFile,
-  isSimpleRootClassDefinition,
-} from "../helpers.js";
+import { getAtRuleContextSignature, isSimpleRootClassDefinition } from "../cssDefinitionUtils.js";
+import { getRuleNumberConfig, isCssModuleFile } from "../helpers.js";
 
 export const utilityClassReplacementRule: RuleDefinition = {
   ruleId: "utility-class-replacement",

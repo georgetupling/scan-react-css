@@ -163,6 +163,14 @@ test("normalization fills defaults for omitted sections", () => {
   assert.deepEqual(result.css.global, ["src/styles/global.css"]);
   assert.deepEqual(result.source.include, DEFAULT_CONFIG.source.include);
   assert.deepEqual(result.classComposition.helpers, DEFAULT_CONFIG.classComposition.helpers);
+  assert.equal(
+    result.classComposition.partialTemplateMatching.enabled,
+    DEFAULT_CONFIG.classComposition.partialTemplateMatching.enabled,
+  );
+  assert.equal(
+    result.classComposition.partialTemplateMatching.maxCandidates,
+    DEFAULT_CONFIG.classComposition.partialTemplateMatching.maxCandidates,
+  );
   assert.equal(result.externalCss.mode, "declared-globals");
   assert.equal(result.output.minSeverity, "info");
   assert.ok(result.externalCss.globals.some((entry) => entry.provider === "font-awesome"));
@@ -179,6 +187,20 @@ test("supports output min severity in config", () => {
   });
 
   assert.equal(result.output.minSeverity, "debug");
+});
+
+test("supports partial template matching config overrides", () => {
+  const result = normalizeScanReactCssConfig({
+    classComposition: {
+      partialTemplateMatching: {
+        enabled: false,
+        maxCandidates: 4,
+      },
+    },
+  });
+
+  assert.equal(result.classComposition.partialTemplateMatching.enabled, false);
+  assert.equal(result.classComposition.partialTemplateMatching.maxCandidates, 4);
 });
 
 test("invalid config values fail clearly", async () => {

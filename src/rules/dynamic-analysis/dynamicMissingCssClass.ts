@@ -1,10 +1,6 @@
 import type { RuleDefinition } from "../types.js";
-import {
-  DYNAMIC_REFERENCE_KINDS,
-  getProjectClassDefinitions,
-  isCssModuleReference,
-  isDefinitionReachable,
-} from "../helpers.js";
+import { DYNAMIC_REFERENCE_KINDS, isCssModuleReference } from "../helpers.js";
+import { getReferenceDefinitionCandidates } from "../referenceMatching.js";
 
 export const dynamicMissingCssClassRule: RuleDefinition = {
   ruleId: "dynamic-missing-css-class",
@@ -24,21 +20,13 @@ export const dynamicMissingCssClassRule: RuleDefinition = {
           continue;
         }
 
-        const candidateDefinitions = reference.className
-          ? getProjectClassDefinitions(context.model, reference.className)
-          : [];
-        const reachableDefinitions = reference.className
-          ? candidateDefinitions.filter((definition) =>
-              isDefinitionReachable(
-                context.model,
-                sourceFile.path,
-                definition.cssFile,
-                definition.externalSpecifier,
-              ),
-            )
-          : [];
+        const candidateDefinitions = getReferenceDefinitionCandidates(
+          context.model,
+          sourceFile.path,
+          reference,
+        );
 
-        if (candidateDefinitions.length > 0 || reachableDefinitions.length > 0) {
+        if (candidateDefinitions.length > 0) {
           continue;
         }
 

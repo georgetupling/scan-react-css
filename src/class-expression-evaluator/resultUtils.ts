@@ -13,6 +13,7 @@ export function dynamicOnly(
   anchorNode: TokenEvaluation["anchorNode"],
   kind: ClassReferenceFact["kind"],
   confidence: ClassReferenceFact["confidence"],
+  metadata?: Record<string, unknown>,
 ): ClassExpressionEvaluation {
   return {
     tokens: [],
@@ -22,6 +23,7 @@ export function dynamicOnly(
         kind,
         confidence,
         source: anchorNode.getText(),
+        metadata,
       },
     ],
   };

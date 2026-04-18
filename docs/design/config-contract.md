@@ -48,6 +48,7 @@ That currently captures the default product assumptions:
 - built-in declared external global providers such as Font Awesome, Bootstrap Icons, Material Design Icons, Animate.css, UIkit, and Pure.css
 - opt-in `fetch-remote` support for remote HTML-linked stylesheet URLs
 - native helper support for `classnames` and `clsx`
+- partial template-variant matching enabled by default with a capped low-confidence candidate set
 - policy default of `failOnSeverity: "error"`
 - output default of `minSeverity: "info"`
 - per-rule object config for rules that need thresholds

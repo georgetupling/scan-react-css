@@ -1,9 +1,6 @@
 import type { RuleDefinition } from "../types.js";
-import {
-  getAtRuleContextSignature,
-  isCssModuleFile,
-  isSimpleRootClassDefinition,
-} from "../helpers.js";
+import { getAtRuleContextSignature, isSimpleRootClassDefinition } from "../cssDefinitionUtils.js";
+import { isCssModuleFile } from "../helpers.js";
 
 export const duplicateCssClassDefinitionRule: RuleDefinition = {
   ruleId: "duplicate-css-class-definition",
