@@ -61,6 +61,7 @@ function buildSourceFileNodes(
       externalCssImports: fact.imports.filter((item) => item.kind === "external-css"),
       cssModuleImports: [...fact.cssModuleImports],
       classReferences: [...fact.classReferences],
+      renderedComponents: [...fact.renderedComponents],
       helperImports: [...fact.helperImports],
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
@@ -237,6 +238,19 @@ function buildGraphEdges(
         type: "source-import",
         from: sourceFile.path,
         to: sourceImport.resolvedPath ?? sourceImport.specifier,
+      });
+    }
+
+    for (const renderedComponent of sourceFile.renderedComponents) {
+      edges.push({
+        type: "render",
+        from: sourceFile.path,
+        to: renderedComponent.resolvedPath,
+        metadata: {
+          componentName: renderedComponent.componentName,
+          line: renderedComponent.line,
+          column: renderedComponent.column,
+        },
       });
     }
 
@@ -418,6 +432,7 @@ function buildReachability(
   const sourceFileByPath = new Map(sourceFiles.map((sourceFile) => [sourceFile.path, sourceFile]));
   const cssFileByPath = new Map(cssFiles.map((cssFile) => [cssFile.path, cssFile]));
   const importersBySourcePath = new Map<string, Set<string>>();
+  const renderersBySourcePath = new Map<string, Set<string>>();
   const globalCssPaths = cssFiles
     .filter((cssFile) => cssFile.category === "global")
     .map((cssFile) => cssFile.path)
@@ -434,16 +449,31 @@ function buildReachability(
       importers.add(sourceFile.path);
       importersBySourcePath.set(importedSourcePath, importers);
     }
+
+    for (const renderedComponent of sourceFile.renderedComponents) {
+      if (!sourceFileByPath.has(renderedComponent.resolvedPath)) {
+        continue;
+      }
+
+      const renderers =
+        renderersBySourcePath.get(renderedComponent.resolvedPath) ?? new Set<string>();
+      renderers.add(sourceFile.path);
+      renderersBySourcePath.set(renderedComponent.resolvedPath, renderers);
+    }
   }
 
-  const reachabilityBySourceFile = new Map<string, ReachabilityInfo>();
+  const directReachabilityBySourceFile = new Map<string, ReachabilityInfo>();
 
   for (const sourceFile of sourceFiles) {
     const reachableSources = collectReachableImporterChain(sourceFile.path, importersBySourcePath);
-    reachableSources.add(sourceFile.path);
-
-    const localCss = new Set<string>();
+    const directLocalCss = collectDirectLocalCss(sourceFile, cssFileByPath);
+    const importContextLocalCss = new Set<string>();
+    const localCss = new Set<string>(directLocalCss);
     const externalCss = new Set<string>();
+
+    for (const externalImport of sourceFile.externalCssImports) {
+      externalCss.add(externalImport.specifier);
+    }
 
     for (const reachableSourcePath of reachableSources) {
       const reachableSource = sourceFileByPath.get(reachableSourcePath);
@@ -451,23 +481,10 @@ function buildReachability(
         continue;
       }
 
-      for (const cssImport of reachableSource.cssImports) {
-        const cssPath = cssImport.resolvedPath ?? cssImport.specifier;
-        const cssFile = cssFileByPath.get(cssPath);
-        if (!cssFile) {
-          continue;
-        }
-
-        if (cssFile.category === "global") {
-          continue;
-        }
-
-        localCss.add(cssFile.path);
-      }
-
-      for (const cssModuleImport of reachableSource.cssModuleImports) {
-        if (cssModuleImport.resolvedPath) {
-          localCss.add(cssModuleImport.resolvedPath);
+      for (const cssPath of collectDirectLocalCss(reachableSource, cssFileByPath)) {
+        if (!directLocalCss.has(cssPath)) {
+          importContextLocalCss.add(cssPath);
+          localCss.add(cssPath);
         }
       }
 
@@ -480,10 +497,67 @@ function buildReachability(
       externalCss.add(externalCssSpecifier);
     }
 
-    reachabilityBySourceFile.set(sourceFile.path, {
+    directReachabilityBySourceFile.set(sourceFile.path, {
+      directLocalCss: new Set([...directLocalCss].sort((left, right) => left.localeCompare(right))),
+      importContextLocalCss: new Set(
+        [...importContextLocalCss].sort((left, right) => left.localeCompare(right)),
+      ),
       localCss: new Set([...localCss].sort((left, right) => left.localeCompare(right))),
+      renderContextDefiniteLocalCss: new Set(),
+      renderContextPossibleLocalCss: new Set(),
       globalCss: new Set(globalCssPaths),
       externalCss: new Set([...externalCss].sort((left, right) => left.localeCompare(right))),
+    });
+  }
+
+  const reachabilityBySourceFile = new Map<string, ReachabilityInfo>();
+
+  for (const sourceFile of sourceFiles) {
+    const directReachability = directReachabilityBySourceFile.get(sourceFile.path);
+    if (!directReachability) {
+      continue;
+    }
+
+    const renderAncestors = collectReachableImporterChain(sourceFile.path, renderersBySourcePath);
+    const renderAncestorReachabilities = [...renderAncestors]
+      .map((sourcePath) => directReachabilityBySourceFile.get(sourcePath))
+      .filter((reachability): reachability is ReachabilityInfo => Boolean(reachability));
+
+    const renderContextDefiniteLocalCss = new Set<string>();
+    const renderContextPossibleLocalCss = new Set<string>();
+
+    if (renderAncestorReachabilities.length > 0) {
+      const intersectedCss = intersectSets(
+        renderAncestorReachabilities.map((reachability) => reachability.localCss),
+      );
+      const unionCss = unionSets(
+        renderAncestorReachabilities.map((reachability) => reachability.localCss),
+      );
+
+      for (const cssPath of intersectedCss) {
+        if (!directReachability.directLocalCss.has(cssPath)) {
+          renderContextDefiniteLocalCss.add(cssPath);
+        }
+      }
+
+      for (const cssPath of unionCss) {
+        if (
+          !directReachability.directLocalCss.has(cssPath) &&
+          !renderContextDefiniteLocalCss.has(cssPath)
+        ) {
+          renderContextPossibleLocalCss.add(cssPath);
+        }
+      }
+    }
+
+    reachabilityBySourceFile.set(sourceFile.path, {
+      ...directReachability,
+      renderContextDefiniteLocalCss: new Set(
+        [...renderContextDefiniteLocalCss].sort((left, right) => left.localeCompare(right)),
+      ),
+      renderContextPossibleLocalCss: new Set(
+        [...renderContextPossibleLocalCss].sort((left, right) => left.localeCompare(right)),
+      ),
     });
   }
 
@@ -618,4 +692,58 @@ function compareGraphEdges(left: ProjectGraphEdge, right: ProjectGraphEdge): num
   }
 
   return left.to.localeCompare(right.to);
+}
+
+function collectDirectLocalCss(
+  sourceFile: SourceFileNode,
+  cssFileByPath: Map<string, CssFileNode>,
+): Set<string> {
+  const localCss = new Set<string>();
+
+  for (const cssImport of sourceFile.cssImports) {
+    const cssPath = cssImport.resolvedPath ?? cssImport.specifier;
+    const cssFile = cssFileByPath.get(cssPath);
+    if (!cssFile || cssFile.category === "global") {
+      continue;
+    }
+
+    localCss.add(cssFile.path);
+  }
+
+  for (const cssModuleImport of sourceFile.cssModuleImports) {
+    if (cssModuleImport.resolvedPath) {
+      localCss.add(cssModuleImport.resolvedPath);
+    }
+  }
+
+  return localCss;
+}
+
+function unionSets(sets: Array<Set<string>>): Set<string> {
+  const union = new Set<string>();
+
+  for (const currentSet of sets) {
+    for (const item of currentSet) {
+      union.add(item);
+    }
+  }
+
+  return union;
+}
+
+function intersectSets(sets: Array<Set<string>>): Set<string> {
+  if (sets.length === 0) {
+    return new Set<string>();
+  }
+
+  const intersection = new Set(sets[0]);
+  for (const currentSet of sets.slice(1)) {
+    for (const item of intersection) {
+      if (!currentSet.has(item)) {
+        intersection.delete(item);
+      }
+    }
+  }
+
+  return intersection;
 }

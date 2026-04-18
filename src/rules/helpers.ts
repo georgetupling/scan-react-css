@@ -27,25 +27,58 @@ export function isDefinitionReachable(
   cssFilePath: string,
   externalSpecifier?: string,
 ): boolean {
+  return (
+    getDefinitionReachabilityStatus(model, sourceFilePath, cssFilePath, externalSpecifier) !==
+    "unreachable"
+  );
+}
+
+export function getDefinitionReachabilityStatus(
+  model: ProjectModel,
+  sourceFilePath: string,
+  cssFilePath: string,
+  externalSpecifier?: string,
+):
+  | "direct"
+  | "import-context"
+  | "render-context-definite"
+  | "render-context-possible"
+  | "unreachable" {
   const reachability = model.reachability.get(sourceFilePath);
   const cssFile = model.indexes.cssFileByPath.get(cssFilePath);
   if (!reachability) {
-    return false;
+    return "unreachable";
   }
 
   if (externalSpecifier) {
-    return reachability.externalCss.has(externalSpecifier);
+    return reachability.externalCss.has(externalSpecifier) ? "direct" : "unreachable";
   }
 
   if (!cssFile) {
-    return false;
+    return "unreachable";
   }
 
   if (cssFile.category === "global") {
-    return reachability.globalCss.has(cssFilePath);
+    return reachability.globalCss.has(cssFilePath) ? "direct" : "unreachable";
   }
 
-  return reachability.localCss.has(cssFilePath);
+  if (reachability.directLocalCss.has(cssFilePath)) {
+    return "direct";
+  }
+
+  if (reachability.renderContextDefiniteLocalCss.has(cssFilePath)) {
+    return "render-context-definite";
+  }
+
+  if (reachability.renderContextPossibleLocalCss.has(cssFilePath)) {
+    return "render-context-possible";
+  }
+
+  if (reachability.importContextLocalCss.has(cssFilePath)) {
+    return "import-context";
+  }
+
+  return "unreachable";
 }
 
 export function isCssModuleReference(kind: string): boolean {

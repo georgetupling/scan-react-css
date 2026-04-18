@@ -38,10 +38,12 @@ export async function extractSourceFileFacts(
   const imports: SourceImportFact[] = [];
   const cssModuleImports: CssModuleImportFact[] = [];
   const classReferences: ClassReferenceFact[] = [];
+  const renderedComponents: SourceFileFact["renderedComponents"] = [];
   const helperImports = new Set<string>();
   const cssModuleLocalNames = new Set<string>();
   const localBindings = new Map<string, ts.Expression>();
   const localFunctions = new Map<string, LocalFunctionBinding>();
+  const importedSourceBindings = new Map<string, string>();
   const expressionContext: ClassExpressionEvaluationContext = {
     helperImports,
     localBindings,
@@ -118,6 +120,20 @@ export async function extractSourceFileFacts(
     });
 
     const importClause = statement.importClause;
+    if (importClause?.name && resolvedPath) {
+      importedSourceBindings.set(importClause.name.text, resolvedPath);
+    }
+
+    if (
+      importClause?.namedBindings &&
+      ts.isNamedImports(importClause.namedBindings) &&
+      resolvedPath
+    ) {
+      for (const element of importClause.namedBindings.elements) {
+        importedSourceBindings.set(element.name.text, resolvedPath);
+      }
+    }
+
     if (
       !BUILT_IN_HELPERS.has(specifier) &&
       !options.config.classComposition.helpers.includes(specifier)
@@ -177,6 +193,14 @@ export async function extractSourceFileFacts(
       return;
     }
 
+    if (ts.isJsxOpeningElement(node) || ts.isJsxSelfClosingElement(node)) {
+      const renderedComponent = resolveRenderedComponent(node, parsed, importedSourceBindings);
+      if (renderedComponent) {
+        renderedComponents.push(renderedComponent);
+      }
+      return;
+    }
+
     if (ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression)) {
       if (cssModuleLocalNames.has(node.expression.text)) {
         classReferences.push(
@@ -219,6 +243,7 @@ export async function extractSourceFileFacts(
       left.localName.localeCompare(right.localName),
     ),
     classReferences: sortClassReferences(classReferences),
+    renderedComponents: sortRenderedComponents(renderedComponents),
     helperImports: [...helperImports].sort(),
   };
 }
@@ -363,6 +388,22 @@ function sortClassReferences(classReferences: ClassReferenceFact[]): ClassRefere
   });
 }
 
+function sortRenderedComponents(
+  renderedComponents: SourceFileFact["renderedComponents"],
+): SourceFileFact["renderedComponents"] {
+  return [...renderedComponents].sort((left, right) => {
+    if (left.resolvedPath === right.resolvedPath) {
+      if (left.line === right.line) {
+        return left.column - right.column;
+      }
+
+      return left.line - right.line;
+    }
+
+    return left.resolvedPath.localeCompare(right.resolvedPath);
+  });
+}
+
 function createClassReferenceFact(
   node: ts.Node,
   parsedSourceFile: ts.SourceFile,
@@ -373,6 +414,19 @@ function createClassReferenceFact(
 
   return {
     ...input,
+    line: position.line + 1,
+    column: position.character + 1,
+  };
+}
+
+function createLocatedFact(
+  node: ts.Node,
+  parsedSourceFile: ts.SourceFile,
+): { line: number; column: number } {
+  const start = node.getStart(parsedSourceFile);
+  const position = ts.getLineAndCharacterOfPosition(parsedSourceFile, start);
+
+  return {
     line: position.line + 1,
     column: position.character + 1,
   };
@@ -404,4 +458,30 @@ function getFunctionBodyExpression(
   }
 
   return statement.expression;
+}
+
+function resolveRenderedComponent(
+  node: ts.JsxOpeningElement | ts.JsxSelfClosingElement,
+  parsedSourceFile: ts.SourceFile,
+  importedSourceBindings: Map<string, string>,
+): SourceFileFact["renderedComponents"][number] | undefined {
+  const tagName = node.tagName;
+  if (!ts.isIdentifier(tagName)) {
+    return undefined;
+  }
+
+  if (!/^[A-Z]/.test(tagName.text)) {
+    return undefined;
+  }
+
+  const resolvedPath = importedSourceBindings.get(tagName.text);
+  if (!resolvedPath) {
+    return undefined;
+  }
+
+  return {
+    componentName: tagName.text,
+    resolvedPath,
+    ...createLocatedFact(node, parsedSourceFile),
+  };
 }

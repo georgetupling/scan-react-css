@@ -162,6 +162,46 @@ test("graph edges are deterministic and include css-module relationships", async
   });
 });
 
+test("render edges contribute ancestor-context css reachability", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/pages/Page.tsx",
+      [
+        'import "./Page.css";',
+        'import { Child } from "../components/Child";',
+        "export function Page() { return <Child />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/components/Child.tsx",
+      'export function Child() { return <div className="page-shell" />; }',
+    );
+    await writeProjectFile(tempDir, "src/pages/Page.css", ".page-shell {}");
+
+    const facts = await extractProjectFacts(DEFAULT_CONFIG, tempDir);
+    const model = buildProjectModel({ config: DEFAULT_CONFIG, facts });
+
+    assert.ok(
+      model.graph.edges.some(
+        (edge) =>
+          edge.type === "render" &&
+          edge.from === "src/pages/Page.tsx" &&
+          edge.to === "src/components/Child.tsx",
+      ),
+    );
+
+    const childReachability = model.reachability.get("src/components/Child.tsx");
+    assert.ok(childReachability);
+    assert.equal(childReachability.directLocalCss.size, 0);
+    assert.ok(childReachability.importContextLocalCss.has("src/pages/Page.css"));
+    assert.ok(childReachability.localCss.has("src/pages/Page.css"));
+    assert.ok(childReachability.renderContextDefiniteLocalCss.has("src/pages/Page.css"));
+    assert.equal(childReachability.renderContextPossibleLocalCss.size, 0);
+  });
+});
+
 test("activates declared external css providers from matching html stylesheet links", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(

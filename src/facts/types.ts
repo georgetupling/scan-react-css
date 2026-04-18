@@ -37,6 +37,12 @@ export type SourceFileFact = {
   imports: SourceImportFact[];
   cssModuleImports: CssModuleImportFact[];
   classReferences: ClassReferenceFact[];
+  renderedComponents: Array<{
+    componentName: string;
+    resolvedPath: string;
+    line: number;
+    column: number;
+  }>;
   helperImports: string[];
 };
 

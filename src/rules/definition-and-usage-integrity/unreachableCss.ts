@@ -1,8 +1,8 @@
 import type { RuleDefinition } from "../types.js";
 import {
+  getDefinitionReachabilityStatus,
   getProjectClassDefinitions,
   isCssModuleReference,
-  isDefinitionReachable,
 } from "../helpers.js";
 
 export const unreachableCssRule: RuleDefinition = {
@@ -28,25 +28,43 @@ export const unreachableCssRule: RuleDefinition = {
           continue;
         }
 
-        const reachableDefinitions = candidateDefinitions.filter((definition) =>
-          isDefinitionReachable(
+        const definitionsWithStatus = candidateDefinitions.map((definition) => ({
+          definition,
+          status: getDefinitionReachabilityStatus(
             context.model,
             sourceFile.path,
             definition.cssFile,
             definition.externalSpecifier,
           ),
+        }));
+        const definitelyReachableDefinitions = definitionsWithStatus.filter(
+          (entry) => entry.status === "direct" || entry.status === "import-context",
         );
-        if (reachableDefinitions.length > 0) {
+        if (definitelyReachableDefinitions.length > 0) {
           continue;
         }
+
+        const definiteRenderContextDefinitions = definitionsWithStatus.filter(
+          (entry) => entry.status === "render-context-definite",
+        );
+        if (definiteRenderContextDefinitions.length > 0) {
+          continue;
+        }
+
+        const possibleRenderContextDefinitions = definitionsWithStatus.filter(
+          (entry) => entry.status === "render-context-possible",
+        );
 
         findings.push(
           context.createFinding({
             ruleId: "unreachable-css",
             family: "definition-and-usage-integrity",
             severity,
-            confidence: reference.confidence,
-            message: `Class "${reference.className}" exists in project CSS, but not in CSS reachable from "${sourceFile.path}".`,
+            confidence: possibleRenderContextDefinitions.length > 0 ? "low" : reference.confidence,
+            message:
+              possibleRenderContextDefinitions.length > 0
+                ? `Class "${reference.className}" exists in project CSS and may be available via some render contexts, but is not directly reachable from "${sourceFile.path}".`
+                : `Class "${reference.className}" exists in project CSS, but not in CSS reachable from "${sourceFile.path}".`,
             primaryLocation: {
               filePath: sourceFile.path,
               line: reference.line,
@@ -62,6 +80,14 @@ export const unreachableCssRule: RuleDefinition = {
             },
             metadata: {
               candidateCssFiles: candidateDefinitions.map((definition) => definition.cssFile),
+              ...(possibleRenderContextDefinitions.length > 0
+                ? {
+                    renderContextReachability: "possible",
+                    possibleRenderContextCssFiles: possibleRenderContextDefinitions.map(
+                      (entry) => entry.definition.cssFile,
+                    ),
+                  }
+                : {}),
             },
           }),
         );

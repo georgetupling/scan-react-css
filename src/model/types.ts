@@ -26,6 +26,7 @@ export type SourceFileNode = {
   externalCssImports: SourceImportFact[];
   cssModuleImports: CssModuleImportFact[];
   classReferences: ClassReferenceFact[];
+  renderedComponents: SourceFileFact["renderedComponents"];
   helperImports: string[];
 };
 
@@ -63,6 +64,7 @@ export type ActiveExternalCssProvider = {
 
 export type ProjectGraphEdgeType =
   | "source-import"
+  | "render"
   | "css-import"
   | "external-css-import"
   | "css-module-import"
@@ -110,7 +112,11 @@ export type ProjectIndexes = {
 };
 
 export type ReachabilityInfo = {
+  directLocalCss: Set<string>;
+  importContextLocalCss: Set<string>;
   localCss: Set<string>;
+  renderContextDefiniteLocalCss: Set<string>;
+  renderContextPossibleLocalCss: Set<string>;
   globalCss: Set<string>;
   externalCss: Set<string>;
 };

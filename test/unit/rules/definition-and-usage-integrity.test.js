@@ -78,6 +78,76 @@ test("unreachable-css reports classes defined outside reachable css but not reac
   });
 });
 
+test("unreachable-css does not report classes inherited from all known render contexts", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/pages/Page.tsx",
+      [
+        'import "./Page.css";',
+        'import { Child } from "../components/Child";',
+        "export function Page() { return <Child />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/components/Child.tsx",
+      'export function Child() { return <div className="page-shell" />; }',
+    );
+    await writeProjectFile(tempDir, "src/pages/Page.css", ".page-shell {}");
+
+    const findings = await runRuleScenario(tempDir);
+
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "unreachable-css" && finding.subject?.className === "page-shell",
+      ),
+    );
+  });
+});
+
+test("unreachable-css is advisory when css is only available from some known render contexts", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/pages/PageWithCss.tsx",
+      [
+        'import "./PageWithCss.css";',
+        'import { Child } from "../components/Child";',
+        "export function PageWithCss() { return <Child />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/pages/PageWithoutCss.tsx",
+      [
+        'import { Child } from "../components/Child";',
+        "export function PageWithoutCss() { return <Child />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/components/Child.tsx",
+      'export function Child() { return <div className="page-shell" />; }',
+    );
+    await writeProjectFile(tempDir, "src/pages/PageWithCss.css", ".page-shell {}");
+
+    const findings = await runRuleScenario(tempDir);
+    const finding = findings.find(
+      (entry) => entry.ruleId === "unreachable-css" && entry.subject?.className === "page-shell",
+    );
+
+    assert.ok(finding);
+    assert.equal(finding.confidence, "low");
+    assert.match(finding.message, /may be available via some render contexts/);
+    assert.equal(finding.metadata?.renderContextReachability, "possible");
+    assert.deepEqual(finding.metadata?.possibleRenderContextCssFiles, [
+      "src/pages/PageWithCss.css",
+    ]);
+  });
+});
+
 test("unused-css-class reports unused project css classes but not used ones", async () => {
   await withRuleTempDir(async (tempDir) => {
     await writeProjectFile(
