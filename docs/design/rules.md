@@ -16,6 +16,7 @@ This document describes the current rule catalog for `scan-react-css` and keeps 
 
 Suggested default severity meanings:
 
+- `debug`: diagnostic output about analysis limits or internal detail that is hidden by default
 - `error`: should typically fail CI by default
 - `warning`: important, but not necessarily build-breaking by default
 - `info`: advisory or optimization-oriented
@@ -44,13 +45,13 @@ The product preserves the intent of the earlier Loremaster-style audit while usi
 - `component-style-cross-component` - `warning`
 - `global-css-not-global` - `info`
 - `utility-class-replacement` - `info`
-- `dynamic-class-reference` - `warning`
+- `dynamic-class-reference` - `debug`
 - `missing-css-module-class` - `error`
 
 ### Tier 2
 
 - `page-style-used-by-single-component` - `info`
-- `dynamic-missing-css-class` - `warning`
+- `dynamic-missing-css-class` - `debug`
 - `unused-css-module-class` - `warning`
 - `missing-external-css-class` - `error`
 - `duplicate-css-class-definition` - `warning`

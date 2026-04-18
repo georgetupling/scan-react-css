@@ -149,6 +149,7 @@ test("supports direct inline config input", async () => {
   assert.equal(result.source.kind, "inline");
   assert.equal(result.config.rootDir, "inline-root");
   assert.equal(result.config.policy.failOnSeverity, "warning");
+  assert.equal(result.config.output.minSeverity, "info");
   assert.equal(result.warnings.length, 0);
 });
 
@@ -163,10 +164,21 @@ test("normalization fills defaults for omitted sections", () => {
   assert.deepEqual(result.source.include, DEFAULT_CONFIG.source.include);
   assert.deepEqual(result.classComposition.helpers, DEFAULT_CONFIG.classComposition.helpers);
   assert.equal(result.externalCss.mode, "declared-globals");
+  assert.equal(result.output.minSeverity, "info");
   assert.ok(result.externalCss.globals.some((entry) => entry.provider === "font-awesome"));
   assert.ok(result.externalCss.globals.some((entry) => entry.provider === "bootstrap-icons"));
   assert.ok(result.externalCss.globals.some((entry) => entry.provider === "material-design-icons"));
   assert.ok(result.externalCss.globals.some((entry) => entry.provider === "animate.css"));
+});
+
+test("supports output min severity in config", () => {
+  const result = normalizeScanReactCssConfig({
+    output: {
+      minSeverity: "debug",
+    },
+  });
+
+  assert.equal(result.output.minSeverity, "debug");
 });
 
 test("invalid config values fail clearly", async () => {

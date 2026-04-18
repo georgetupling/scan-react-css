@@ -1,7 +1,6 @@
 import type { RuleDefinition } from "../types.js";
 import {
   DYNAMIC_REFERENCE_KINDS,
-  getDeclaredExternalProviderForClass,
   getProjectClassDefinitions,
   isCssModuleReference,
   isDefinitionReachable,
@@ -10,9 +9,9 @@ import {
 export const dynamicMissingCssClassRule: RuleDefinition = {
   ruleId: "dynamic-missing-css-class",
   family: "dynamic-analysis",
-  defaultSeverity: "warning",
+  defaultSeverity: "debug",
   run(context) {
-    const severity = context.getRuleSeverity("dynamic-missing-css-class", "warning");
+    const severity = context.getRuleSeverity("dynamic-missing-css-class", "debug");
     if (severity === "off") {
       return [];
     }
@@ -40,13 +39,6 @@ export const dynamicMissingCssClassRule: RuleDefinition = {
           : [];
 
         if (candidateDefinitions.length > 0 || reachableDefinitions.length > 0) {
-          continue;
-        }
-
-        if (
-          reference.className &&
-          getDeclaredExternalProviderForClass(context.model, reference.className)
-        ) {
           continue;
         }
 

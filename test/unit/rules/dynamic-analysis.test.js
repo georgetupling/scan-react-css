@@ -71,7 +71,7 @@ test("dynamic-missing-css-class reports unresolved dynamic classes with no defin
   });
 });
 
-test("dynamic-missing-css-class ignores classes satisfied by active html-linked providers", async () => {
+test("dynamic-class-reference still reports provider-backed dynamic classes in debug output", async () => {
   await withRuleTempDir(async (tempDir) => {
     await writeProjectFile(
       tempDir,
@@ -86,39 +86,7 @@ test("dynamic-missing-css-class ignores classes satisfied by active html-linked 
       "src/App.tsx",
       [
         'import classNames from "classnames";',
-        "const enabled = true;",
-        'export function App() { return <i className={classNames(enabled && "fa-plus")} />; }',
-      ].join("\n"),
-    );
-
-    const findings = await runRuleScenario(tempDir);
-
-    assert.ok(
-      !findings.some(
-        (finding) =>
-          finding.ruleId === "dynamic-missing-css-class" &&
-          finding.subject?.className === "fa-plus",
-      ),
-    );
-  });
-});
-
-test("dynamic-class-reference ignores classes satisfied by active html-linked providers", async () => {
-  await withRuleTempDir(async (tempDir) => {
-    await writeProjectFile(
-      tempDir,
-      "index.html",
-      [
-        "<!doctype html>",
-        '<html><head><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" /></head><body></body></html>',
-      ].join("\n"),
-    );
-    await writeProjectFile(
-      tempDir,
-      "src/App.tsx",
-      [
-        'import classNames from "classnames";',
-        "const enabled = false;",
+        "const enabled = getEnabledState();",
         'export function App() { return <i className={classNames("fa-solid", enabled ? "fa-chevron-up" : "fa-chevron-down")} />; }',
       ].join("\n"),
     );
@@ -126,7 +94,7 @@ test("dynamic-class-reference ignores classes satisfied by active html-linked pr
     const findings = await runRuleScenario(tempDir);
 
     assert.ok(
-      !findings.some(
+      findings.some(
         (finding) =>
           finding.ruleId === "dynamic-class-reference" &&
           (finding.subject?.className === "fa-solid" ||
@@ -134,6 +102,7 @@ test("dynamic-class-reference ignores classes satisfied by active html-linked pr
             finding.subject?.className === "fa-chevron-down"),
       ),
     );
+    assert.ok(!findings.some((finding) => finding.ruleId === "dynamic-missing-css-class"));
   });
 });
 

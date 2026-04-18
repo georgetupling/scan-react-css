@@ -49,6 +49,7 @@ That currently captures the default product assumptions:
 - opt-in `fetch-remote` support for remote HTML-linked stylesheet URLs
 - native helper support for `classnames` and `clsx`
 - policy default of `failOnSeverity: "error"`
+- output default of `minSeverity: "info"`
 - per-rule object config for rules that need thresholds
 
 If these built-in defaults are used because no config file was discovered, the CLI should emit a warning recommending that the user create a config file.

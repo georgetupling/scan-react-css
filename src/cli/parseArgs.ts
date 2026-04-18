@@ -1,5 +1,5 @@
 import type { FindingSeverity } from "../runtime/types.js";
-import type { ConfigSummaryMode, HumanOutputMode } from "./format.js";
+import type { OutputVerbosity } from "./format.js";
 
 export type ParsedCliArgs = {
   targetPath?: string;
@@ -9,8 +9,8 @@ export type ParsedCliArgs = {
   outputMinSeverity?: FindingSeverity;
   outputFile?: string;
   overwriteOutput: boolean;
-  configSummary: ConfigSummaryMode;
-  outputMode: HumanOutputMode;
+  printConfig: boolean;
+  verbosity: OutputVerbosity;
 };
 
 export class CliArgumentError extends Error {
@@ -20,17 +20,17 @@ export class CliArgumentError extends Error {
   }
 }
 
-const SEVERITIES: FindingSeverity[] = ["info", "warning", "error"];
-const CONFIG_SUMMARY_MODES: ConfigSummaryMode[] = ["off", "default", "verbose"];
-const OUTPUT_MODES: HumanOutputMode[] = ["minimal", "default", "verbose"];
+const SEVERITIES: FindingSeverity[] = ["debug", "info", "warning", "error"];
+const BOOLEAN_FLAG_VALUES = ["on", "off"] as const;
+const VERBOSITY_LEVELS: OutputVerbosity[] = ["low", "medium", "high"];
 
 export function parseCliArgs(argv: string[]): ParsedCliArgs {
   const args = argv.slice(2);
   const parsed: ParsedCliArgs = {
     json: false,
     overwriteOutput: false,
-    configSummary: "default",
-    outputMode: "default",
+    printConfig: false,
+    verbosity: "medium",
   };
 
   for (let index = 0; index < args.length; index += 1) {
@@ -81,25 +81,25 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
       continue;
     }
 
-    if (arg === "--config-summary") {
-      const value = readNextValue(args, ++index, "--config-summary");
-      if (!CONFIG_SUMMARY_MODES.includes(value as ConfigSummaryMode)) {
+    if (arg === "--print-config") {
+      const value = readNextValue(args, ++index, "--print-config");
+      if (!BOOLEAN_FLAG_VALUES.includes(value as (typeof BOOLEAN_FLAG_VALUES)[number])) {
         throw new CliArgumentError(
-          `Invalid value for --config-summary: ${value}. Expected one of ${CONFIG_SUMMARY_MODES.join(", ")}`,
+          `Invalid value for --print-config: ${value}. Expected one of ${BOOLEAN_FLAG_VALUES.join(", ")}`,
         );
       }
-      parsed.configSummary = value as ConfigSummaryMode;
+      parsed.printConfig = value === "on";
       continue;
     }
 
-    if (arg === "--output-mode") {
-      const value = readNextValue(args, ++index, "--output-mode");
-      if (!OUTPUT_MODES.includes(value as HumanOutputMode)) {
+    if (arg === "--verbosity") {
+      const value = readNextValue(args, ++index, "--verbosity");
+      if (!VERBOSITY_LEVELS.includes(value as OutputVerbosity)) {
         throw new CliArgumentError(
-          `Invalid value for --output-mode: ${value}. Expected one of ${OUTPUT_MODES.join(", ")}`,
+          `Invalid value for --verbosity: ${value}. Expected one of ${VERBOSITY_LEVELS.join(", ")}`,
         );
       }
-      parsed.outputMode = value as HumanOutputMode;
+      parsed.verbosity = value as OutputVerbosity;
       continue;
     }
 
@@ -108,10 +108,6 @@ export function parseCliArgs(argv: string[]): ParsedCliArgs {
 
   if (parsed.outputFile && !parsed.json) {
     throw new CliArgumentError("--output-file requires --json");
-  }
-
-  if (parsed.outputMinSeverity && parsed.json) {
-    throw new CliArgumentError("--output-min-severity only applies to human-readable output");
   }
 
   return parsed;

@@ -24,7 +24,7 @@ test("JSON output stays stable for a representative mixed-finding scan", async (
     async (project) => {
       const result = await scanReactCss({ targetPath: project.rootDir });
       const normalizedResult = normalizeScanResult(result, project.rootDir);
-      const actualOutput = formatJsonOutput(normalizedResult, "default");
+      const actualOutput = formatJsonOutput(normalizedResult, false);
       const expectedOutput = await readGoldenResource("golden/report-default.json");
 
       assert.deepEqual(JSON.parse(actualOutput), JSON.parse(expectedOutput));
@@ -51,8 +51,9 @@ test("human-readable verbose output stays stable for grouped findings", async ()
       const normalizedResult = normalizeScanResult(result, project.rootDir);
       const actualOutput = formatHumanReadableOutput({
         result: normalizedResult,
-        outputMode: "verbose",
+        verbosity: "high",
         scanTarget: PROJECT_ROOT_TOKEN,
+        printConfig: false,
       });
       const expectedOutput = await readGoldenResource("golden/report-verbose.txt");
 

@@ -24,6 +24,7 @@ const TOP_LEVEL_KEYS = new Set([
   "externalCss",
   "classComposition",
   "policy",
+  "output",
   "rules",
 ]);
 
@@ -35,6 +36,7 @@ const EXTERNAL_CSS_KEYS = new Set(["enabled", "mode", "globals"]);
 const EXTERNAL_CSS_GLOBAL_KEYS = new Set(["provider", "match", "classPrefixes", "classNames"]);
 const CLASS_COMPOSITION_KEYS = new Set(["helpers"]);
 const POLICY_KEYS = new Set(["failOnSeverity"]);
+const OUTPUT_KEYS = new Set(["minSeverity"]);
 const RULE_OBJECT_KEYS = new Set([
   "severity",
   "threshold",
@@ -43,8 +45,18 @@ const RULE_OBJECT_KEYS = new Set([
   "minDeclarations",
 ]);
 
-const RULE_SEVERITIES: RuleSeverity[] = ["off", "info", "warning", "error"];
-const FAIL_ON_SEVERITIES: Array<Exclude<RuleSeverity, "off">> = ["info", "warning", "error"];
+const RULE_SEVERITIES: RuleSeverity[] = ["off", "debug", "info", "warning", "error"];
+const FAIL_ON_SEVERITIES: Array<Exclude<RuleSeverity, "off" | "debug">> = [
+  "info",
+  "warning",
+  "error",
+];
+const OUTPUT_SEVERITIES: Array<Exclude<RuleSeverity, "off">> = [
+  "debug",
+  "info",
+  "warning",
+  "error",
+];
 const OWNERSHIP_NAMING_CONVENTIONS: OwnershipNamingConvention[] = ["off", "sibling"];
 const EXTERNAL_CSS_MODES: ExternalCssMode[] = ["imported-only", "declared-globals", "fetch-remote"];
 
@@ -207,6 +219,12 @@ export function normalizeScanReactCssConfig(
     assertKnownKeys(policy, POLICY_KEYS, "config.policy", options.filePath);
   }
 
+  const output = rawConfig.output;
+  if (output !== undefined) {
+    assertPlainObject(output, "config.output", options.filePath);
+    assertKnownKeys(output, OUTPUT_KEYS, "config.output", options.filePath);
+  }
+
   const rules = rawConfig.rules;
   if (rules !== undefined) {
     assertPlainObject(rules, "config.rules", options.filePath);
@@ -297,6 +315,15 @@ export function normalizeScanReactCssConfig(
           "config.policy.failOnSeverity",
           options.filePath,
         ) ?? DEFAULT_CONFIG.policy.failOnSeverity,
+    },
+    output: {
+      minSeverity:
+        normalizeEnum(
+          output?.minSeverity,
+          OUTPUT_SEVERITIES,
+          "config.output.minSeverity",
+          options.filePath,
+        ) ?? DEFAULT_CONFIG.output.minSeverity,
     },
     rules: resolvedRules,
   };
@@ -507,6 +534,9 @@ function cloneResolvedConfig(config: ResolvedScanReactCssConfig): ResolvedScanRe
     },
     policy: {
       failOnSeverity: config.policy.failOnSeverity,
+    },
+    output: {
+      minSeverity: config.output.minSeverity,
     },
     rules: Object.fromEntries(
       Object.entries(config.rules).map(([ruleId, value]) => [ruleId, cloneRuleConfigValue(value)]),

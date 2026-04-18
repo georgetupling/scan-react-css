@@ -6,7 +6,8 @@
     "findingCount": 4,
     "errorCount": 0,
     "warningCount": 0,
-    "infoCount": 4
+    "infoCount": 4,
+    "debugCount": 0
   },
   "findings": [
     {
@@ -87,104 +88,5 @@
   ],
   "operationalWarnings": [
     "No scan-react-css.json config file was found; built-in defaults were used. Create a config file to make scanner behavior explicit."
-  ],
-  "config": {
-    "rootDir": ".",
-    "source": {
-      "include": [],
-      "exclude": ["dist", "build", "coverage", "node_modules"],
-      "discovery": "auto"
-    },
-    "css": {
-      "global": [],
-      "utilities": ["**/utilities.css", "**/utilities/**/*.css"],
-      "modules": {
-        "enabled": true,
-        "patterns": ["**/*.module.css"]
-      }
-    },
-    "externalCss": {
-      "enabled": true,
-      "mode": "declared-globals",
-      "globals": [
-        {
-          "provider": "font-awesome",
-          "match": [
-            "**/font-awesome/**/css/*.css",
-            "**/fontawesome/**/css/*.css",
-            "**/cdnjs.cloudflare.com/ajax/libs/font-awesome/**/css/*.css",
-            "**/use.fontawesome.com/**.css"
-          ],
-          "classPrefixes": ["fa-"],
-          "classNames": [
-            "fa",
-            "fa-solid",
-            "fa-regular",
-            "fa-brands",
-            "fa-light",
-            "fa-thin",
-            "fa-duotone"
-          ]
-        },
-        {
-          "provider": "material-design-icons",
-          "match": [
-            "**/@mdi/font@*/css/materialdesignicons*.css",
-            "**/npm/@mdi/font@*/css/materialdesignicons*.css",
-            "**/unpkg.com/@mdi/font@*/css/materialdesignicons*.css",
-            "**/materialdesignicons*.css"
-          ],
-          "classPrefixes": ["mdi-"],
-          "classNames": ["mdi", "mdi-set"]
-        },
-        {
-          "provider": "bootstrap-icons",
-          "match": [
-            "**/bootstrap-icons@*/font/bootstrap-icons*.css",
-            "**/npm/bootstrap-icons@*/font/bootstrap-icons*.css",
-            "**/unpkg.com/bootstrap-icons@*/font/bootstrap-icons*.css",
-            "**/bootstrap-icons/font/bootstrap-icons*.css"
-          ],
-          "classPrefixes": ["bi-"],
-          "classNames": ["bi"]
-        },
-        {
-          "provider": "animate.css",
-          "match": [
-            "**/cdnjs.cloudflare.com/ajax/libs/animate.css/**/animate*.css",
-            "**/animate.css@*/animate*.css",
-            "**/npm/animate.css@*/animate*.css",
-            "**/animate.css/**/animate*.css"
-          ],
-          "classPrefixes": ["animate__"],
-          "classNames": ["animate__animated"]
-        },
-        {
-          "provider": "uikit",
-          "match": [
-            "**/uikit@*/dist/css/uikit*.css",
-            "**/npm/uikit@*/dist/css/uikit*.css",
-            "**/unpkg.com/uikit@*/dist/css/uikit*.css",
-            "**/uikit/dist/css/uikit*.css"
-          ],
-          "classPrefixes": ["uk-"],
-          "classNames": []
-        },
-        {
-          "provider": "pure.css",
-          "match": [
-            "**/purecss@*/build/pure*.css",
-            "**/npm/purecss@*/build/pure*.css",
-            "**/unpkg.com/purecss@*/build/pure*.css",
-            "**/purecss/build/pure*.css"
-          ],
-          "classPrefixes": ["pure-"],
-          "classNames": []
-        }
-      ]
-    },
-    "policy": {
-      "failOnSeverity": "error"
-    }
-  }
+  ]
 }

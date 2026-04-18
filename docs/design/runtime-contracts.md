@@ -50,7 +50,7 @@ scan-react-css
 ### Supported syntax
 
 ```bash
-scan-react-css [targetPath] [--focus path/to/focus] [--config path/to/scan-react-css.json] [--json] [--output-min-severity warning] [--output-file ./reports/scan-react-css.json] [--overwrite-output] [--config-summary default] [--output-mode default]
+scan-react-css [targetPath] [--focus path/to/focus] [--config path/to/scan-react-css.json] [--json] [--output-min-severity warning] [--print-config on] [--output-file ./reports/scan-react-css.json] [--overwrite-output] [--verbosity medium]
 ```
 
 ### Supported flags
@@ -58,11 +58,11 @@ scan-react-css [targetPath] [--focus path/to/focus] [--config path/to/scan-react
 - `--config path/to/scan-react-css.json`
 - `--focus path/to/focus`
 - `--json`
-- `--output-min-severity info|warning|error`
+- `--output-min-severity debug|info|warning|error`
+- `--print-config on|off`
 - `--output-file path/to/report.json`
 - `--overwrite-output`
-- `--config-summary off|default|verbose`
-- `--output-mode minimal|default|verbose`
+- `--verbosity low|medium|high`
 
 ### CLI behavior
 
@@ -74,13 +74,14 @@ scan-react-css [targetPath] [--focus path/to/focus] [--config path/to/scan-react
 - If `--config` is provided, it overrides discovery.
 - If `--json` is provided, the scanner emits machine-readable JSON.
 - Without `--json`, the scanner emits human-readable terminal output.
-- `--output-min-severity` filters only human-readable output.
 - `--output-file` requires `--json`.
-- `--output-min-severity` cannot be used with `--json`.
+- `--output-min-severity` filters both human-readable and JSON output.
+- If `--output-min-severity` is omitted, the scanner uses `config.output.minSeverity`.
+- `--print-config on` includes the full resolved config in either output mode.
+- `--print-config off` omits config from either output mode and is the default.
 - If `--output-file` points to an existing file and `--overwrite-output` is not set, the CLI writes to the first available suffixed filename such as `report-1.json`.
 - If `--overwrite-output` is provided, the CLI may overwrite the destination file.
-- `--config-summary` controls how much config information appears in JSON output.
-- `--output-mode` controls how much human-readable detail is printed.
+- `--verbosity` controls how much human-readable detail is printed.
 
 ## Node API contract
 
@@ -98,6 +99,7 @@ type ScanInput = {
   configPath?: string;
   config?: RawScanReactCssConfig;
   cwd?: string;
+  outputMinSeverity?: FindingSeverity;
 };
 
 type ScanResult = {
@@ -117,7 +119,7 @@ Core finding shape:
 type Finding = {
   ruleId: string;
   family: string;
-  severity: "info" | "warning" | "error";
+  severity: "debug" | "info" | "warning" | "error";
   confidence: "low" | "medium" | "high";
   message: string;
   primaryLocation?: FindingLocation;
@@ -152,6 +154,7 @@ type FindingSubject = {
 
 Finding severity:
 
+- `debug`
 - `info`
 - `warning`
 - `error`
@@ -194,23 +197,20 @@ Default ordering is:
 3. subject key such as class name
 4. file path
 
-Human-readable output modes:
+Human-readable verbosity levels:
 
-- `minimal`
-- `default`
-- `verbose`
+- `low`
+- `medium`
+- `high`
 
 ## JSON output contract
 
 JSON output is deterministic and structured.
 
-Config summary modes:
-
-- `off`
-- `default`
-- `verbose`
-
-`--output-min-severity` does not affect JSON output. JSON always includes the full unfiltered result for the run.
+`--output-min-severity` affects both human-readable and JSON output.
+If omitted, both output modes default to `config.output.minSeverity`.
+`--print-config on` includes the full resolved config in either output mode.
+By default, config is omitted in both output modes.
 
 When present, `operationalWarnings` are also included in JSON output.
 

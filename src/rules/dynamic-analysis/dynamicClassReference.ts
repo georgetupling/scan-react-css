@@ -1,12 +1,12 @@
 import type { RuleDefinition } from "../types.js";
-import { DYNAMIC_REFERENCE_KINDS, getDeclaredExternalProviderForClass } from "../helpers.js";
+import { DYNAMIC_REFERENCE_KINDS } from "../helpers.js";
 
 export const dynamicClassReferenceRule: RuleDefinition = {
   ruleId: "dynamic-class-reference",
   family: "dynamic-analysis",
-  defaultSeverity: "warning",
+  defaultSeverity: "debug",
   run(context) {
-    const severity = context.getRuleSeverity("dynamic-class-reference", "warning");
+    const severity = context.getRuleSeverity("dynamic-class-reference", "debug");
     if (severity === "off") {
       return [];
     }
@@ -16,13 +16,6 @@ export const dynamicClassReferenceRule: RuleDefinition = {
     for (const sourceFile of context.model.graph.sourceFiles) {
       for (const reference of sourceFile.classReferences) {
         if (reference.confidence === "high" && !DYNAMIC_REFERENCE_KINDS.has(reference.kind)) {
-          continue;
-        }
-
-        if (
-          reference.className &&
-          getDeclaredExternalProviderForClass(context.model, reference.className)
-        ) {
           continue;
         }
 

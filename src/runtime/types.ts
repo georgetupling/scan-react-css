@@ -1,7 +1,7 @@
 import type { RawScanReactCssConfig, ResolvedScanReactCssConfig } from "../config/types.js";
 import type { ResolvedConfigSource } from "../config/load.js";
 
-export type FindingSeverity = "info" | "warning" | "error";
+export type FindingSeverity = "debug" | "info" | "warning" | "error";
 
 export type FindingConfidence = "low" | "medium" | "high";
 
@@ -36,6 +36,7 @@ export type ScanInput = {
   configPath?: string;
   config?: RawScanReactCssConfig;
   cwd?: string;
+  outputMinSeverity?: FindingSeverity;
 };
 
 export type ScanSummary = {
@@ -46,6 +47,7 @@ export type ScanSummary = {
   errorCount: number;
   warningCount: number;
   infoCount: number;
+  debugCount: number;
 };
 
 export type ScanResult = {

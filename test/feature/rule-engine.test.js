@@ -111,6 +111,7 @@ test("scan summary counts severities deterministically", () => {
     errorCount: 1,
     warningCount: 1,
     infoCount: 1,
+    debugCount: 0,
   });
 });
 
@@ -177,6 +178,7 @@ test("scanReactCss returns the structured runtime shape even before default rule
       errorCount: 0,
       warningCount: 0,
       infoCount: 0,
+      debugCount: 0,
     });
   });
 });

@@ -5,6 +5,7 @@ const SEVERITY_ORDER: Record<FindingSeverity, number> = {
   error: 0,
   warning: 1,
   info: 2,
+  debug: 3,
 };
 
 const CONFIDENCE_ORDER = {
@@ -73,6 +74,7 @@ export function buildScanSummary(input: {
     errorCount: 0,
     warningCount: 0,
     infoCount: 0,
+    debugCount: 0,
   };
 
   for (const finding of input.findings) {
@@ -86,10 +88,24 @@ export function buildScanSummary(input: {
       continue;
     }
 
-    summary.infoCount += 1;
+    if (finding.severity === "info") {
+      summary.infoCount += 1;
+      continue;
+    }
+
+    summary.debugCount += 1;
   }
 
   return summary;
+}
+
+export function filterFindingsByMinSeverity(
+  findings: Finding[],
+  minSeverity: FindingSeverity,
+): Finding[] {
+  return findings.filter(
+    (finding) => SEVERITY_ORDER[finding.severity] <= SEVERITY_ORDER[minSeverity],
+  );
 }
 
 function getSubjectSortKey(finding: Finding): string {

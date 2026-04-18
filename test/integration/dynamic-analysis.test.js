@@ -14,7 +14,10 @@ test("integration scans preserve dynamic-class-reference confidence through the 
   builder.withCssFile("src/App.css", ".panel {}\n.open {}\n");
 
   await withBuiltProject(builder, async (project) => {
-    const result = await scanReactCss({ targetPath: project.rootDir });
+    const result = await scanReactCss({
+      targetPath: project.rootDir,
+      outputMinSeverity: "debug",
+    });
     const finding = result.findings.find((entry) => entry.ruleId === "dynamic-class-reference");
 
     assert.ok(finding);
@@ -34,7 +37,10 @@ test("integration scans report dynamic missing css classes from helper-composed 
         ].join("\n"),
       ),
     async (project) => {
-      const result = await scanReactCss({ targetPath: project.rootDir });
+      const result = await scanReactCss({
+        targetPath: project.rootDir,
+        outputMinSeverity: "debug",
+      });
 
       assert.ok(
         result.findings.some(
@@ -47,7 +53,7 @@ test("integration scans report dynamic missing css classes from helper-composed 
   );
 });
 
-test("integration scans suppress dynamic provider-backed icon composition for active declared providers", async () => {
+test("integration scans include provider-backed dynamic reference findings when debug output is enabled", async () => {
   await withBuiltProject(
     new TestProjectBuilder()
       .withTemplate("basic-react-app")
@@ -62,14 +68,17 @@ test("integration scans suppress dynamic provider-backed icon composition for ac
         "src/App.tsx",
         [
           'import classNames from "classnames";',
-          "const enabled = false;",
+          "const enabled = getEnabledState();",
           'export function App() { return <i className={classNames("fa-solid", enabled ? "fa-chevron-up" : "fa-chevron-down")} />; }',
         ].join("\n"),
       ),
     async (project) => {
-      const result = await scanReactCss({ targetPath: project.rootDir });
+      const result = await scanReactCss({
+        targetPath: project.rootDir,
+        outputMinSeverity: "debug",
+      });
 
-      assert.ok(!result.findings.some((finding) => finding.ruleId === "dynamic-class-reference"));
+      assert.ok(result.findings.some((finding) => finding.ruleId === "dynamic-class-reference"));
       assert.ok(!result.findings.some((finding) => finding.ruleId === "dynamic-missing-css-class"));
     },
   );

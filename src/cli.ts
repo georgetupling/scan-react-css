@@ -17,6 +17,7 @@ export async function runCli(argv: string[]): Promise<void> {
       focusPath: parsedArgs.focusPath,
       configPath: parsedArgs.configPath ? path.resolve(cliCwd, parsedArgs.configPath) : undefined,
       cwd: scanRoot,
+      outputMinSeverity: parsedArgs.outputMinSeverity,
     });
 
     for (const warning of result.operationalWarnings ?? []) {
@@ -24,7 +25,7 @@ export async function runCli(argv: string[]): Promise<void> {
     }
 
     if (parsedArgs.json) {
-      const content = formatJsonOutput(result, parsedArgs.configSummary);
+      const content = formatJsonOutput(result, parsedArgs.printConfig);
 
       if (parsedArgs.outputFile) {
         const writtenPath = await writeOutputFile({
@@ -40,10 +41,10 @@ export async function runCli(argv: string[]): Promise<void> {
     } else {
       const output = formatHumanReadableOutput({
         result,
-        outputMode: parsedArgs.outputMode,
-        minSeverity: parsedArgs.outputMinSeverity,
+        verbosity: parsedArgs.verbosity,
         scanTarget: parsedArgs.targetPath ?? cliCwd,
         focusPath: parsedArgs.focusPath,
+        printConfig: parsedArgs.printConfig,
       });
       console.log(output);
     }

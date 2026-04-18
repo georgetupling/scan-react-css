@@ -1,16 +1,9 @@
 import type { ResolvedScanReactCssConfig } from "../config/types.js";
-import type { Finding, FindingSeverity, ScanResult } from "../runtime/types.js";
+import type { Finding, ScanResult } from "../runtime/types.js";
 
-export type ConfigSummaryMode = "off" | "default" | "verbose";
-export type HumanOutputMode = "minimal" | "default" | "verbose";
+export type OutputVerbosity = "low" | "medium" | "high";
 
-const SEVERITY_ORDER: Record<FindingSeverity, number> = {
-  info: 0,
-  warning: 1,
-  error: 2,
-};
-
-export function formatJsonOutput(result: ScanResult, configSummaryMode: ConfigSummaryMode): string {
+export function formatJsonOutput(result: ScanResult, printConfig: boolean): string {
   const payload: Record<string, unknown> = {
     summary: result.summary,
     findings: result.findings,
@@ -20,9 +13,7 @@ export function formatJsonOutput(result: ScanResult, configSummaryMode: ConfigSu
     payload.operationalWarnings = result.operationalWarnings;
   }
 
-  if (configSummaryMode === "default") {
-    payload.config = buildDefaultConfigSummary(result.config);
-  } else if (configSummaryMode === "verbose") {
+  if (printConfig) {
     payload.config = result.config;
   }
 
@@ -31,16 +22,12 @@ export function formatJsonOutput(result: ScanResult, configSummaryMode: ConfigSu
 
 export function formatHumanReadableOutput(input: {
   result: ScanResult;
-  outputMode: HumanOutputMode;
-  minSeverity?: FindingSeverity;
+  verbosity: OutputVerbosity;
   scanTarget: string;
   focusPath?: string;
+  printConfig: boolean;
 }): string {
-  const filteredFindings = input.minSeverity
-    ? input.result.findings.filter(
-        (finding) => SEVERITY_ORDER[finding.severity] >= SEVERITY_ORDER[input.minSeverity!],
-      )
-    : input.result.findings;
+  const filteredFindings = input.result.findings;
   const lines: string[] = [];
 
   lines.push(`Scan target: ${input.scanTarget}`);
@@ -54,44 +41,50 @@ export function formatHumanReadableOutput(input: {
     lines.push(`Config source: ${sourceLabel}`);
   }
   lines.push(
-    `Summary: ${input.result.summary.findingCount} findings (${input.result.summary.errorCount} error, ${input.result.summary.warningCount} warning, ${input.result.summary.infoCount} info) across ${input.result.summary.fileCount} files`,
+    `Summary: ${input.result.summary.findingCount} findings (${input.result.summary.errorCount} error, ${input.result.summary.warningCount} warning, ${input.result.summary.infoCount} info${
+      input.result.summary.debugCount > 0 ? `, ${input.result.summary.debugCount} debug` : ""
+    }) across ${input.result.summary.fileCount} files`,
   );
 
   if (filteredFindings.length === 0) {
     lines.push("Findings: none");
-    return lines.join("\n");
+  } else {
+    lines.push("Findings:");
+    const groupedFindings = groupFindingsBySubject(filteredFindings);
+
+    for (const group of groupedFindings) {
+      if (group.label) {
+        lines.push(`- ${group.label}`);
+      }
+
+      for (const finding of group.findings) {
+        const prefix = group.label ? "  " : "- ";
+        const location = finding.primaryLocation?.filePath
+          ? ` @ ${finding.primaryLocation.filePath}`
+          : "";
+        lines.push(
+          `${prefix}[${finding.severity}/${finding.confidence}] ${finding.ruleId}${location}: ${finding.message}`,
+        );
+
+        if (input.verbosity === "high" && finding.relatedLocations.length > 0) {
+          for (const relatedLocation of finding.relatedLocations) {
+            lines.push(`    related: ${relatedLocation.filePath}`);
+          }
+        }
+
+        if (input.verbosity === "high") {
+          const metadataEntries = Object.entries(finding.metadata);
+          if (metadataEntries.length > 0) {
+            lines.push(`    metadata: ${JSON.stringify(finding.metadata)}`);
+          }
+        }
+      }
+    }
   }
 
-  lines.push("Findings:");
-  const groupedFindings = groupFindingsBySubject(filteredFindings);
-
-  for (const group of groupedFindings) {
-    if (group.label) {
-      lines.push(`- ${group.label}`);
-    }
-
-    for (const finding of group.findings) {
-      const prefix = group.label ? "  " : "- ";
-      const location = finding.primaryLocation?.filePath
-        ? ` @ ${finding.primaryLocation.filePath}`
-        : "";
-      lines.push(
-        `${prefix}[${finding.severity}/${finding.confidence}] ${finding.ruleId}${location}: ${finding.message}`,
-      );
-
-      if (input.outputMode === "verbose" && finding.relatedLocations.length > 0) {
-        for (const relatedLocation of finding.relatedLocations) {
-          lines.push(`    related: ${relatedLocation.filePath}`);
-        }
-      }
-
-      if (input.outputMode !== "minimal" && input.outputMode === "verbose") {
-        const metadataEntries = Object.entries(finding.metadata);
-        if (metadataEntries.length > 0) {
-          lines.push(`    metadata: ${JSON.stringify(finding.metadata)}`);
-        }
-      }
-    }
+  if (input.printConfig) {
+    lines.push("Config:");
+    lines.push(JSON.stringify(resultConfigForPrint(input.result.config), null, 2));
   }
 
   return lines.join("\n");
@@ -132,16 +125,6 @@ function groupFindingsBySubject(
   return grouped;
 }
 
-function buildDefaultConfigSummary(config: ResolvedScanReactCssConfig) {
-  return {
-    rootDir: config.rootDir,
-    source: config.source,
-    css: {
-      global: config.css.global,
-      utilities: config.css.utilities,
-      modules: config.css.modules,
-    },
-    externalCss: config.externalCss,
-    policy: config.policy,
-  };
+function resultConfigForPrint(config: ResolvedScanReactCssConfig) {
+  return config;
 }

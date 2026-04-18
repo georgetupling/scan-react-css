@@ -1,6 +1,6 @@
 import path from "node:path";
 import type { ScanInput, ScanResult } from "./runtime/types.js";
-import { buildScanSummary } from "./runtime/findings.js";
+import { buildScanSummary, filterFindingsByMinSeverity } from "./runtime/findings.js";
 import { runRules } from "./rules/engine.js";
 import { loadScanReactCssConfig } from "./config/load.js";
 import { extractProjectFacts } from "./facts/extractProjectFacts.js";
@@ -102,10 +102,12 @@ export async function scanReactCss(input: ScanInput = {}): Promise<ScanResult> {
     targetPath: input.targetPath,
     focusPath: input.focusPath,
   });
+  const effectiveMinSeverity = input.outputMinSeverity ?? loadedConfig.config.output.minSeverity;
+  const visibleFindings = filterFindingsByMinSeverity(findings, effectiveMinSeverity);
   const summary = buildScanSummary({
     sourceFileCount: model.graph.sourceFiles.length,
     cssFileCount: model.graph.cssFiles.length,
-    findings,
+    findings: visibleFindings,
   });
 
   return {
@@ -114,7 +116,7 @@ export async function scanReactCss(input: ScanInput = {}): Promise<ScanResult> {
     operationalWarnings: focusWarning
       ? [...loadedConfig.warnings, ...facts.operationalWarnings, focusWarning]
       : [...loadedConfig.warnings, ...facts.operationalWarnings],
-    findings,
+    findings: visibleFindings,
     summary,
   };
 }

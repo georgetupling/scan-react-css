@@ -1,4 +1,4 @@
-export type RuleSeverity = "off" | "info" | "warning" | "error";
+export type RuleSeverity = "off" | "debug" | "info" | "warning" | "error";
 
 export type ConfidenceLevel = "low" | "medium" | "high";
 
@@ -57,7 +57,10 @@ export type RawScanReactCssConfig = {
     helpers?: string[];
   };
   policy?: {
-    failOnSeverity?: Exclude<RuleSeverity, "off">;
+    failOnSeverity?: Exclude<RuleSeverity, "off" | "debug">;
+  };
+  output?: {
+    minSeverity?: Exclude<RuleSeverity, "off">;
   };
   rules?: Record<string, RuleConfigValue>;
 };
@@ -91,7 +94,10 @@ export type ResolvedScanReactCssConfig = {
     helpers: string[];
   };
   policy: {
-    failOnSeverity: Exclude<RuleSeverity, "off">;
+    failOnSeverity: Exclude<RuleSeverity, "off" | "debug">;
+  };
+  output: {
+    minSeverity: Exclude<RuleSeverity, "off">;
   };
   rules: Record<string, RuleConfigValue>;
 };
@@ -201,6 +207,9 @@ export const DEFAULT_CONFIG: ResolvedScanReactCssConfig = {
   },
   policy: {
     failOnSeverity: "error",
+  },
+  output: {
+    minSeverity: "info",
   },
   rules: {
     "component-css-should-be-global": {

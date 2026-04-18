@@ -26,6 +26,7 @@ Most projects should only need to configure:
 - where the app source lives if auto-discovery is not sufficient
 - which CSS should be treated as global
 - policy thresholds
+- output filtering thresholds
 
 Everything else should have idiomatic defaults.
 
@@ -109,6 +110,9 @@ Example:
   },
   "policy": {
     "failOnSeverity": "error"
+  },
+  "output": {
+    "minSeverity": "info"
   },
   "rules": {
     "missing-css-class": "info",
@@ -426,6 +430,38 @@ Meaning:
 - findings at severity `error` fail the scan
 - warnings and info do not fail the scan by default
 
+### `output`
+
+Purpose:
+
+- controls which findings are included in CLI and API output by default
+
+Proposed shape:
+
+```json
+{
+  "output": {
+    "minSeverity": "info"
+  }
+}
+```
+
+Default:
+
+- `"info"`
+
+Allowed values:
+
+- `"debug"`
+- `"info"`
+- `"warning"`
+- `"error"`
+
+Meaning:
+
+- findings below the configured threshold are omitted from both human-readable and JSON output by default
+- CLI `--output-min-severity` and API `outputMinSeverity` override this for a single run
+
 ### `rules`
 
 Purpose:
@@ -455,6 +491,7 @@ Meaning:
 Proposed allowed values:
 
 - `"off"`
+- `"debug"`
 - `"info"`
 - `"warning"`
 - `"error"`
@@ -518,6 +555,9 @@ If no config file is present, the scanner should behave roughly like this:
   },
   "policy": {
     "failOnSeverity": "error"
+  },
+  "output": {
+    "minSeverity": "info"
   },
   "rules": {
     "component-css-should-be-global": {

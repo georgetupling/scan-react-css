@@ -27,12 +27,30 @@ async function writeProjectFile(rootDir, relativePath, content) {
   await writeFile(filePath, content, "utf8");
 }
 
-test("CLI rejects invalid json/min-severity flag combinations", async () => {
+test("CLI rejects invalid output-min-severity values", async () => {
   await withTempDir(async (tempDir) => {
-    const result = await runCli([tempDir, "--json", "--output-min-severity", "warning"], tempDir);
+    const result = await runCli([tempDir, "--output-min-severity", "loud"], tempDir);
 
     assert.equal(result.code, 1);
-    assert.match(result.stderr, /only applies to human-readable output/i);
+    assert.match(result.stderr, /Invalid value for --output-min-severity/i);
+  });
+});
+
+test("CLI rejects invalid print-config values", async () => {
+  await withTempDir(async (tempDir) => {
+    const result = await runCli([tempDir, "--print-config", "maybe"], tempDir);
+
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /Invalid value for --print-config/i);
+  });
+});
+
+test("CLI rejects invalid verbosity values", async () => {
+  await withTempDir(async (tempDir) => {
+    const result = await runCli([tempDir, "--verbosity", "loud"], tempDir);
+
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /Invalid value for --verbosity/i);
   });
 });
 
@@ -206,22 +224,37 @@ test("CLI focus filters findings while retaining full-project indexing", async (
   });
 });
 
-test("CLI supports config summary modes for JSON output", async () => {
+test("CLI omits config by default in JSON output and includes full config when requested", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(tempDir, "src/App.tsx", "export function App() { return null; }");
 
-    const offResult = await runCli([tempDir, "--json", "--config-summary", "off"], tempDir);
-    const offPayload = JSON.parse(offResult.stdout);
-    assert.ok(!("config" in offPayload));
+    const defaultResult = await runCli([tempDir, "--json"], tempDir);
+    const defaultPayload = JSON.parse(defaultResult.stdout);
+    assert.ok(!("config" in defaultPayload));
 
-    const verboseResult = await runCli([tempDir, "--json", "--config-summary", "verbose"], tempDir);
-    const verbosePayload = JSON.parse(verboseResult.stdout);
-    assert.equal(verbosePayload.config.rootDir, ".");
-    assert.ok(verbosePayload.config.source);
+    const onResult = await runCli([tempDir, "--json", "--print-config", "on"], tempDir);
+    const onPayload = JSON.parse(onResult.stdout);
+    assert.equal(onPayload.config.rootDir, ".");
+    assert.ok(onPayload.config.source);
   });
 });
 
-test("CLI applies output-min-severity only to human-readable output", async () => {
+test("CLI omits config by default in human-readable output and includes full config when requested", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(tempDir, "src/App.tsx", "export function App() { return null; }");
+
+    const defaultResult = await runCli([tempDir], tempDir);
+    assert.doesNotMatch(defaultResult.stdout, /^Config:\s*$/m);
+    assert.doesNotMatch(defaultResult.stdout, /"rootDir": "\."/);
+
+    const onResult = await runCli([tempDir, "--print-config", "on"], tempDir);
+    assert.match(onResult.stdout, /^Config:\s*$/m);
+    assert.match(onResult.stdout, /"rootDir": "\."/);
+    assert.match(onResult.stdout, /"output": \{\s*"minSeverity": "info"/);
+  });
+});
+
+test("CLI applies output-min-severity to human-readable output", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(
       tempDir,
@@ -238,5 +271,71 @@ test("CLI applies output-min-severity only to human-readable output", async () =
 
     assert.equal(result.code, 0);
     assert.doesNotMatch(result.stdout, /dynamic-class-reference/);
+  });
+});
+
+test("CLI includes debug findings in human-readable output when output-min-severity is debug", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      "export function App() { return <div className={`panel ${getStateClass()}`} />; }",
+    );
+    await writeProjectFile(tempDir, "src/App.css", ".panel {}");
+
+    const result = await runCli([tempDir, "--output-min-severity", "debug"], tempDir);
+
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /dynamic-class-reference/);
+    assert.match(result.stdout, /\bdebug\b/i);
+  });
+});
+
+test("CLI applies output-min-severity to JSON output too", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      "export function App() { return <div className={`panel ${getStateClass()}`} />; }",
+    );
+    await writeProjectFile(tempDir, "src/App.css", ".panel {}");
+
+    const defaultResult = await runCli([tempDir, "--json"], tempDir);
+    const defaultPayload = JSON.parse(defaultResult.stdout);
+    assert.ok(
+      !defaultPayload.findings.some((finding) => finding.ruleId === "dynamic-class-reference"),
+    );
+    assert.equal(defaultPayload.summary.debugCount, 0);
+
+    const debugResult = await runCli(
+      [tempDir, "--json", "--output-min-severity", "debug"],
+      tempDir,
+    );
+    const debugPayload = JSON.parse(debugResult.stdout);
+    assert.ok(
+      debugPayload.findings.some((finding) => finding.ruleId === "dynamic-class-reference"),
+    );
+    assert.ok(debugPayload.summary.debugCount > 0);
+  });
+});
+
+test("CLI uses config output.minSeverity when no CLI override is provided", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      "export function App() { return <div className={`panel ${getStateClass()}`} />; }",
+    );
+    await writeProjectFile(tempDir, "src/App.css", ".panel {}");
+    await writeProjectFile(
+      tempDir,
+      "scan-react-css.json",
+      `${JSON.stringify({ output: { minSeverity: "debug" } }, null, 2)}\n`,
+    );
+
+    const result = await runCli([tempDir], tempDir);
+
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /dynamic-class-reference/);
   });
 });
