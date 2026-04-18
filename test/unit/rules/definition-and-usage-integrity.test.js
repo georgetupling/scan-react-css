@@ -148,6 +148,132 @@ test("unreachable-css is advisory when css is only available from some known ren
   });
 });
 
+test("missing-css-class does not report classes satisfied only through wrapper render context", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        'import { Wrapper } from "./Wrapper";',
+        "export function App() { return <Wrapper />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Wrapper.tsx",
+      [
+        'import "./Field.css";',
+        'import { Leaf } from "./Leaf";',
+        "export function Wrapper() { return <Leaf />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Leaf.tsx",
+      'export function Leaf() { return <div className="field__hint" />; }',
+    );
+    await writeProjectFile(tempDir, "src/Field.css", ".field__hint {}");
+
+    const findings = await runRuleScenario(tempDir);
+
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "missing-css-class" && finding.subject?.className === "field__hint",
+      ),
+    );
+  });
+});
+
+test("unused-css-class does not report classes used only through wrapper render context", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        'import { Wrapper } from "./Wrapper";',
+        "export function App() { return <Wrapper />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Wrapper.tsx",
+      [
+        'import "./Field.css";',
+        'import { Leaf } from "./Leaf";',
+        "export function Wrapper() { return <Leaf />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Leaf.tsx",
+      'export function Leaf() { return <div className="field__hint" />; }',
+    );
+    await writeProjectFile(tempDir, "src/Field.css", ".field__hint {}\n.unused {}");
+
+    const findings = await runRuleScenario(tempDir);
+
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "unused-css-class" && finding.subject?.className === "field__hint",
+      ),
+    );
+    assert.ok(
+      findings.some(
+        (finding) => finding.ruleId === "unused-css-class" && finding.subject?.className === "unused",
+      ),
+    );
+  });
+});
+
+test("unreachable-css stays advisory for layout utility css available on only one render path", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        'import { StyledLayout } from "./StyledLayout";',
+        'import { PlainLayout } from "./PlainLayout";',
+        "export function App() { return <><StyledLayout /><PlainLayout /></>; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/StyledLayout.tsx",
+      [
+        'import "./layout.css";',
+        'import { Child } from "./Child";',
+        "export function StyledLayout() { return <Child />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/PlainLayout.tsx",
+      [
+        'import { Child } from "./Child";',
+        "export function PlainLayout() { return <Child />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Child.tsx",
+      'export function Child() { return <div className="page-flow" />; }',
+    );
+    await writeProjectFile(tempDir, "src/layout.css", ".page-flow {}");
+
+    const findings = await runRuleScenario(tempDir);
+    const finding = findings.find(
+      (entry) => entry.ruleId === "unreachable-css" && entry.subject?.className === "page-flow",
+    );
+
+    assert.ok(finding);
+    assert.equal(finding.confidence, "low");
+    assert.equal(finding.metadata?.renderContextReachability, "possible");
+    assert.deepEqual(finding.metadata?.possibleRenderContextCssFiles, ["src/layout.css"]);
+  });
+});
+
 test("unused-css-class reports unused project css classes but not used ones", async () => {
   await withRuleTempDir(async (tempDir) => {
     await writeProjectFile(

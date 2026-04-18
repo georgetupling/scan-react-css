@@ -202,6 +202,57 @@ test("render edges contribute ancestor-context css reachability", async () => {
   });
 });
 
+test("unresolved uppercase JSX targets do not create render edges", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      'export function App() { return <MissingWidget />; }',
+    );
+
+    const facts = await extractProjectFacts(DEFAULT_CONFIG, tempDir);
+    const model = buildProjectModel({ config: DEFAULT_CONFIG, facts });
+
+    assert.ok(!model.graph.edges.some((edge) => edge.type === "render"));
+  });
+});
+
+test("wrapper-imported css reaches leaf components through render ancestry", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        'import { Wrapper } from "./Wrapper";',
+        "export function App() { return <Wrapper />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Wrapper.tsx",
+      [
+        'import "./Field.css";',
+        'import { Leaf } from "./Leaf";',
+        "export function Wrapper() { return <Leaf />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/Leaf.tsx",
+      'export function Leaf() { return <div className="field__hint" />; }',
+    );
+    await writeProjectFile(tempDir, "src/Field.css", ".field__hint {}");
+
+    const facts = await extractProjectFacts(DEFAULT_CONFIG, tempDir);
+    const model = buildProjectModel({ config: DEFAULT_CONFIG, facts });
+
+    const leafReachability = model.reachability.get("src/Leaf.tsx");
+    assert.ok(leafReachability);
+    assert.ok(leafReachability.renderContextDefiniteLocalCss.has("src/Field.css"));
+    assert.equal(leafReachability.renderContextPossibleLocalCss.size, 0);
+  });
+});
+
 test("activates declared external css providers from matching html stylesheet links", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(
