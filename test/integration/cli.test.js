@@ -62,6 +62,23 @@ test("CLI emits default-config warning and human-readable output", async () => {
   });
 });
 
+test("CLI fails clearly instead of reporting an empty scan when auto-discovery finds no source files", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "apps/web/package.json",
+      '{\n  "name": "apps-web",\n  "dependencies": {\n    "react": "^18.0.0"\n  }\n}\n',
+    );
+    await writeProjectFile(tempDir, "apps/web/src/README.md", "# not a scan target");
+
+    const result = await runCli([tempDir], tempDir);
+
+    assert.equal(result.code, 1);
+    assert.match(result.stderr, /no project files were found to scan/i);
+    assert.doesNotMatch(result.stdout, /Summary: 0 findings .* across 0 files/i);
+  });
+});
+
 test("CLI treats the positional path as the project root for config discovery", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(

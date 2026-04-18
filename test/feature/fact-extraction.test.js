@@ -109,6 +109,26 @@ test("auto-discovery fails clearly when no React source roots are found", async 
   });
 });
 
+test("auto-discovery fails clearly when React source roots resolve but contain no source files", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "apps/web/package.json",
+      '{\n  "dependencies": {\n    "react": "^18.0.0"\n  }\n}\n',
+    );
+    await writeProjectFile(tempDir, "apps/web/src/README.md", "# not a scan target");
+
+    await assert.rejects(
+      () => discoverProjectFiles(DEFAULT_CONFIG, tempDir),
+      (error) => {
+        assert.match(error.message, /no project files were found to scan/i);
+        assert.match(error.message, /apps\/web\/src/i);
+        return true;
+      },
+    );
+  });
+});
+
 test("explicit source.include bypasses React auto-discovery", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(tempDir, "package.json", '{\n  "name": "explicit-include-test"\n}\n');
@@ -125,6 +145,27 @@ test("explicit source.include bypasses React auto-discovery", async () => {
     assert.deepEqual(
       result.sourceFiles.map((file) => file.relativePath),
       ["custom/App.tsx"],
+    );
+  });
+});
+
+test("explicit source.include fails clearly when the configured paths contain no source files", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(tempDir, "custom/README.md", "# not a scan target");
+
+    const config = normalizeScanReactCssConfig({
+      source: {
+        include: ["custom"],
+      },
+    });
+
+    await assert.rejects(
+      () => discoverProjectFiles(config, tempDir),
+      (error) => {
+        assert.match(error.message, /No project files were found under source\.include/i);
+        assert.match(error.message, /custom/i);
+        return true;
+      },
     );
   });
 });

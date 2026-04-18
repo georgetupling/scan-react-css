@@ -33,6 +33,16 @@ export async function discoverProjectFiles(
     .filter((file) => file.kind === "html")
     .sort(compareDiscoveredFiles);
 
+  if (sourceFiles.length === 0 && cssFiles.length === 0 && htmlFiles.length === 0) {
+    const includeSummary =
+      includePatterns.length > 0 ? includePatterns.join(", ") : "(none resolved)";
+    throw new Error(
+      config.source.discovery === "auto"
+        ? `React source roots were resolved automatically (${includeSummary}), but no project files were found to scan. Point the scanner at the correct project root or configure source.include explicitly.`
+        : `No project files were found under source.include (${includeSummary}). Check the configured paths or point the scanner at the correct project root.`,
+    );
+  }
+
   return {
     rootDir,
     sourceFiles,
