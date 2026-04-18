@@ -1,6 +1,10 @@
 import path from "node:path";
 import type { ScanInput, ScanResult } from "./runtime/types.js";
-import { buildScanSummary, filterFindingsByMinSeverity } from "./runtime/findings.js";
+import {
+  buildScanSummary,
+  collateFindings,
+  filterFindingsByMinSeverity,
+} from "./runtime/findings.js";
 import { runRules } from "./rules/engine.js";
 import { loadScanReactCssConfig } from "./config/load.js";
 import { extractProjectFacts } from "./facts/extractProjectFacts.js";
@@ -14,7 +18,7 @@ export {
 } from "./config/load.js";
 export { extractProjectFacts } from "./facts/extractProjectFacts.js";
 export { buildProjectModel } from "./model/buildProjectModel.js";
-export { buildScanSummary, createFinding, sortFindings } from "./runtime/findings.js";
+export { buildScanSummary, collateFindings, createFinding, sortFindings } from "./runtime/findings.js";
 export { runRules } from "./rules/engine.js";
 export { RULE_DEFINITIONS } from "./rules/catalog.js";
 export type {
@@ -95,8 +99,9 @@ export async function scanReactCss(input: ScanInput = {}): Promise<ScanResult> {
     facts,
   });
   const ruleResult = runRules(model);
+  const collatedFindings = collateFindings(ruleResult.findings);
   const { findings, focusWarning } = filterFindingsForFocus({
-    findings: ruleResult.findings,
+    findings: collatedFindings,
     rootDir: facts.rootDir,
     cwd,
     targetPath: input.targetPath,

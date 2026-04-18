@@ -7,6 +7,7 @@ import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import {
   buildProjectModel,
   buildScanSummary,
+  collateFindings,
   createFinding,
   extractProjectFacts,
   normalizeScanReactCssConfig,
@@ -115,6 +116,104 @@ test("scan summary counts severities deterministically", () => {
   });
 });
 
+test("finding collation merges identical findings and preserves extra locations", () => {
+  const findings = collateFindings([
+    createFinding({
+      ruleId: "missing-css-class",
+      family: "definition-and-usage-integrity",
+      severity: "warning",
+      confidence: "high",
+      message: 'Class "world-members-page" is referenced in React code but no matching reachable CSS class definition was found.',
+      primaryLocation: {
+        filePath: "src/pages/WorldMembersPage.tsx",
+        line: 20,
+        column: 5,
+      },
+      subject: {
+        className: "world-members-page",
+        sourceFilePath: "src/pages/WorldMembersPage.tsx",
+      },
+      metadata: {
+        referenceKind: "string-literal",
+      },
+    }),
+    createFinding({
+      ruleId: "missing-css-class",
+      family: "definition-and-usage-integrity",
+      severity: "warning",
+      confidence: "high",
+      message: 'Class "world-members-page" is referenced in React code but no matching reachable CSS class definition was found.',
+      primaryLocation: {
+        filePath: "src/pages/WorldMembersPage.tsx",
+        line: 42,
+        column: 9,
+      },
+      subject: {
+        className: "world-members-page",
+        sourceFilePath: "src/pages/WorldMembersPage.tsx",
+      },
+      metadata: {
+        referenceKind: "string-literal",
+      },
+    }),
+  ]);
+
+  assert.equal(findings.length, 1);
+  assert.equal(findings[0].primaryLocation?.line, 20);
+  assert.deepEqual(findings[0].relatedLocations, [
+    {
+      filePath: "src/pages/WorldMembersPage.tsx",
+      line: 42,
+      column: 9,
+    },
+  ]);
+  assert.equal(findings[0].metadata.aggregateOccurrenceCount, 2);
+});
+
+test("finding collation keeps distinct findings separate when their messages or metadata differ", () => {
+  const findings = collateFindings([
+    createFinding({
+      ruleId: "missing-css-class",
+      family: "definition-and-usage-integrity",
+      severity: "warning",
+      confidence: "high",
+      message: 'Class "title-pane" is referenced in React code but no matching reachable CSS class definition was found.',
+      primaryLocation: {
+        filePath: "src/pages/A.tsx",
+        line: 10,
+      },
+      subject: {
+        className: "title-pane",
+        sourceFilePath: "src/pages/A.tsx",
+      },
+      metadata: {
+        referenceKind: "string-literal",
+      },
+    }),
+    createFinding({
+      ruleId: "missing-css-class",
+      family: "definition-and-usage-integrity",
+      severity: "warning",
+      confidence: "high",
+      message: 'Class "title-pane" is referenced in React code but no matching reachable CSS class definition was found.',
+      primaryLocation: {
+        filePath: "src/pages/B.tsx",
+        line: 10,
+      },
+      subject: {
+        className: "title-pane",
+        sourceFilePath: "src/pages/B.tsx",
+      },
+      metadata: {
+        referenceKind: "helper-call",
+      },
+    }),
+  ]);
+
+  assert.equal(findings.length, 2);
+  assert.ok(findings.every((finding) => finding.metadata.aggregateOccurrenceCount === undefined));
+});
+
 test("rule engine runs registered rules against the project model without rereading files", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(
@@ -180,5 +279,49 @@ test("scanReactCss returns the structured runtime shape even before default rule
       infoCount: 0,
       debugCount: 0,
     });
+  });
+});
+
+test("scanReactCss collates repeated findings before returning the runtime result", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        "export function App() {",
+        "  return (",
+        "    <>",
+        '      <div className="missing" />',
+        '      <section className="missing" />',
+        "    </>",
+        "  );",
+        "}",
+      ].join("\n"),
+    );
+
+    const result = await scanReactCss({ targetPath: tempDir });
+
+    const finding = result.findings.find(
+      (entry) =>
+        entry.ruleId === "missing-css-class" && entry.subject?.className === "missing",
+    );
+
+    assert.ok(finding);
+    assert.equal(result.findings.length, 1);
+    assert.equal(finding.metadata.aggregateOccurrenceCount, 2);
+    assert.equal(finding.primaryLocation?.filePath, "src/App.tsx");
+    assert.equal(finding.primaryLocation?.line, 4);
+    assert.deepEqual(
+      finding.relatedLocations.map((location) => ({
+        filePath: location.filePath,
+        line: location.line,
+      })),
+      [
+        {
+          filePath: "src/App.tsx",
+          line: 5,
+        },
+      ],
+    );
   });
 });

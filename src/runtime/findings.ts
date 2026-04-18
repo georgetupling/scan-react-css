@@ -1,4 +1,4 @@
-import type { Finding, FindingSeverity, ScanSummary } from "./types.js";
+import type { Finding, FindingLocation, FindingSeverity, ScanSummary } from "./types.js";
 import type { CreateFindingInput } from "../rules/types.js";
 
 const SEVERITY_ORDER: Record<FindingSeverity, number> = {
@@ -13,6 +13,8 @@ const CONFIDENCE_ORDER = {
   medium: 1,
   low: 2,
 } as const;
+
+const AGGREGATE_OCCURRENCE_COUNT_KEY = "aggregateOccurrenceCount";
 
 export function createFinding(input: CreateFindingInput): Finding {
   return {
@@ -59,6 +61,21 @@ export function sortFindings(findings: Finding[]): Finding[] {
 
     return left.message.localeCompare(right.message);
   });
+}
+
+export function collateFindings(findings: Finding[]): Finding[] {
+  const findingsByKey = new Map<string, Finding[]>();
+
+  for (const finding of findings) {
+    const key = createFindingAggregationKey(finding);
+    const grouped = findingsByKey.get(key) ?? [];
+    grouped.push(finding);
+    findingsByKey.set(key, grouped);
+  }
+
+  return sortFindings(
+    [...findingsByKey.values()].map((groupedFindings) => collateFindingGroup(groupedFindings)),
+  );
 }
 
 export function buildScanSummary(input: {
@@ -115,4 +132,136 @@ function getSubjectSortKey(finding: Finding): string {
     finding.subject?.sourceFilePath ??
     ""
   );
+}
+
+function collateFindingGroup(findings: Finding[]): Finding {
+  const [firstFinding] = findings;
+  if (!firstFinding) {
+    throw new Error("Cannot collate an empty finding group.");
+  }
+
+  const allPrimaryLocations: FindingLocation[] = [];
+  const allRelatedLocations: FindingLocation[] = [];
+  let aggregateOccurrenceCount = 0;
+
+  for (const finding of findings) {
+    aggregateOccurrenceCount += getAggregateOccurrenceCount(finding);
+
+    if (finding.primaryLocation) {
+      allPrimaryLocations.push(finding.primaryLocation);
+    }
+
+    allRelatedLocations.push(...finding.relatedLocations);
+  }
+
+  const uniquePrimaryLocations = dedupeLocations(allPrimaryLocations);
+  const sortedPrimaryLocations = [...uniquePrimaryLocations].sort(compareLocations);
+  const primaryLocation = sortedPrimaryLocations[0] ?? firstFinding.primaryLocation;
+
+  const relatedLocations = dedupeLocations([
+    ...allRelatedLocations,
+    ...sortedPrimaryLocations.slice(primaryLocation ? 1 : 0),
+  ]).filter((location) => !locationsEqual(location, primaryLocation));
+
+  const metadata =
+    aggregateOccurrenceCount > 1
+      ? {
+          ...firstFinding.metadata,
+          [AGGREGATE_OCCURRENCE_COUNT_KEY]: aggregateOccurrenceCount,
+        }
+      : firstFinding.metadata;
+
+  return {
+    ...firstFinding,
+    primaryLocation,
+    relatedLocations: relatedLocations.sort(compareLocations),
+    metadata,
+  };
+}
+
+function createFindingAggregationKey(finding: Finding): string {
+  return stableSerialize({
+    ruleId: finding.ruleId,
+    family: finding.family,
+    severity: finding.severity,
+    confidence: finding.confidence,
+    message: finding.message,
+    subject: finding.subject ?? null,
+    metadata: omitAggregateOccurrenceCount(finding.metadata),
+  });
+}
+
+function omitAggregateOccurrenceCount(metadata: Record<string, unknown>): Record<string, unknown> {
+  const { [AGGREGATE_OCCURRENCE_COUNT_KEY]: _ignored, ...rest } = metadata;
+  return rest;
+}
+
+function dedupeLocations(locations: FindingLocation[]): FindingLocation[] {
+  const uniqueLocations = new Map<string, FindingLocation>();
+
+  for (const location of locations) {
+    const key = stableSerialize(location);
+    if (!uniqueLocations.has(key)) {
+      uniqueLocations.set(key, location);
+    }
+  }
+
+  return [...uniqueLocations.values()];
+}
+
+function getAggregateOccurrenceCount(finding: Finding): number {
+  const count = finding.metadata[AGGREGATE_OCCURRENCE_COUNT_KEY];
+  return typeof count === "number" && Number.isFinite(count) && count > 0 ? count : 1;
+}
+
+function compareLocations(left: FindingLocation, right: FindingLocation): number {
+  const filePathComparison = left.filePath.localeCompare(right.filePath);
+  if (filePathComparison !== 0) {
+    return filePathComparison;
+  }
+
+  const lineComparison = (left.line ?? 0) - (right.line ?? 0);
+  if (lineComparison !== 0) {
+    return lineComparison;
+  }
+
+  const columnComparison = (left.column ?? 0) - (right.column ?? 0);
+  if (columnComparison !== 0) {
+    return columnComparison;
+  }
+
+  return (left.context ?? "").localeCompare(right.context ?? "");
+}
+
+function locationsEqual(left: FindingLocation | undefined, right: FindingLocation | undefined): boolean {
+  if (!left || !right) {
+    return left === right;
+  }
+
+  return (
+    left.filePath === right.filePath &&
+    left.line === right.line &&
+    left.column === right.column &&
+    left.context === right.context
+  );
+}
+
+function stableSerialize(value: unknown): string {
+  return JSON.stringify(normalizeValue(value));
+}
+
+function normalizeValue(value: unknown): unknown {
+  if (Array.isArray(value)) {
+    return value.map((entry) => normalizeValue(entry));
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort((left, right) => left[0].localeCompare(right[0]))
+        .map(([key, entryValue]) => [key, normalizeValue(entryValue)]),
+    );
+  }
+
+  return value;
 }
