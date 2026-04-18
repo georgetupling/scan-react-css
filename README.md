@@ -169,7 +169,7 @@ Example:
 }
 ```
 
-For full configuration docs, see [docs/user-guide/README.md](./docs/user-guide/README.md).
+For full configuration docs, see [user-guide/README.md](./user-guide/README.md).
 
 ## Output And CI
 

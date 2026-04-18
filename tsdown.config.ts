@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: "src/index.ts",
     cli: "src/cli.ts",
+    "static-analysis-engine": "src/static-analysis-engine/index.ts",
   },
   format: ["esm"],
   dts: true,
