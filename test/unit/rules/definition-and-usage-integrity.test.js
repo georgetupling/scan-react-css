@@ -259,6 +259,48 @@ test("missing-css-class does not report classes satisfied through a higher rende
   });
 });
 
+test("same-file local wrapper components still benefit from file-level render-context reachability", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/pages/Page.tsx",
+      [
+        'import "./Page.css";',
+        'import { Child } from "../components/Child";',
+        "export function Page() { return <Child />; }",
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/components/Child.tsx",
+      [
+        "function Inner() {",
+        '  return <div className="page-shell" />;',
+        "}",
+        "export function Child() {",
+        "  return <Inner />;",
+        "}",
+      ].join("\n"),
+    );
+    await writeProjectFile(tempDir, "src/pages/Page.css", ".page-shell {}");
+
+    const findings = await runRuleScenario(tempDir);
+
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "missing-css-class" && finding.subject?.className === "page-shell",
+      ),
+    );
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "unreachable-css" && finding.subject?.className === "page-shell",
+      ),
+    );
+  });
+});
+
 test("unused-css-class does not report classes used only through wrapper render context", async () => {
   await withRuleTempDir(async (tempDir) => {
     await writeProjectFile(

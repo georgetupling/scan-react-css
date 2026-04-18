@@ -103,6 +103,40 @@ test("dynamic-missing-css-class ignores classes satisfied by active html-linked 
   });
 });
 
+test("dynamic-class-reference ignores classes satisfied by active html-linked providers", async () => {
+  await withRuleTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "index.html",
+      [
+        "<!doctype html>",
+        '<html><head><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" /></head><body></body></html>',
+      ].join("\n"),
+    );
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      [
+        'import classNames from "classnames";',
+        "const enabled = false;",
+        'export function App() { return <i className={classNames("fa-solid", enabled ? "fa-chevron-up" : "fa-chevron-down")} />; }',
+      ].join("\n"),
+    );
+
+    const findings = await runRuleScenario(tempDir);
+
+    assert.ok(
+      !findings.some(
+        (finding) =>
+          finding.ruleId === "dynamic-class-reference" &&
+          (finding.subject?.className === "fa-solid" ||
+            finding.subject?.className === "fa-chevron-up" ||
+            finding.subject?.className === "fa-chevron-down"),
+      ),
+    );
+  });
+});
+
 test("fully provable helper-composed classes fall through to missing-css-class instead of dynamic findings", async () => {
   await withRuleTempDir(async (tempDir) => {
     await writeProjectFile(

@@ -1,5 +1,5 @@
 import type { RuleDefinition } from "../types.js";
-import { DYNAMIC_REFERENCE_KINDS } from "../helpers.js";
+import { DYNAMIC_REFERENCE_KINDS, getDeclaredExternalProviderForClass } from "../helpers.js";
 
 export const dynamicClassReferenceRule: RuleDefinition = {
   ruleId: "dynamic-class-reference",
@@ -16,6 +16,13 @@ export const dynamicClassReferenceRule: RuleDefinition = {
     for (const sourceFile of context.model.graph.sourceFiles) {
       for (const reference of sourceFile.classReferences) {
         if (reference.confidence === "high" && !DYNAMIC_REFERENCE_KINDS.has(reference.kind)) {
+          continue;
+        }
+
+        if (
+          reference.className &&
+          getDeclaredExternalProviderForClass(context.model, reference.className)
+        ) {
           continue;
         }
 

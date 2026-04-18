@@ -474,6 +474,10 @@ function resolveRenderedComponent(
     return undefined;
   }
 
+  // Render reachability is currently tracked at file granularity.
+  // Same-file component calls like <Inner /> already contribute facts to this
+  // source file, so inventing a self-edge here would not add new reachability
+  // information and would risk creating misleading self-routes.
   const resolvedPath = importedSourceBindings.get(tagName.text);
   if (!resolvedPath) {
     return undefined;

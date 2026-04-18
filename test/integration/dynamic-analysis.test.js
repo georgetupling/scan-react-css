@@ -46,3 +46,31 @@ test("integration scans report dynamic missing css classes from helper-composed 
     },
   );
 });
+
+test("integration scans suppress dynamic provider-backed icon composition for active declared providers", async () => {
+  await withBuiltProject(
+    new TestProjectBuilder()
+      .withTemplate("basic-react-app")
+      .withFile(
+        "index.html",
+        [
+          "<!doctype html>",
+          '<html><head><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" /></head><body><div id="root"></div></body></html>',
+        ].join("\n"),
+      )
+      .withSourceFile(
+        "src/App.tsx",
+        [
+          'import classNames from "classnames";',
+          "const enabled = false;",
+          'export function App() { return <i className={classNames("fa-solid", enabled ? "fa-chevron-up" : "fa-chevron-down")} />; }',
+        ].join("\n"),
+      ),
+    async (project) => {
+      const result = await scanReactCss({ targetPath: project.rootDir });
+
+      assert.ok(!result.findings.some((finding) => finding.ruleId === "dynamic-class-reference"));
+      assert.ok(!result.findings.some((finding) => finding.ruleId === "dynamic-missing-css-class"));
+    },
+  );
+});
