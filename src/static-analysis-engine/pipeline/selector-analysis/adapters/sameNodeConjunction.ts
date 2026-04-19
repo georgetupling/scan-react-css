@@ -1,5 +1,6 @@
 import type { RenderNode } from "../../render-ir/types.js";
 import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
+import { buildSelectorQueryResult } from "../resultUtils.js";
 import { mergeBranchEvaluations, mergeInspectionEvaluations } from "../renderInspection.js";
 import { attachMatchedReachability } from "../reachabilityResultUtils.js";
 import { evaluateClassRequirement } from "../selectorEvaluationUtils.js";
@@ -33,17 +34,28 @@ export function analyzeSameNodeClassConjunction(input: {
       return attachMatchedReachability({
         selectorQuery: input.selectorQuery,
         matchedTargets: [analysisTarget],
-        result: {
-          selectorText: input.selectorQuery.selectorText,
-          source: input.selectorQuery.source,
-          constraint: input.constraint,
+        result: buildSelectorQueryResult({
+          selectorQuery: input.selectorQuery,
           outcome: "match",
           status: "resolved",
-          confidence: "high",
           reasons: [
             `found a rendered element with all required classes: ${input.constraint.classNames.join(", ")}`,
           ],
-        },
+          certainty: "definite",
+          dimensions: { structure: "definite" },
+          traces: [
+            {
+              traceId: "selector-match:same-node:definite",
+              category: "selector-match",
+              summary: `found a rendered element with all required classes: ${input.constraint.classNames.join(", ")}`,
+              anchor:
+                input.selectorQuery.source.kind === "css-source"
+                  ? input.selectorQuery.source.selectorAnchor
+                  : undefined,
+              children: [],
+            },
+          ],
+        }),
       });
     }
 
@@ -61,45 +73,79 @@ export function analyzeSameNodeClassConjunction(input: {
     return attachMatchedReachability({
       selectorQuery: input.selectorQuery,
       matchedTargets,
-      result: {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.constraint,
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
         outcome: "possible-match",
         status: "resolved",
-        confidence: "medium",
         reasons: [
           `at least one rendered element may emit all required classes together: ${input.constraint.classNames.join(", ")}`,
         ],
-      },
+        certainty: "possible",
+        dimensions: { structure: "possible" },
+        traces: [
+          {
+            traceId: "selector-match:same-node:possible",
+            category: "selector-match",
+            summary: `at least one rendered element may emit all required classes together: ${input.constraint.classNames.join(", ")}`,
+            anchor:
+              input.selectorQuery.source.kind === "css-source"
+                ? input.selectorQuery.source.selectorAnchor
+                : undefined,
+            children: [],
+          },
+        ],
+      }),
     });
   }
 
   if (sawUnsupportedDynamicClass) {
-    return {
-      selectorText: input.selectorQuery.selectorText,
-      source: input.selectorQuery.source,
-      constraint: input.constraint,
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
       outcome: "possible-match",
       status: "unsupported",
-      confidence: "low",
       reasons: [
         "encountered unsupported dynamic class construction while checking same-node class conjunction",
       ],
-    };
+      certainty: "unknown",
+      dimensions: { structure: "unsupported" },
+      traces: [
+        {
+          traceId: "selector-match:same-node:unsupported",
+          category: "selector-match",
+          summary:
+            "encountered unsupported dynamic class construction while checking same-node class conjunction",
+          anchor:
+            input.selectorQuery.source.kind === "css-source"
+              ? input.selectorQuery.source.selectorAnchor
+              : undefined,
+          children: [],
+        },
+      ],
+    });
   }
 
-  return {
-    selectorText: input.selectorQuery.selectorText,
-    source: input.selectorQuery.source,
-    constraint: input.constraint,
+  return buildSelectorQueryResult({
+    selectorQuery: input.selectorQuery,
     outcome: "no-match-under-bounded-analysis",
     status: "resolved",
-    confidence: "high",
     reasons: [
       `no rendered element emitted all required classes together: ${input.constraint.classNames.join(", ")}`,
     ],
-  };
+    certainty: "definite",
+    dimensions: { structure: "not-found-under-bounded-analysis" },
+    traces: [
+      {
+        traceId: "selector-match:same-node:no-match",
+        category: "selector-match",
+        summary: `no rendered element emitted all required classes together: ${input.constraint.classNames.join(", ")}`,
+        anchor:
+          input.selectorQuery.source.kind === "css-source"
+            ? input.selectorQuery.source.selectorAnchor
+            : undefined,
+        children: [],
+      },
+    ],
+  });
 }
 
 function inspectNodeForSameNodeConstraint(

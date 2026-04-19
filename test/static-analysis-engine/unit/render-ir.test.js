@@ -883,6 +883,26 @@ test("static analysis engine preserves unresolved component references when loca
     result.renderSubtrees[1].root.reason,
     "same-file-component-expansion-unsupported:destructured-default-values",
   );
+  assert.deepEqual(result.renderSubtrees[1].root.traces, [
+    {
+      traceId: "render-expansion:component-reference:unsupported",
+      category: "render-expansion",
+      summary:
+        'stopped expanding component reference "Child" because prop or children binding is unsupported in the current bounded slice',
+      anchor: {
+        filePath: "src/App.tsx",
+        startLine: 5,
+        startColumn: 11,
+        endLine: 5,
+        endColumn: 16,
+      },
+      children: [],
+      metadata: {
+        componentName: "Child",
+        reason: "same-file-component-expansion-unsupported:destructured-default-values",
+      },
+    },
+  ]);
 });
 
 test("static analysis engine preserves explicit cross-file unsupported component outcomes", () => {

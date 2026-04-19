@@ -1,5 +1,6 @@
 import type { RenderNode } from "../../render-ir/types.js";
 import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
+import { buildSelectorQueryResult } from "../resultUtils.js";
 import { attachMatchedReachability } from "../reachabilityResultUtils.js";
 import {
   combinePresence,
@@ -39,17 +40,28 @@ export function analyzeAncestorDescendantConstraint(input: {
       return attachMatchedReachability({
         selectorQuery: input.selectorQuery,
         matchedTargets: [analysisTarget],
-        result: {
-          selectorText: input.selectorQuery.selectorText,
-          source: input.selectorQuery.source,
-          constraint: input.constraint,
+        result: buildSelectorQueryResult({
+          selectorQuery: input.selectorQuery,
           outcome: "match",
           status: "resolved",
-          confidence: "high",
           reasons: [
             `found a rendered descendant with class "${input.constraint.subjectClassName}" under an ancestor with class "${input.constraint.ancestorClassName}"`,
           ],
-        },
+          certainty: "definite",
+          dimensions: { structure: "definite" },
+          traces: [
+            {
+              traceId: "selector-match:ancestor-descendant:definite",
+              category: "selector-match",
+              summary: `found a rendered descendant with class "${input.constraint.subjectClassName}" under an ancestor with class "${input.constraint.ancestorClassName}"`,
+              anchor:
+                input.selectorQuery.source.kind === "css-source"
+                  ? input.selectorQuery.source.selectorAnchor
+                  : undefined,
+              children: [],
+            },
+          ],
+        }),
       });
     }
 
@@ -67,45 +79,79 @@ export function analyzeAncestorDescendantConstraint(input: {
     return attachMatchedReachability({
       selectorQuery: input.selectorQuery,
       matchedTargets,
-      result: {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.constraint,
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
         outcome: "possible-match",
         status: "resolved",
-        confidence: "medium",
         reasons: [
           `found a plausible ancestor-descendant match for "${input.constraint.ancestorClassName} ${input.constraint.subjectClassName}" on at least one bounded path`,
         ],
-      },
+        certainty: "possible",
+        dimensions: { structure: "possible" },
+        traces: [
+          {
+            traceId: "selector-match:ancestor-descendant:possible",
+            category: "selector-match",
+            summary: `found a plausible ancestor-descendant match for "${input.constraint.ancestorClassName} ${input.constraint.subjectClassName}" on at least one bounded path`,
+            anchor:
+              input.selectorQuery.source.kind === "css-source"
+                ? input.selectorQuery.source.selectorAnchor
+                : undefined,
+            children: [],
+          },
+        ],
+      }),
     });
   }
 
   if (sawUnsupportedDynamicClass) {
-    return {
-      selectorText: input.selectorQuery.selectorText,
-      source: input.selectorQuery.source,
-      constraint: input.constraint,
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
       outcome: "possible-match",
       status: "unsupported",
-      confidence: "low",
       reasons: [
         "encountered unsupported dynamic class construction while checking ancestor-descendant structure",
       ],
-    };
+      certainty: "unknown",
+      dimensions: { structure: "unsupported" },
+      traces: [
+        {
+          traceId: "selector-match:ancestor-descendant:unsupported",
+          category: "selector-match",
+          summary:
+            "encountered unsupported dynamic class construction while checking ancestor-descendant structure",
+          anchor:
+            input.selectorQuery.source.kind === "css-source"
+              ? input.selectorQuery.source.selectorAnchor
+              : undefined,
+          children: [],
+        },
+      ],
+    });
   }
 
-  return {
-    selectorText: input.selectorQuery.selectorText,
-    source: input.selectorQuery.source,
-    constraint: input.constraint,
+  return buildSelectorQueryResult({
+    selectorQuery: input.selectorQuery,
     outcome: "no-match-under-bounded-analysis",
     status: "resolved",
-    confidence: "high",
     reasons: [
       `no bounded rendered path satisfied ancestor "${input.constraint.ancestorClassName}" with descendant "${input.constraint.subjectClassName}"`,
     ],
-  };
+    certainty: "definite",
+    dimensions: { structure: "not-found-under-bounded-analysis" },
+    traces: [
+      {
+        traceId: "selector-match:ancestor-descendant:no-match",
+        category: "selector-match",
+        summary: `no bounded rendered path satisfied ancestor "${input.constraint.ancestorClassName}" with descendant "${input.constraint.subjectClassName}"`,
+        anchor:
+          input.selectorQuery.source.kind === "css-source"
+            ? input.selectorQuery.source.selectorAnchor
+            : undefined,
+        children: [],
+      },
+    ],
+  });
 }
 
 function inspectNodeForAncestorDescendantConstraint(input: {

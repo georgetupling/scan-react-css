@@ -1,4 +1,5 @@
 import type { SelectorQueryResult } from "../../selector-analysis/types.js";
+import { deriveAnalysisConfidence } from "../../../types/analysis.js";
 import type { ExperimentalRuleResult } from "../types.js";
 
 export function runSelectorNeverSatisfiedRule(
@@ -14,7 +15,7 @@ export function runSelectorNeverSatisfiedRule(
   return {
     ruleId: "selector-never-satisfied",
     severity: "info",
-    confidence: selectorQueryResult.confidence,
+    confidence: deriveAnalysisConfidence(selectorQueryResult.decision),
     summary: `selector appears never satisfied under bounded analysis: ${selectorQueryResult.selectorText}`,
     reasons: [
       "experimental Phase 7 pilot rule derived from resolved selector satisfiability analysis",
@@ -22,6 +23,7 @@ export function runSelectorNeverSatisfiedRule(
     ],
     primaryLocation: toPrimaryLocation(selectorQueryResult),
     selectorText: selectorQueryResult.selectorText,
+    decision: selectorQueryResult.decision,
     selectorQueryResult,
   };
 }

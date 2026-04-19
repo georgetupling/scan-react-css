@@ -1,4 +1,5 @@
 import type { SelectorQueryResult } from "../../selector-analysis/types.js";
+import { deriveAnalysisConfidence } from "../../../types/analysis.js";
 import type { ExperimentalRuleResult } from "../types.js";
 
 export function runUnusedCompoundSelectorBranchRule(
@@ -19,7 +20,7 @@ export function runUnusedCompoundSelectorBranchRule(
   return {
     ruleId: "unused-compound-selector-branch",
     severity: "info",
-    confidence: selectorQueryResult.confidence,
+    confidence: deriveAnalysisConfidence(selectorQueryResult.decision),
     summary: `Compound selector branch "${selectorQueryResult.selectorText}" does not have any convincing reachable React usage where all required classes appear together.`,
     reasons: [
       "experimental Phase 7 pilot rule derived from same-node compound selector satisfiability analysis",
@@ -30,6 +31,7 @@ export function runUnusedCompoundSelectorBranchRule(
       line: selectorQueryResult.source.selectorAnchor?.startLine,
     },
     selectorText: selectorQueryResult.selectorText,
+    decision: selectorQueryResult.decision,
     selectorQueryResult,
   };
 }

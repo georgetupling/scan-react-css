@@ -1,3 +1,5 @@
+import type { AnalysisTrace } from "../../types/analysis.js";
+
 export type ReachabilityAvailability = "definite" | "possible" | "unknown" | "unavailable";
 
 export type ReachabilityDerivation =
@@ -25,7 +27,15 @@ export type ReachabilityDerivation =
       kind: "placement-derived-region";
       toComponentName: string;
       toFilePath?: string;
-      renderPath: "definite" | "possible";
+      renderPath: "definite" | "possible" | "unknown";
+    }
+  | {
+      kind: "whole-component-unknown-barrier";
+      reason: string;
+    }
+  | {
+      kind: "render-region-unknown-barrier";
+      reason: string;
     };
 
 export type StylesheetReachabilityContext =
@@ -68,6 +78,7 @@ export type StylesheetReachabilityContextRecord = {
   availability: ReachabilityAvailability;
   reasons: string[];
   derivations: ReachabilityDerivation[];
+  traces: AnalysisTrace[];
 };
 
 export type StylesheetReachabilityRecord = {
@@ -75,6 +86,7 @@ export type StylesheetReachabilityRecord = {
   availability: ReachabilityAvailability;
   contexts: StylesheetReachabilityContextRecord[];
   reasons: string[];
+  traces: AnalysisTrace[];
 };
 
 export type ReachabilitySummary = {

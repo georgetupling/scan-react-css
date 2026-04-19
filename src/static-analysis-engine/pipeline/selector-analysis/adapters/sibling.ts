@@ -1,5 +1,6 @@
 import type { RenderNode } from "../../render-ir/types.js";
 import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
+import { buildSelectorQueryResult } from "../resultUtils.js";
 import { attachMatchedReachability } from "../reachabilityResultUtils.js";
 import { combinePresence, evaluateSingleClassPresence } from "../selectorEvaluationUtils.js";
 import { mergeInspectionEvaluations } from "../renderInspection.js";
@@ -38,17 +39,28 @@ export function analyzeSiblingConstraint(input: {
       return attachMatchedReachability({
         selectorQuery: input.selectorQuery,
         matchedTargets: [analysisTarget],
-        result: {
-          selectorText: input.selectorQuery.selectorText,
-          source: input.selectorQuery.source,
-          constraint: input.constraint,
+        result: buildSelectorQueryResult({
+          selectorQuery: input.selectorQuery,
           outcome: "match",
           status: "resolved",
-          confidence: "high",
           reasons: [
             `found a rendered ${describeRelation(input.constraint.relation)} sibling with class "${input.constraint.rightClassName}" after a sibling with class "${input.constraint.leftClassName}"`,
           ],
-        },
+          certainty: "definite",
+          dimensions: { structure: "definite" },
+          traces: [
+            {
+              traceId: `selector-match:sibling:${input.constraint.relation}:definite`,
+              category: "selector-match",
+              summary: `found a rendered ${describeRelation(input.constraint.relation)} sibling with class "${input.constraint.rightClassName}" after a sibling with class "${input.constraint.leftClassName}"`,
+              anchor:
+                input.selectorQuery.source.kind === "css-source"
+                  ? input.selectorQuery.source.selectorAnchor
+                  : undefined,
+              children: [],
+            },
+          ],
+        }),
       });
     }
 
@@ -66,45 +78,78 @@ export function analyzeSiblingConstraint(input: {
     return attachMatchedReachability({
       selectorQuery: input.selectorQuery,
       matchedTargets,
-      result: {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.constraint,
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
         outcome: "possible-match",
         status: "resolved",
-        confidence: "medium",
         reasons: [
           `found a plausible ${describeRelation(input.constraint.relation)} sibling match for "${input.constraint.leftClassName}${input.constraint.relation === "adjacent" ? " + " : " ~ "}${input.constraint.rightClassName}" on at least one bounded path`,
         ],
-      },
+        certainty: "possible",
+        dimensions: { structure: "possible" },
+        traces: [
+          {
+            traceId: `selector-match:sibling:${input.constraint.relation}:possible`,
+            category: "selector-match",
+            summary: `found a plausible ${describeRelation(input.constraint.relation)} sibling match for "${input.constraint.leftClassName}${input.constraint.relation === "adjacent" ? " + " : " ~ "}${input.constraint.rightClassName}" on at least one bounded path`,
+            anchor:
+              input.selectorQuery.source.kind === "css-source"
+                ? input.selectorQuery.source.selectorAnchor
+                : undefined,
+            children: [],
+          },
+        ],
+      }),
     });
   }
 
   if (sawUnsupportedDynamicClass) {
-    return {
-      selectorText: input.selectorQuery.selectorText,
-      source: input.selectorQuery.source,
-      constraint: input.constraint,
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
       outcome: "possible-match",
       status: "unsupported",
-      confidence: "low",
       reasons: [
         `encountered unsupported dynamic class construction while checking ${describeRelation(input.constraint.relation)} sibling structure`,
       ],
-    };
+      certainty: "unknown",
+      dimensions: { structure: "unsupported" },
+      traces: [
+        {
+          traceId: `selector-match:sibling:${input.constraint.relation}:unsupported`,
+          category: "selector-match",
+          summary: `encountered unsupported dynamic class construction while checking ${describeRelation(input.constraint.relation)} sibling structure`,
+          anchor:
+            input.selectorQuery.source.kind === "css-source"
+              ? input.selectorQuery.source.selectorAnchor
+              : undefined,
+          children: [],
+        },
+      ],
+    });
   }
 
-  return {
-    selectorText: input.selectorQuery.selectorText,
-    source: input.selectorQuery.source,
-    constraint: input.constraint,
+  return buildSelectorQueryResult({
+    selectorQuery: input.selectorQuery,
     outcome: "no-match-under-bounded-analysis",
     status: "resolved",
-    confidence: "high",
     reasons: [
       `no bounded rendered path satisfied ${describeRelation(input.constraint.relation)} sibling "${input.constraint.leftClassName}" with sibling "${input.constraint.rightClassName}"`,
     ],
-  };
+    certainty: "definite",
+    dimensions: { structure: "not-found-under-bounded-analysis" },
+    traces: [
+      {
+        traceId: `selector-match:sibling:${input.constraint.relation}:no-match`,
+        category: "selector-match",
+        summary: `no bounded rendered path satisfied ${describeRelation(input.constraint.relation)} sibling "${input.constraint.leftClassName}" with sibling "${input.constraint.rightClassName}"`,
+        anchor:
+          input.selectorQuery.source.kind === "css-source"
+            ? input.selectorQuery.source.selectorAnchor
+            : undefined,
+        children: [],
+      },
+    ],
+  });
 }
 
 function inspectNodeForSiblingConstraint(input: {

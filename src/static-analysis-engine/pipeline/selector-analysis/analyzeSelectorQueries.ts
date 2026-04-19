@@ -1,6 +1,7 @@
 import type { RenderNode, RenderRegionPathSegment, RenderSubtree } from "../render-ir/types.js";
 import type { ReachabilitySummary } from "../reachability/types.js";
 import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "./types.js";
+import { buildSelectorQueryResult } from "./resultUtils.js";
 import { analyzeAncestorDescendantConstraint } from "./adapters/ancestorDescendant.js";
 import { analyzeParentChildConstraint } from "./adapters/parentChild.js";
 import { analyzeSameNodeClassConjunction } from "./adapters/sameNodeConjunction.js";
@@ -48,18 +49,34 @@ function analyzeSelectorQuery(input: {
   }
 
   if ("kind" in constraint && constraint.kind === "unsupported") {
-    return {
-      selectorText: input.selectorQuery.selectorText,
-      source: input.selectorQuery.source,
-      constraint,
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
       outcome: "possible-match",
       status: "unsupported",
-      confidence: "low",
       reasons: [
         `unsupported selector query: ${constraint.reason}`,
         ...input.selectorQuery.parseNotes,
       ],
-    };
+      certainty: "unknown",
+      dimensions: {
+        structure: "unsupported",
+      },
+      traces: [
+        {
+          traceId: "selector-match:unsupported-selector-shape",
+          category: "selector-match",
+          summary: `unsupported selector query: ${constraint.reason}`,
+          anchor:
+            input.selectorQuery.source.kind === "css-source"
+              ? input.selectorQuery.source.selectorAnchor
+              : undefined,
+          children: [],
+          metadata: {
+            selectorText: input.selectorQuery.selectorText,
+          },
+        },
+      ],
+    });
   }
 
   if (constraint.kind === "same-node-class-conjunction") {
@@ -123,14 +140,27 @@ function resolveQueryReachability(input: {
 
   if (!reachabilityRecord) {
     return {
-      result: {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.selectorQuery.constraint,
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
         outcome: "possible-match",
         status: "unsupported",
-        confidence: "low",
         reasons: ["could not determine stylesheet reachability for this selector source"],
+        certainty: "unknown",
+        dimensions: {
+          reachability: "unsupported",
+        },
+        traces: [
+          {
+            traceId: "selector-reachability:missing-record",
+            category: "reachability",
+            summary: "could not determine stylesheet reachability for this selector source",
+            anchor: input.selectorQuery.source.selectorAnchor,
+            children: [],
+            metadata: {
+              cssFilePath,
+            },
+          },
+        ],
         reachability: {
           kind: "css-source",
           cssFilePath,
@@ -138,44 +168,33 @@ function resolveQueryReachability(input: {
           contexts: [],
           reasons: ["no reachability record exists for this stylesheet source"],
         },
-      },
+      }),
       analysisTargets: [],
     };
   }
 
   if (reachabilityRecord.availability === "unknown") {
     return {
-      result: {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.selectorQuery.constraint,
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
         outcome: "possible-match",
         status: "unsupported",
-        confidence: "low",
         reasons: ["stylesheet reachability is unknown for this selector source"],
-        reachability: {
-          kind: "css-source",
-          cssFilePath: reachabilityRecord.cssFilePath,
-          availability: reachabilityRecord.availability,
-          contexts: reachabilityRecord.contexts,
-          reasons: reachabilityRecord.reasons,
+        certainty: "unknown",
+        dimensions: {
+          reachability: "unknown",
         },
-      },
-      analysisTargets: [],
-    };
-  }
-
-  if (reachabilityRecord.availability === "unavailable") {
-    return {
-      result: {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.selectorQuery.constraint,
-        outcome: "no-match-under-bounded-analysis",
-        status: "resolved",
-        confidence: "high",
-        reasons: [
-          "stylesheet is not reachable from any analyzed source file or propagated render context",
+        traces: [
+          {
+            traceId: "selector-reachability:unknown",
+            category: "reachability",
+            summary: "stylesheet reachability is unknown for this selector source",
+            anchor: input.selectorQuery.source.selectorAnchor,
+            children: reachabilityRecord.traces ?? [],
+            metadata: {
+              cssFilePath: reachabilityRecord.cssFilePath,
+            },
+          },
         ],
         reachability: {
           kind: "css-source",
@@ -184,7 +203,46 @@ function resolveQueryReachability(input: {
           contexts: reachabilityRecord.contexts,
           reasons: reachabilityRecord.reasons,
         },
-      },
+      }),
+      analysisTargets: [],
+    };
+  }
+
+  if (reachabilityRecord.availability === "unavailable") {
+    return {
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
+        outcome: "no-match-under-bounded-analysis",
+        status: "resolved",
+        reasons: [
+          "stylesheet is not reachable from any analyzed source file or propagated render context",
+        ],
+        certainty: "definite",
+        dimensions: {
+          structure: "not-found-under-bounded-analysis",
+          reachability: "unavailable",
+        },
+        traces: [
+          {
+            traceId: "selector-reachability:unavailable",
+            category: "reachability",
+            summary:
+              "stylesheet is not reachable from any analyzed source file or propagated render context",
+            anchor: input.selectorQuery.source.selectorAnchor,
+            children: reachabilityRecord.traces ?? [],
+            metadata: {
+              cssFilePath: reachabilityRecord.cssFilePath,
+            },
+          },
+        ],
+        reachability: {
+          kind: "css-source",
+          cssFilePath: reachabilityRecord.cssFilePath,
+          availability: reachabilityRecord.availability,
+          contexts: reachabilityRecord.contexts,
+          reasons: reachabilityRecord.reasons,
+        },
+      }),
       analysisTargets: [],
     };
   }

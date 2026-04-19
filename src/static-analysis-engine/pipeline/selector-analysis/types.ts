@@ -1,14 +1,19 @@
 import type { SourceAnchor } from "../../types/core.js";
 import type {
+  AnalysisConfidence as SharedAnalysisConfidence,
+  AnalysisDecision,
+  AnalysisStatus as SharedAnalysisStatus,
+} from "../../types/analysis.js";
+import type {
   ReachabilityAvailability,
   StylesheetReachabilityContextRecord,
 } from "../reachability/types.js";
 
 export type SemanticOutcome = "match" | "possible-match" | "no-match-under-bounded-analysis";
 
-export type AnalysisStatus = "resolved" | "unsupported" | "budget-exceeded";
+export type AnalysisStatus = SharedAnalysisStatus;
 
-export type AnalysisConfidence = "high" | "medium" | "low";
+export type AnalysisConfidence = SharedAnalysisConfidence;
 
 export type SelectorConstraint =
   | {
@@ -126,6 +131,7 @@ export type SelectorQueryResult = {
   status: AnalysisStatus;
   confidence: AnalysisConfidence;
   reasons: string[];
+  decision: AnalysisDecision;
   reachability?:
     | {
         kind: "direct-query";

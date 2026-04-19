@@ -1,3 +1,4 @@
+import type { AnalysisDecision } from "../../types/analysis.js";
 import type { FindingConfidence, FindingSeverity } from "../../runtime/compatTypes.js";
 import type { ExperimentalCssFileAnalysis } from "../css-analysis/types.js";
 import type { SelectorQueryResult } from "../selector-analysis/types.js";
@@ -25,6 +26,7 @@ export type ExperimentalRuleResult = {
     line?: number;
   };
   selectorText?: string;
+  decision?: AnalysisDecision;
   selectorQueryResult?: SelectorQueryResult;
   cssFile?: ExperimentalCssFileAnalysis;
   metadata?: Record<string, unknown>;

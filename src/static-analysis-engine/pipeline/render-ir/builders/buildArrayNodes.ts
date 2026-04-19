@@ -4,6 +4,7 @@ import type { BuildContext } from "../shared/internalTypes.js";
 import type { RenderNode } from "../types.js";
 import {
   createEmptyFragmentNode,
+  createRenderExpansionTrace,
   toSourceAnchor,
   unwrapExpression,
 } from "../shared/renderIrUtils.js";
@@ -27,14 +28,25 @@ export function buildArrayRenderNode(input: {
     }
 
     if (ts.isSpreadElement(element)) {
+      const sourceAnchor = toSourceAnchor(
+        input.node,
+        input.context.parsedSourceFile,
+        input.context.filePath,
+      );
       return {
         kind: "unknown",
-        sourceAnchor: toSourceAnchor(
-          input.node,
-          input.context.parsedSourceFile,
-          input.context.filePath,
-        ),
+        sourceAnchor,
         reason: "unsupported-render-array-spread",
+        traces: [
+          createRenderExpansionTrace({
+            traceId: "render-expansion:unknown:array-spread",
+            summary: "could not expand render array because spread elements are unsupported",
+            anchor: sourceAnchor,
+            metadata: {
+              reason: "unsupported-render-array-spread",
+            },
+          }),
+        ],
       };
     }
 
@@ -87,15 +99,27 @@ export function tryBuildMappedArrayRenderNode(input: {
     input.context,
   );
   if (!arrayElements) {
+    const sourceAnchor = toSourceAnchor(
+      input.expression,
+      input.context.parsedSourceFile,
+      input.context.filePath,
+    );
     return {
       kind: "repeated-region",
-      sourceAnchor: toSourceAnchor(
-        input.expression,
-        input.context.parsedSourceFile,
-        input.context.filePath,
-      ),
+      sourceAnchor,
       template: input.buildRenderNode(callbackBodyExpression, input.context),
       reason: "bounded-unknown-array-map",
+      traces: [
+        createRenderExpansionTrace({
+          traceId: "render-expansion:repeated-region:array-map",
+          summary:
+            "lowered array map output to a repeated region because the source array is not exactly known",
+          anchor: sourceAnchor,
+          metadata: {
+            reason: "bounded-unknown-array-map",
+          },
+        }),
+      ],
     };
   }
 

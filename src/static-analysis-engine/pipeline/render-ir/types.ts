@@ -1,4 +1,5 @@
 import type { ClassExpressionSummary } from "../abstract-values/types.js";
+import type { AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
 
 export type RenderNodeKind =
@@ -13,6 +14,7 @@ export type RenderNodeBase = {
   kind: RenderNodeKind;
   sourceAnchor: SourceAnchor;
   placementAnchor?: SourceAnchor;
+  traces?: AnalysisTrace[];
 };
 
 export type RenderElementNode = RenderNodeBase & {

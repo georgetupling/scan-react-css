@@ -1,5 +1,6 @@
 import type { RenderNode } from "../../render-ir/types.js";
 import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
+import { buildSelectorQueryResult } from "../resultUtils.js";
 import type { RenderNodeInspectionAdapter } from "../renderInspection.js";
 import { inspectRenderNode } from "../renderInspection.js";
 import { attachMatchedReachability } from "../reachabilityResultUtils.js";
@@ -45,17 +46,28 @@ export function analyzeParentChildConstraint(input: {
       return attachMatchedReachability({
         selectorQuery: input.selectorQuery,
         matchedTargets: [analysisTarget],
-        result: {
-          selectorText: input.selectorQuery.selectorText,
-          source: input.selectorQuery.source,
-          constraint: input.constraint,
+        result: buildSelectorQueryResult({
+          selectorQuery: input.selectorQuery,
           outcome: "match",
           status: "resolved",
-          confidence: "high",
           reasons: [
             `found a rendered child with class "${input.constraint.childClassName}" directly under a parent with class "${input.constraint.parentClassName}"`,
           ],
-        },
+          certainty: "definite",
+          dimensions: { structure: "definite" },
+          traces: [
+            {
+              traceId: "selector-match:parent-child:definite",
+              category: "selector-match",
+              summary: `found a rendered child with class "${input.constraint.childClassName}" directly under a parent with class "${input.constraint.parentClassName}"`,
+              anchor:
+                input.selectorQuery.source.kind === "css-source"
+                  ? input.selectorQuery.source.selectorAnchor
+                  : undefined,
+              children: [],
+            },
+          ],
+        }),
       });
     }
 
@@ -73,45 +85,79 @@ export function analyzeParentChildConstraint(input: {
     return attachMatchedReachability({
       selectorQuery: input.selectorQuery,
       matchedTargets,
-      result: {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.constraint,
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
         outcome: "possible-match",
         status: "resolved",
-        confidence: "medium",
         reasons: [
           `found a plausible direct parent-child match for "${input.constraint.parentClassName} > ${input.constraint.childClassName}" on at least one bounded path`,
         ],
-      },
+        certainty: "possible",
+        dimensions: { structure: "possible" },
+        traces: [
+          {
+            traceId: "selector-match:parent-child:possible",
+            category: "selector-match",
+            summary: `found a plausible direct parent-child match for "${input.constraint.parentClassName} > ${input.constraint.childClassName}" on at least one bounded path`,
+            anchor:
+              input.selectorQuery.source.kind === "css-source"
+                ? input.selectorQuery.source.selectorAnchor
+                : undefined,
+            children: [],
+          },
+        ],
+      }),
     });
   }
 
   if (sawUnsupportedDynamicClass) {
-    return {
-      selectorText: input.selectorQuery.selectorText,
-      source: input.selectorQuery.source,
-      constraint: input.constraint,
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
       outcome: "possible-match",
       status: "unsupported",
-      confidence: "low",
       reasons: [
         "encountered unsupported dynamic class construction while checking direct parent-child structure",
       ],
-    };
+      certainty: "unknown",
+      dimensions: { structure: "unsupported" },
+      traces: [
+        {
+          traceId: "selector-match:parent-child:unsupported",
+          category: "selector-match",
+          summary:
+            "encountered unsupported dynamic class construction while checking direct parent-child structure",
+          anchor:
+            input.selectorQuery.source.kind === "css-source"
+              ? input.selectorQuery.source.selectorAnchor
+              : undefined,
+          children: [],
+        },
+      ],
+    });
   }
 
-  return {
-    selectorText: input.selectorQuery.selectorText,
-    source: input.selectorQuery.source,
-    constraint: input.constraint,
+  return buildSelectorQueryResult({
+    selectorQuery: input.selectorQuery,
     outcome: "no-match-under-bounded-analysis",
     status: "resolved",
-    confidence: "high",
     reasons: [
       `no bounded rendered path satisfied parent "${input.constraint.parentClassName}" with direct child "${input.constraint.childClassName}"`,
     ],
-  };
+    certainty: "definite",
+    dimensions: { structure: "not-found-under-bounded-analysis" },
+    traces: [
+      {
+        traceId: "selector-match:parent-child:no-match",
+        category: "selector-match",
+        summary: `no bounded rendered path satisfied parent "${input.constraint.parentClassName}" with direct child "${input.constraint.childClassName}"`,
+        anchor:
+          input.selectorQuery.source.kind === "css-source"
+            ? input.selectorQuery.source.selectorAnchor
+            : undefined,
+        children: [],
+      },
+    ],
+  });
 }
 
 const parentChildConstraintAdapter: RenderNodeInspectionAdapter<ParentChildState> = {

@@ -12,6 +12,7 @@ import type { BuildContext } from "./shared/internalTypes.js";
 import {
   applyPlacementAnchor,
   createEmptyFragmentNode,
+  createRenderExpansionTrace,
   isUndefinedIdentifier,
   toSourceAnchor,
 } from "./shared/renderIrUtils.js";
@@ -185,10 +186,21 @@ function buildRenderNode(node: ts.Expression | ts.JsxChild, context: BuildContex
 
   if (ts.isJsxExpression(node)) {
     if (!node.expression) {
+      const sourceAnchor = toSourceAnchor(node, context.parsedSourceFile, context.filePath);
       return {
         kind: "unknown",
-        sourceAnchor: toSourceAnchor(node, context.parsedSourceFile, context.filePath),
+        sourceAnchor,
         reason: "empty-jsx-expression",
+        traces: [
+          createRenderExpansionTrace({
+            traceId: "render-expansion:unknown:empty-jsx-expression",
+            summary: "encountered an empty JSX expression while building render IR",
+            anchor: sourceAnchor,
+            metadata: {
+              reason: "empty-jsx-expression",
+            },
+          }),
+        ],
       };
     }
 
@@ -201,10 +213,21 @@ function buildRenderNode(node: ts.Expression | ts.JsxChild, context: BuildContex
   }
 
   if (ts.isJsxText(node)) {
+    const sourceAnchor = toSourceAnchor(node, context.parsedSourceFile, context.filePath);
     return {
       kind: "unknown",
-      sourceAnchor: toSourceAnchor(node, context.parsedSourceFile, context.filePath),
+      sourceAnchor,
       reason: "jsx-text",
+      traces: [
+        createRenderExpansionTrace({
+          traceId: "render-expansion:unknown:jsx-text",
+          summary: "preserved JSX text as an unknown render node in the current bounded IR",
+          anchor: sourceAnchor,
+          metadata: {
+            reason: "jsx-text",
+          },
+        }),
+      ],
     };
   }
 
@@ -237,18 +260,42 @@ function buildRenderNode(node: ts.Expression | ts.JsxChild, context: BuildContex
 
     const helperFailureReason = getHelperCallResolutionFailureReason(node, context);
     if (helperFailureReason) {
+      const sourceAnchor = toSourceAnchor(node, context.parsedSourceFile, context.filePath);
       return {
         kind: "unknown",
-        sourceAnchor: toSourceAnchor(node, context.parsedSourceFile, context.filePath),
+        sourceAnchor,
         reason: helperFailureReason,
+        traces: [
+          createRenderExpansionTrace({
+            traceId: "render-expansion:unknown:helper-call",
+            summary:
+              "could not inline helper-driven render output under the current bounded expansion rules",
+            anchor: sourceAnchor,
+            metadata: {
+              reason: helperFailureReason,
+            },
+          }),
+        ],
       };
     }
   }
 
+  const sourceAnchor = toSourceAnchor(node, context.parsedSourceFile, context.filePath);
   return {
     kind: "unknown",
-    sourceAnchor: toSourceAnchor(node, context.parsedSourceFile, context.filePath),
+    sourceAnchor,
     reason: `unsupported-render-node:${ts.SyntaxKind[node.kind]}`,
+    traces: [
+      createRenderExpansionTrace({
+        traceId: "render-expansion:unknown:unsupported-node",
+        summary:
+          "encountered a render expression shape that is unsupported in the current bounded IR",
+        anchor: sourceAnchor,
+        metadata: {
+          reason: `unsupported-render-node:${ts.SyntaxKind[node.kind]}`,
+        },
+      }),
+    ],
   };
 }
 

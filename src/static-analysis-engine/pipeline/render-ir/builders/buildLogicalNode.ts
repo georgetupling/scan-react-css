@@ -1,7 +1,11 @@
 import ts from "typescript";
 
 import type { BuildContext } from "../shared/internalTypes.js";
-import { createEmptyFragmentNode, toSourceAnchor } from "../shared/renderIrUtils.js";
+import {
+  createEmptyFragmentNode,
+  createRenderExpansionTrace,
+  toSourceAnchor,
+} from "../shared/renderIrUtils.js";
 import {
   resolveExactNullishExpression,
   resolveExactTruthyExpression,
@@ -71,9 +75,20 @@ export function buildLogicalRenderNode(input: {
     };
   }
 
+  const sourceAnchor = toSourceAnchor(node, context.parsedSourceFile, context.filePath);
   return {
     kind: "unknown",
-    sourceAnchor: toSourceAnchor(node, context.parsedSourceFile, context.filePath),
+    sourceAnchor,
     reason: `unsupported-logical-render-operator:${ts.SyntaxKind[node.operatorToken.kind]}`,
+    traces: [
+      createRenderExpansionTrace({
+        traceId: "render-expansion:unknown:logical-operator",
+        summary: "could not expand logical render expression because the operator is unsupported",
+        anchor: sourceAnchor,
+        metadata: {
+          reason: `unsupported-logical-render-operator:${ts.SyntaxKind[node.operatorToken.kind]}`,
+        },
+      }),
+    ],
   };
 }

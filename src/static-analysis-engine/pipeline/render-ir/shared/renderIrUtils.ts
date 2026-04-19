@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import type { AnalysisTrace } from "../../../types/analysis.js";
 import type { SourceAnchor } from "../../../types/core.js";
 import type { BuildContext } from "./internalTypes.js";
 import type { RenderNode } from "../types.js";
@@ -16,6 +17,23 @@ export function applyPlacementAnchor(node: RenderNode, placementAnchor: SourceAn
   return {
     ...node,
     placementAnchor,
+  };
+}
+
+export function createRenderExpansionTrace(input: {
+  traceId: string;
+  summary: string;
+  anchor: SourceAnchor;
+  metadata?: Record<string, unknown>;
+  children?: AnalysisTrace[];
+}): AnalysisTrace {
+  return {
+    traceId: input.traceId,
+    category: "render-expansion",
+    summary: input.summary,
+    anchor: input.anchor,
+    children: [...(input.children ?? [])],
+    ...(input.metadata ? { metadata: input.metadata } : {}),
   };
 }
 

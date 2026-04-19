@@ -79,6 +79,7 @@ function collectRenderEdgesForComponent(input: {
       renderPath: classifyRenderPath({
         jsxNode: node,
         componentRootExpression: input.definition.rootExpression,
+        resolved: Boolean(targetDefinition),
       }),
     });
   });
@@ -106,7 +107,12 @@ function visitNode(node: ts.Node, visitor: (node: ts.Node) => void): void {
 function classifyRenderPath(input: {
   jsxNode: ts.JsxElement | ts.JsxSelfClosingElement;
   componentRootExpression: ts.Expression;
+  resolved: boolean;
 }): RenderGraphEdge["renderPath"] {
+  if (!input.resolved) {
+    return "unknown";
+  }
+
   let current: ts.Node | undefined = input.jsxNode;
 
   while (current && current !== input.componentRootExpression) {

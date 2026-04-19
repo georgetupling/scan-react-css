@@ -1,6 +1,7 @@
 export { extractSelectorQueriesFromCssText } from "./extractSelectorQueriesFromCssText.js";
 export { buildParsedSelectorQueries } from "./buildParsedSelectorQueries.js";
 export { analyzeSelectorQueries } from "./analyzeSelectorQueries.js";
+export { buildSelectorQueryResult } from "./resultUtils.js";
 export type {
   AnalysisConfidence,
   AnalysisStatus,

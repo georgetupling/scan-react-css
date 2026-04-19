@@ -1,4 +1,5 @@
 import type { SelectorQueryResult } from "../../selector-analysis/types.js";
+import { deriveAnalysisConfidence } from "../../../types/analysis.js";
 import type { ExperimentalRuleResult } from "../types.js";
 
 export function runSelectorPossiblySatisfiedRule(
@@ -14,7 +15,7 @@ export function runSelectorPossiblySatisfiedRule(
   return {
     ruleId: "selector-possibly-satisfied",
     severity: "info",
-    confidence: selectorQueryResult.confidence,
+    confidence: deriveAnalysisConfidence(selectorQueryResult.decision),
     summary: `selector is only possibly satisfied under bounded analysis: ${selectorQueryResult.selectorText}`,
     reasons: [
       "experimental Phase 7 pilot rule derived from bounded selector uncertainty",
@@ -22,6 +23,7 @@ export function runSelectorPossiblySatisfiedRule(
     ],
     primaryLocation: toPrimaryLocation(selectorQueryResult),
     selectorText: selectorQueryResult.selectorText,
+    decision: selectorQueryResult.decision,
     selectorQueryResult,
   };
 }

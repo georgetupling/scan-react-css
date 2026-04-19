@@ -10,7 +10,11 @@ import {
   getExpansionScope,
   MAX_LOCAL_COMPONENT_EXPANSION_DEPTH,
 } from "../shared/expansionPolicy.js";
-import { applyPlacementAnchor, toSourceAnchor } from "../shared/renderIrUtils.js";
+import {
+  applyPlacementAnchor,
+  createRenderExpansionTrace,
+  toSourceAnchor,
+} from "../shared/renderIrUtils.js";
 import { mergeExpressionBindings, mergeHelperDefinitions } from "../resolution/resolveBindings.js";
 import type { RenderNode } from "../types.js";
 import { buildChildren } from "./buildIntrinsicNode.js";
@@ -27,31 +31,69 @@ export function buildComponentReferenceNode(
     resolveComponentDefinition(tagNameNode, context) ??
     context.componentsByFilePath.get(context.currentComponentFilePath)?.get(componentName);
   if (!definition) {
+    const sourceAnchor = toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath);
     return {
       kind: "component-reference",
-      sourceAnchor: toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath),
+      sourceAnchor,
       componentName,
       reason: COMPONENT_DEFINITION_NOT_FOUND_REASON,
+      traces: [
+        createRenderExpansionTrace({
+          traceId: "render-expansion:component-reference:not-found",
+          summary: `could not resolve component reference "${componentName}" for render expansion`,
+          anchor: sourceAnchor,
+          metadata: {
+            componentName,
+            reason: COMPONENT_DEFINITION_NOT_FOUND_REASON,
+          },
+        }),
+      ],
     };
   }
 
   const expansionScope = getExpansionScope(context.currentComponentFilePath, definition.filePath);
 
   if (context.expansionStack.includes(componentName)) {
+    const sourceAnchor = toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath);
+    const reason = buildComponentExpansionReason(expansionScope, "cycle");
     return {
       kind: "component-reference",
-      sourceAnchor: toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath),
+      sourceAnchor,
       componentName,
-      reason: buildComponentExpansionReason(expansionScope, "cycle"),
+      reason,
+      traces: [
+        createRenderExpansionTrace({
+          traceId: "render-expansion:component-reference:cycle",
+          summary: `stopped expanding component reference "${componentName}" because expansion would cycle`,
+          anchor: sourceAnchor,
+          metadata: {
+            componentName,
+            reason,
+          },
+        }),
+      ],
     };
   }
 
   if (context.currentDepth >= MAX_LOCAL_COMPONENT_EXPANSION_DEPTH) {
+    const sourceAnchor = toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath);
+    const reason = buildComponentExpansionReason(expansionScope, "budgetExceeded");
     return {
       kind: "component-reference",
-      sourceAnchor: toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath),
+      sourceAnchor,
       componentName,
-      reason: buildComponentExpansionReason(expansionScope, "budgetExceeded"),
+      reason,
+      traces: [
+        createRenderExpansionTrace({
+          traceId: "render-expansion:component-reference:budget-exceeded",
+          summary: `stopped expanding component reference "${componentName}" because the render expansion budget was exceeded`,
+          anchor: sourceAnchor,
+          metadata: {
+            componentName,
+            reason,
+          },
+        }),
+      ],
     };
   }
 
@@ -64,11 +106,23 @@ export function buildComponentReferenceNode(
     buildRenderNode,
   );
   if ("reason" in expansionBinding) {
+    const sourceAnchor = toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath);
     return {
       kind: "component-reference",
-      sourceAnchor: toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath),
+      sourceAnchor,
       componentName,
       reason: expansionBinding.reason,
+      traces: [
+        createRenderExpansionTrace({
+          traceId: "render-expansion:component-reference:unsupported",
+          summary: `stopped expanding component reference "${componentName}" because prop or children binding is unsupported in the current bounded slice`,
+          anchor: sourceAnchor,
+          metadata: {
+            componentName,
+            reason: expansionBinding.reason,
+          },
+        }),
+      ],
     };
   }
 

@@ -3,9 +3,11 @@ import type { RenderGraph } from "../render-graph/types.js";
 import {
   collectRenderRegionsFromSubtrees,
   type RenderRegion,
+  type RenderNode,
   type RenderSubtree,
 } from "../render-ir/index.js";
 import type { SelectorSourceInput } from "../selector-analysis/types.js";
+import type { AnalysisTrace } from "../../types/analysis.js";
 import type {
   ReachabilityDerivation,
   ReachabilitySummary,
@@ -47,14 +49,15 @@ function buildStylesheetReachabilityRecord(input: {
 }): StylesheetReachabilityRecord {
   const cssFilePath = normalizeProjectPath(input.cssSource.filePath);
   if (!cssFilePath) {
-    return {
+    return withStylesheetRecordTraces({
       cssFilePath: input.cssSource.filePath,
       availability: "unknown",
       contexts: [],
       reasons: [
         "stylesheet source does not have a file path, so reachability cannot be determined",
       ],
-    };
+      traces: [],
+    });
   }
 
   const directlyImportingSourceFilePaths: string[] = [];
@@ -83,12 +86,13 @@ function buildStylesheetReachabilityRecord(input: {
   }
 
   if (directlyImportingSourceFilePaths.length === 0) {
-    return {
+    return withStylesheetRecordTraces({
       cssFilePath: input.cssSource.filePath,
       availability: "unavailable",
       contexts: [],
       reasons: ["no analyzed source file directly imports this stylesheet"],
-    };
+      traces: [],
+    });
   }
 
   const sortedImportingSourceFilePaths = directlyImportingSourceFilePaths.sort((left, right) =>
@@ -100,17 +104,22 @@ function buildStylesheetReachabilityRecord(input: {
     renderSubtrees: input.renderSubtrees,
   });
 
-  return {
+  return withStylesheetRecordTraces({
     cssFilePath: input.cssSource.filePath,
     availability: contextRecords.some((context) => context.availability === "definite")
       ? "definite"
-      : "possible",
+      : contextRecords.some((context) => context.availability === "possible")
+        ? "possible"
+        : contextRecords.some((context) => context.availability === "unknown")
+          ? "unknown"
+          : "unavailable",
     contexts: contextRecords,
     reasons: [
       `stylesheet is directly imported by ${sortedImportingSourceFilePaths.length} analyzed source file${sortedImportingSourceFilePaths.length === 1 ? "" : "s"}`,
       `reachability is attached to ${contextRecords.length} explicit render context${contextRecords.length === 1 ? "" : "s"}`,
     ],
-  };
+    traces: [],
+  });
 }
 
 function buildContextRecords(input: {
@@ -122,6 +131,7 @@ function buildContextRecords(input: {
   const renderRegions = collectRenderRegionsFromSubtrees(input.renderSubtrees);
   const renderRegionsByComponentKey = new Map<string, RenderRegion[]>();
   const renderSubtreesByComponentKey = new Map<string, RenderSubtree>();
+  const unknownBarriersByComponentKey = new Map<string, UnknownReachabilityBarrier[]>();
   const renderGraphNodesByKey = new Map(
     input.renderGraph.nodes.map((node) => [
       createComponentKey(node.filePath, node.componentName),
@@ -147,13 +157,15 @@ function buildContextRecords(input: {
       continue;
     }
 
-    renderSubtreesByComponentKey.set(
-      createComponentKey(
-        normalizeProjectPath(renderSubtree.sourceAnchor.filePath) ??
-          renderSubtree.sourceAnchor.filePath,
-        renderSubtree.componentName,
-      ),
-      renderSubtree,
+    const componentKey = createComponentKey(
+      normalizeProjectPath(renderSubtree.sourceAnchor.filePath) ??
+        renderSubtree.sourceAnchor.filePath,
+      renderSubtree.componentName,
+    );
+    renderSubtreesByComponentKey.set(componentKey, renderSubtree);
+    unknownBarriersByComponentKey.set(
+      componentKey,
+      collectUnknownReachabilityBarriersFromSubtree(renderSubtree),
     );
   }
 
@@ -221,10 +233,6 @@ function buildContextRecords(input: {
   }
 
   for (const [componentKey, availabilityRecord] of componentAvailabilityByKey.entries()) {
-    if (availabilityRecord.availability === "unavailable") {
-      continue;
-    }
-
     const node = renderGraphNodesByKey.get(componentKey);
     if (!node) {
       continue;
@@ -283,6 +291,15 @@ function buildContextRecords(input: {
       outgoingEdges: [...(outgoingEdgesByComponentKey.get(componentKey) ?? [])].sort(compareEdges),
       componentAvailabilityByKey,
     });
+
+    if (availabilityRecord.availability === "unavailable") {
+      addUnknownBarrierContexts({
+        contextRecordsByKey,
+        renderSubtree: renderSubtreesByComponentKey.get(componentKey),
+        renderRegions: renderRegionsByComponentKey.get(componentKey) ?? [],
+        unknownBarriers: unknownBarriersByComponentKey.get(componentKey) ?? [],
+      });
+    }
   }
 
   return [...contextRecordsByKey.values()].sort(compareContextRecords);
@@ -452,6 +469,171 @@ function addPlacedChildRenderRegionContexts(input: {
         availability,
         reasons,
         derivations,
+      });
+    }
+  }
+}
+
+type UnknownReachabilityBarrier = {
+  path: import("../render-ir/types.js").RenderRegionPathSegment[];
+  reason: string;
+  sourceAnchor: import("../../types/core.js").SourceAnchor;
+};
+
+function collectUnknownReachabilityBarriersFromSubtree(
+  renderSubtree: RenderSubtree,
+): UnknownReachabilityBarrier[] {
+  const barriers: UnknownReachabilityBarrier[] = [];
+  collectUnknownReachabilityBarriers({
+    node: renderSubtree.root,
+    path: [{ kind: "root" }],
+    barriers,
+  });
+  return barriers;
+}
+
+function collectUnknownReachabilityBarriers(input: {
+  node: RenderNode;
+  path: import("../render-ir/types.js").RenderRegionPathSegment[];
+  barriers: UnknownReachabilityBarrier[];
+}): void {
+  if (input.node.kind === "unknown") {
+    input.barriers.push({
+      path: input.path,
+      reason: input.node.reason,
+      sourceAnchor: input.node.placementAnchor ?? input.node.sourceAnchor,
+    });
+    return;
+  }
+
+  if (input.node.kind === "component-reference") {
+    input.barriers.push({
+      path: input.path,
+      reason: input.node.reason,
+      sourceAnchor: input.node.placementAnchor ?? input.node.sourceAnchor,
+    });
+    return;
+  }
+
+  if (input.node.kind === "conditional") {
+    collectUnknownReachabilityBarriers({
+      node: input.node.whenTrue,
+      path: [...input.path, { kind: "conditional-branch", branch: "when-true" }],
+      barriers: input.barriers,
+    });
+    collectUnknownReachabilityBarriers({
+      node: input.node.whenFalse,
+      path: [...input.path, { kind: "conditional-branch", branch: "when-false" }],
+      barriers: input.barriers,
+    });
+    return;
+  }
+
+  if (input.node.kind === "repeated-region") {
+    collectUnknownReachabilityBarriers({
+      node: input.node.template,
+      path: [...input.path, { kind: "repeated-template" }],
+      barriers: input.barriers,
+    });
+    return;
+  }
+
+  if (input.node.kind === "element" || input.node.kind === "fragment") {
+    input.node.children.forEach((child, childIndex) =>
+      collectUnknownReachabilityBarriers({
+        node: child,
+        path: [...input.path, { kind: "fragment-child", childIndex }],
+        barriers: input.barriers,
+      }),
+    );
+  }
+}
+
+function addUnknownBarrierContexts(input: {
+  contextRecordsByKey: Map<string, StylesheetReachabilityContextRecord>;
+  renderSubtree?: RenderSubtree;
+  renderRegions: RenderRegion[];
+  unknownBarriers: UnknownReachabilityBarrier[];
+}): void {
+  if (
+    !input.renderSubtree ||
+    input.unknownBarriers.length === 0 ||
+    !input.renderSubtree.componentName
+  ) {
+    return;
+  }
+
+  const uniqueReasons = [...new Set(input.unknownBarriers.map((barrier) => barrier.reason))].sort(
+    (left, right) => left.localeCompare(right),
+  );
+  const derivations = uniqueReasons.map<ReachabilityDerivation>((reason) => ({
+    kind: "whole-component-unknown-barrier",
+    reason,
+  }));
+
+  addContextRecord(input.contextRecordsByKey, {
+    context: {
+      kind: "component",
+      filePath:
+        normalizeProjectPath(input.renderSubtree.sourceAnchor.filePath) ??
+        input.renderSubtree.sourceAnchor.filePath,
+      componentName: input.renderSubtree.componentName,
+    },
+    availability: "unknown",
+    reasons: [
+      "component contains unsupported or budget-limited render expansion that may hide stylesheet availability",
+    ],
+    derivations,
+  });
+
+  addContextRecord(input.contextRecordsByKey, {
+    context: {
+      kind: "render-subtree-root",
+      filePath:
+        normalizeProjectPath(input.renderSubtree.sourceAnchor.filePath) ??
+        input.renderSubtree.sourceAnchor.filePath,
+      componentName: input.renderSubtree.componentName,
+      rootAnchor: {
+        startLine: input.renderSubtree.root.sourceAnchor.startLine,
+        startColumn: input.renderSubtree.root.sourceAnchor.startColumn,
+        endLine: input.renderSubtree.root.sourceAnchor.endLine,
+        endColumn: input.renderSubtree.root.sourceAnchor.endColumn,
+      },
+    },
+    availability: "unknown",
+    reasons: [
+      "render subtree contains unsupported or budget-limited expansion that may hide stylesheet availability",
+    ],
+    derivations,
+  });
+
+  for (const barrier of input.unknownBarriers) {
+    for (const renderRegion of input.renderRegions.filter((region) =>
+      isRegionPathPrefix(region.path, barrier.path),
+    )) {
+      if (renderRegion.kind === "subtree-root") {
+        continue;
+      }
+
+      addContextRecord(input.contextRecordsByKey, {
+        context: {
+          kind: "render-region",
+          filePath: renderRegion.filePath,
+          componentName: renderRegion.componentName,
+          regionKind: renderRegion.kind,
+          path: renderRegion.path,
+          sourceAnchor: {
+            startLine: renderRegion.sourceAnchor.startLine,
+            startColumn: renderRegion.sourceAnchor.startColumn,
+            endLine: renderRegion.sourceAnchor.endLine,
+            endColumn: renderRegion.sourceAnchor.endColumn,
+          },
+        },
+        availability: "unknown",
+        reasons: [
+          "render region contains unsupported or budget-limited expansion that may hide stylesheet availability",
+        ],
+        derivations: [{ kind: "render-region-unknown-barrier", reason: barrier.reason }],
       });
     }
   }
@@ -940,30 +1122,161 @@ function addRenderRegionContexts(input: {
 
 function addContextRecord(
   contextRecordsByKey: Map<string, StylesheetReachabilityContextRecord>,
-  contextRecord: StylesheetReachabilityContextRecord,
+  contextRecord: Omit<StylesheetReachabilityContextRecord, "traces"> & {
+    traces?: AnalysisTrace[];
+  },
 ): void {
+  const normalizedContextRecord = withContextRecordTraces(contextRecord);
   const contextKey = serializeContextKey(contextRecord);
   const existingContextRecord = contextRecordsByKey.get(contextKey);
   if (!existingContextRecord) {
     contextRecordsByKey.set(contextKey, {
-      ...contextRecord,
-      reasons: [...contextRecord.reasons].sort((left, right) => left.localeCompare(right)),
-      derivations: [...contextRecord.derivations].sort(compareDerivations),
+      ...normalizedContextRecord,
+      reasons: [...normalizedContextRecord.reasons].sort((left, right) =>
+        left.localeCompare(right),
+      ),
+      derivations: [...normalizedContextRecord.derivations].sort(compareDerivations),
     });
     return;
   }
 
-  const mergedReasons = new Set([...existingContextRecord.reasons, ...contextRecord.reasons]);
+  const mergedReasons = new Set([
+    ...existingContextRecord.reasons,
+    ...normalizedContextRecord.reasons,
+  ]);
   const derivationsByKey = new Map<string, ReachabilityDerivation>();
-  for (const derivation of [...existingContextRecord.derivations, ...contextRecord.derivations]) {
+  for (const derivation of [
+    ...existingContextRecord.derivations,
+    ...normalizedContextRecord.derivations,
+  ]) {
     derivationsByKey.set(serializeDerivation(derivation), derivation);
   }
   contextRecordsByKey.set(contextKey, {
     ...existingContextRecord,
-    availability: mergeAvailability(existingContextRecord.availability, contextRecord.availability),
+    availability: mergeAvailability(
+      existingContextRecord.availability,
+      normalizedContextRecord.availability,
+    ),
     reasons: [...mergedReasons].sort((left, right) => left.localeCompare(right)),
     derivations: [...derivationsByKey.values()].sort(compareDerivations),
+    traces: mergeTraces(existingContextRecord.traces, normalizedContextRecord.traces),
   });
+}
+
+function withContextRecordTraces(
+  contextRecord: Omit<StylesheetReachabilityContextRecord, "traces"> & {
+    traces?: AnalysisTrace[];
+  },
+): StylesheetReachabilityContextRecord {
+  const traces =
+    contextRecord.traces && contextRecord.traces.length > 0
+      ? [...contextRecord.traces]
+      : [
+          createReachabilityTrace({
+            traceId: `reachability-context:${contextRecord.context.kind}:${contextRecord.availability}`,
+            summary:
+              contextRecord.reasons[0] ??
+              `reachability context recorded as ${contextRecord.availability}`,
+            anchor: getReachabilityContextAnchor(contextRecord.context),
+            metadata: {
+              contextKind: contextRecord.context.kind,
+              availability: contextRecord.availability,
+              derivations: contextRecord.derivations.map(serializeDerivation),
+            },
+          }),
+        ];
+
+  return {
+    ...contextRecord,
+    traces,
+  };
+}
+
+function withStylesheetRecordTraces(
+  record: StylesheetReachabilityRecord,
+): StylesheetReachabilityRecord {
+  const traces =
+    record.traces.length > 0
+      ? [...record.traces]
+      : [
+          createReachabilityTrace({
+            traceId: `reachability-stylesheet:${record.cssFilePath ?? "unknown"}:${record.availability}`,
+            summary:
+              record.reasons[0] ?? `stylesheet reachability resolved as ${record.availability}`,
+            children: mergeTraces(
+              [],
+              record.contexts.flatMap((context) => context.traces),
+            ),
+            metadata: {
+              cssFilePath: record.cssFilePath,
+              availability: record.availability,
+              contextCount: record.contexts.length,
+            },
+          }),
+        ];
+
+  return {
+    ...record,
+    traces,
+  };
+}
+
+function createReachabilityTrace(input: {
+  traceId: string;
+  summary: string;
+  anchor?: import("../../types/core.js").SourceAnchor;
+  children?: AnalysisTrace[];
+  metadata?: Record<string, unknown>;
+}): AnalysisTrace {
+  return {
+    traceId: input.traceId,
+    category: "reachability",
+    summary: input.summary,
+    ...(input.anchor ? { anchor: input.anchor } : {}),
+    children: [...(input.children ?? [])],
+    ...(input.metadata ? { metadata: input.metadata } : {}),
+  };
+}
+
+function getReachabilityContextAnchor(
+  context: StylesheetReachabilityContextRecord["context"],
+): import("../../types/core.js").SourceAnchor | undefined {
+  if (context.kind === "source-file" || context.kind === "component") {
+    return undefined;
+  }
+
+  if (context.kind === "render-subtree-root") {
+    return {
+      filePath: context.filePath,
+      startLine: context.rootAnchor.startLine,
+      startColumn: context.rootAnchor.startColumn,
+      endLine: context.rootAnchor.endLine,
+      endColumn: context.rootAnchor.endColumn,
+    };
+  }
+
+  return {
+    filePath: context.filePath,
+    startLine: context.sourceAnchor.startLine,
+    startColumn: context.sourceAnchor.startColumn,
+    endLine: context.sourceAnchor.endLine,
+    endColumn: context.sourceAnchor.endColumn,
+  };
+}
+
+function mergeTraces(left: AnalysisTrace[], right: AnalysisTrace[]): AnalysisTrace[] {
+  const tracesByKey = new Map<string, AnalysisTrace>();
+  for (const trace of [...left, ...right]) {
+    tracesByKey.set(serializeTrace(trace), trace);
+  }
+
+  return [...tracesByKey.values()].sort((a, b) =>
+    serializeTrace(a).localeCompare(serializeTrace(b)),
+  );
+}
+
+function serializeTrace(trace: AnalysisTrace): string {
+  return JSON.stringify(trace);
 }
 
 function mergeAvailability(
@@ -1028,6 +1341,9 @@ function serializeDerivation(derivation: ReachabilityDerivation): string {
       return derivation.kind;
     case "whole-component-child-availability":
       return [derivation.kind, derivation.toComponentName, derivation.toFilePath ?? ""].join(":");
+    case "whole-component-unknown-barrier":
+    case "render-region-unknown-barrier":
+      return [derivation.kind, derivation.reason].join(":");
     case "placement-derived-region":
       return [
         derivation.kind,
@@ -1036,6 +1352,19 @@ function serializeDerivation(derivation: ReachabilityDerivation): string {
         derivation.renderPath,
       ].join(":");
   }
+}
+
+function isRegionPathPrefix(
+  prefix: import("../render-ir/types.js").RenderRegionPathSegment[],
+  full: import("../render-ir/types.js").RenderRegionPathSegment[],
+): boolean {
+  if (prefix.length > full.length) {
+    return false;
+  }
+
+  return prefix.every(
+    (segment, index) => serializeRegionPath([segment]) === serializeRegionPath([full[index]]),
+  );
 }
 
 function createComponentKey(filePath: string, componentName: string): string {
