@@ -2,733 +2,424 @@
 
 ## Purpose
 
-This document describes the proposed architecture for the new static-analysis-engine track.
+This document defines the target product architecture for the `static-analysis-engine`.
 
-It is the first implementation-oriented architecture note for the new engine.
+It replaces the earlier first-slice framing with a clearer statement of what the finished engine is supposed to look like, even if some parts are still being implemented incrementally.
 
-It takes the high-level direction from:
+This architecture is now informed by:
 
-- [requirements.md](./requirements.md)
-- [directory-structure-and-boundaries.md](./directory-structure-and-boundaries.md)
-- [core-irs-and-type-shapes.md](./core-irs-and-type-shapes.md)
+- the current implementation under `src/static-analysis-engine/`
+- `progress-snapshot-2026-04-19.md`
+- `known-architectural-issues.md`
 
-and turns that into a concrete staged architecture.
+## Architectural Position
 
-## Scope Of This Architecture
+The target engine is:
 
-This architecture is intentionally written around the first bounded target capability:
+- symbol-first
+- stage-oriented
+- explanation-aware
+- internally bounded
+- isolated from the old engine except for temporary comparison scaffolding
 
-- ancestor-qualified selector satisfiability
+The most important architectural decision is that later semantic stages should increasingly consume normalized symbol, value, and render models rather than rebuilding cross-file meaning ad hoc.
 
-In other words, the first version of the new engine is not trying to solve every future problem at once.
+## Target End-State
 
-It is trying to answer a focused question:
+The target product should have:
 
-- can a selector like `.ancestor .child` be satisfied by approximate rendered structure under bounded analysis?
+- one top-level pipeline stage per subdirectory under `src/static-analysis-engine/pipeline/`
+- shared engine libraries outside `pipeline/`
+- explicit contracts for what each stage consumes and emits
+- structured traces only where they help explain user-visible reasoning
+- no permanent `buildProjectRenderContext`-style bridge owning cross-file semantic work
+- no permanent dependence on old-engine runtime or fact types
 
-That bounded target keeps the architecture concrete and prevents the design from expanding into a vague "future perfect engine."
+## Non-Goals
 
-## Architecture Goals
+This document does not try to freeze:
 
-The architecture should satisfy the following goals.
+- the exact public CLI or API surface
+- the exact final finding catalog
+- every future supported React or CSS pattern
 
-### 1. Be meaningfully different from the current scanner
+It does define the target internal pipeline and stage responsibilities.
 
-The new engine should not merely repackage file-level reachability.
+## Stage Model
 
-It should add real program and render reasoning.
+The target product pipeline should be:
 
-### 2. Stay bounded
+1. parse
+2. module-graph
+3. symbol-resolution
+4. abstract-values
+5. render-graph
+6. render-ir
+7. css-analysis
+8. reachability
+9. selector-analysis
+10. rule-execution
 
-The architecture must make it easy to stop, downgrade confidence, or return `unsupported` when complexity exceeds supported limits.
+This is the intended steady-state pipeline. Some implementation scaffolding currently splits or bridges parts of this flow, but that is not the target architecture.
 
-### 3. Support explanation
+## Stage Contracts
 
-Every major stage should produce enough structured information that the engine can explain its conclusions.
+### 1. `parse`
 
-### 4. Be compositional
+Purpose:
+Parse source and CSS inputs into syntax-aware representations with stable source anchors.
 
-The engine should be built from stages and IRs that connect cleanly, rather than from one giant monolithic pass.
+Consumes:
 
-### 5. Allow coexistence with the current scanner
+- discovered source file inputs
+- discovered CSS source inputs
 
-The new engine must remain isolated and internally coherent while it is under development.
+Emits:
 
-## High-Level Summary
+- parsed source files
+- parsed CSS source records
+- stable source anchors reused by later stages
 
-The new engine should follow a staged pipeline similar in spirit to the current scanner, but with very different internal analysis depth.
+Must not own:
 
-At a high level, the pipeline is:
+- import resolution
+- semantic symbol reasoning
+- selector satisfiability decisions
 
-1. file and module discovery
-2. source parsing and source anchors
-3. module graph construction
-4. symbol resolution
-5. bounded expression and value evaluation
-6. render graph construction
-7. render subtree IR construction
-8. selector constraint construction
-9. stylesheet reachability attachment
-10. selector satisfiability analysis
-11. rule execution
-12. explanation assembly and reporting
+Traceability expectation:
+Only emit traces for meaningful parse failures or unsupported syntax that will affect later user-visible conclusions.
 
-The main architectural shift is:
+### 2. `module-graph`
 
-- the current scanner reasons mainly about files, classes, and reachable stylesheets
-- the new engine reasons about files, symbols, values, render structure, selectors, and uncertainty
+Purpose:
+Build the normalized project graph of modules, imports, exports, and non-semantic resource edges.
 
-## Main Architectural Principle
+Consumes:
 
-The engine should use several linked internal models rather than one giant all-purpose graph.
+- parsed source files
 
-The most important models are:
-
-- module graph
-- symbol model
-- abstract values
-- render graph
-- render subtree IR
-- selector constraint IR
-- reachability summaries
-- analysis traces
-
-Each stage should consume one or more of those models and produce the next one.
-
-## The First Bounded Slice
-
-Before detailing the general pipeline, it is helpful to define the first supported slice clearly.
-
-### First supported target
-
-The first target capability is:
-
-- simple ancestor-qualified selector satisfiability
-
-Example:
-
-```css
-.topic-manage-page .topic-manage-page__title-skeleton {
-  width: min(16rem, 100%);
-}
-```
-
-The first slice should eventually be able to reason about whether the engine can find a plausible rendered structure where:
-
-- some ancestor element has class `topic-manage-page`
-- some descendant element has class `topic-manage-page__title-skeleton`
-- the stylesheet is available in that render context
-
-### First slice limits
-
-The first slice should stay bounded.
-
-Recommended initial limits:
-
-- same-file intrinsic JSX support first
-- same-file class expression evaluation first
-- direct local component expansion only when simple and bounded
-- no general render-prop evaluation
-- no arbitrary list expansion
-- explicit `unsupported` for complex selector shapes
-- explicit `budget-exceeded` when expansion exceeds configured limits
-
-This slice is intentionally small, but it is already beyond the current scanner.
-
-## Stage 1: File And Module Discovery
-
-## Purpose
-
-Identify source files and relevant imported resources.
-
-## Responsibilities
-
-- collect candidate source files
-- collect CSS files
-- record imported external CSS resources where needed later
-- normalize project-relative paths
-
-## Output
-
-- discovered file records
-- initial module candidates
-
-## Notes
-
-This stage is intentionally close to the current scanner in spirit, but it should feed the new engine's module graph rather than the old file-facts pipeline.
-
-## Stage 2: Source Parsing And Anchoring
-
-## Purpose
-
-Parse source files into syntax trees and record stable source anchors.
-
-## Responsibilities
-
-- parse TypeScript/JavaScript/JSX source
-- identify declarations, imports, exports, JSX nodes, and class-bearing expressions
-- create `SourceAnchor` references for later explanation
-
-## Output
-
-- parsed source cache
-- raw syntax-level extraction records
-- source anchors
-
-## Why this is a separate stage
-
-The engine will need provenance throughout later stages.
-Anchors should be created once and reused, not recomputed in ad hoc ways later.
-
-## Stage 3: Module Graph Construction
-
-## Purpose
-
-Build the source-level graph of modules, imports, exports, and top-level symbols.
-
-## Responsibilities
-
-- create module nodes
-- create import edges
-- create export edges
-- associate top-level symbol declarations with modules
-
-## Output
+Emits:
 
 - `ModuleGraph`
 
-## Key boundary
+Must not own:
 
-This stage should model source relationships only.
-It should not attempt to reason about runtime-rendered structure.
+- render reasoning
+- abstract value evaluation
+- selector reasoning
 
-## Stage 4: Symbol Resolution
+Traceability expectation:
+Usually low-noise. Traces are only required when unresolved import/export structure becomes relevant to later user-visible uncertainty.
 
-## Purpose
+### 3. `symbol-resolution`
 
-Resolve what names refer to within and across modules.
+Purpose:
+Resolve local and cross-file symbol identity on top of the module graph.
 
-## Responsibilities
+Consumes:
 
-- resolve local bindings
-- resolve imported bindings
-- identify component symbols
-- identify helper/function symbols
-- identify unresolved or unsupported symbol references explicitly
+- parsed source files
+- `ModuleGraph`
 
-## Output
+Emits:
 
-- symbol table or symbol registry
-- symbol-resolution results attached to relevant syntax records
+- normalized symbol registry
+- resolved imported binding summaries
+- resolved namespace and re-export summaries
+- explicit unresolved or bounded-resolution records
 
-## Why this matters
+This stage is authoritative for:
 
-This is the first stage where the engine starts to answer:
+- what a name refers to
+- which exports resolve across module boundaries
+- where symbol resolution stops because of unsupported structure or budgets
 
-- what does this identifier mean?
+Traceability expectation:
+Required for user-meaningful decisions such as unresolved imports, followed re-export chains, ambiguous resolution, and budget cutoffs.
 
-That is a precondition for value flow, helper analysis, and component expansion.
+### 4. `abstract-values`
 
-## Stage 5: Bounded Expression And Value Evaluation
+Purpose:
+Evaluate a bounded subset of expressions into reusable abstract values.
 
-## Purpose
+Consumes:
 
-Evaluate a meaningful subset of expressions into abstract values.
+- parsed source files
+- symbol-resolution outputs
 
-## Responsibilities
+Emits:
 
-- evaluate literals and simple expressions
-- evaluate bounded template literals
-- evaluate arrays and objects where feasible
-- evaluate conditionals and logical expressions where feasible
-- evaluate class-bearing expressions into abstract class sets
-- represent unsupported or over-budget cases explicitly
+- abstract expression summaries
+- abstract class/value sets
+- explicit unknown or unsupported value records
 
-## Output
+This stage is authoritative for:
 
-- `AbstractValue`
-- `AbstractClassSet`
-- value traces
+- what values an expression may produce within bounded analysis
+- where exact reasoning was lost
 
-## Important design point
+Traceability expectation:
+Required when exact values become possible values, unknowns, or unsupported outcomes in ways that affect later render or selector conclusions.
 
-This stage should not try to answer selector questions yet.
+### 5. `render-graph`
 
-It is responsible for saying:
+Purpose:
+Build the structural graph of component-to-component render relationships.
 
-- what values might this expression produce?
+Consumes:
 
-not:
+- parsed source files
+- symbol-resolution outputs
+- abstract-values outputs where needed for bounded component targeting
 
-- what CSS selector can match?
-
-## Stage 6: Render Graph Construction
-
-## Purpose
-
-Build the component-to-component composition graph.
-
-## Responsibilities
-
-- detect which components render which other components
-- attach prop summaries to render edges
-- preserve multiple render sites
-- preserve uncertainty where component targets are unresolved
-
-## Output
+Emits:
 
 - `RenderGraph`
 
-## Why this is distinct from render subtree IR
+This stage is authoritative for:
 
-The render graph answers:
+- which components may render which other components
+- whether those render paths are definite, possible, or unresolved
 
-- which components call which components?
+Traceability expectation:
+Required when component edges are unresolved, downgraded, or blocked in a way that affects reachability or selector explanations.
 
-It does not yet answer:
+### 6. `render-ir`
 
-- what rendered elements do those components produce?
+Purpose:
+Construct bounded approximate rendered subtrees and regions from renderable component structure.
 
-That separation keeps the architecture easier to reason about.
+Consumes:
 
-## Stage 7: Render Subtree IR Construction
+- parsed source files
+- symbol-resolution outputs
+- abstract-values outputs
+- `RenderGraph`
 
-## Purpose
+Emits:
 
-Construct approximate rendered subtrees for bounded components and JSX regions.
+- render subtree IR
+- render region summaries
+- explicit unknown, unsupported, cycle-stopped, or budget-stopped render nodes
 
-## Responsibilities
+This stage is authoritative for:
 
-- normalize intrinsic JSX elements into `RenderElementNode`
-- normalize fragments
-- preserve conditionals as branches
-- preserve component calls as explicit nodes
-- represent `children` and subtree props as slots or subtree payloads
-- attach class sets to rendered elements
+- approximate rendered structure
+- placement of classes in renderable regions
+- where render expansion stopped and why
 
-## Output
+Traceability expectation:
+High. This is one of the main explanation-producing stages because it directly supports later answers about whether something could render.
 
-- `RenderSubtreeValue`
+### 7. `css-analysis`
 
-## Why this stage is central
+Purpose:
+Normalize CSS sources into bounded CSS facts used by later stages.
 
-This is where the engine becomes capable of approximate DOM-like reasoning.
+Consumes:
 
-This stage is the bridge between:
+- parsed CSS source records
 
-- source/program analysis
+Emits:
 
-and:
+- normalized stylesheet analysis records
+- selector-entry records
+- class definition summaries
+- at-rule context summaries
 
-- selector satisfiability analysis
+This stage is authoritative for:
 
-## First-slice guidance
+- what selectors and definitions exist in analyzed CSS
+- where selector shapes are available to later analysis
 
-For the first bounded slice, this stage should support:
+Traceability expectation:
+Low by default. Emit traces for unsupported CSS constructs only when that materially affects a later user-visible explanation.
 
-- same-file intrinsic JSX
-- fragments
-- class-bearing elements
-- bounded conditionals
+### 8. `reachability`
 
-Local component expansion should be added only after the same-file case is stable.
+Purpose:
+Determine where CSS is available across source, component, subtree, and render-region contexts.
 
-## Stage 8: Selector Constraint Construction
+Consumes:
 
-## Purpose
+- `ModuleGraph`
+- `RenderGraph`
+- render subtree IR
+- CSS analysis outputs
 
-Parse CSS selector branches into normalized matching constraints.
-
-## Responsibilities
-
-- parse CSS selectors
-- normalize simple supported shapes into selector constraints
-- preserve unsupported selector forms explicitly
-- retain source anchors and at-rule context
-
-## Output
-
-- `SelectorBranchIR`
-- `SelectorConstraint`
-
-## First-slice guidance
-
-The first slice should focus on:
-
-- same-node class conjunction
-- ancestor-descendant class relationships
-
-This is enough to support:
-
-- compound selector reasoning
-- ancestor-qualified selector satisfiability
-
-Parent-child selectors can come next if needed.
-
-## Stage 9: Reachability Attachment
-
-## Purpose
-
-Determine where stylesheets are available in the new model.
-
-## Responsibilities
-
-- attach stylesheet availability to relevant module, component, or render contexts
-- preserve definite versus possible availability
-- connect CSS resources to the render reasoning path
-
-## Output
+Emits:
 
 - `ReachabilitySummary`
 
-## Important note
+This stage is authoritative for:
 
-Even though the new engine is richer, stylesheet availability is still necessary.
+- direct stylesheet availability
+- inherited or propagated availability through render structure
+- where availability becomes only possible or unknown
 
-A selector may be structurally satisfiable but irrelevant if the stylesheet is not available in that context.
+Traceability expectation:
+Required. Reachability decisions are directly useful in human explanations for selector and finding results.
 
-## Stage 10: Selector Satisfiability Analysis
+### 9. `selector-analysis`
 
-## Purpose
+Purpose:
+Answer whether normalized selectors can match bounded rendered structure in contexts where their stylesheets are available.
 
-Evaluate whether selector constraints can match approximate rendered subtrees under known bounded analysis.
+Consumes:
 
-## Responsibilities
+- CSS analysis outputs
+- render subtree IR
+- `ReachabilitySummary`
 
-- match selector constraints against render subtree IR
-- consider structural context
-- consider class certainty
-- consider stylesheet reachability
-- distinguish semantic possibility from technical unknown
+Emits:
 
-## Output
+- normalized selector analysis results
+- shared decision payloads for selector outcomes
 
-- selector match results
-- traces explaining why a match is:
-  - definite
-  - possible
-  - unsupported
-  - budget-exceeded
-  - not found under bounded analysis
+This stage is authoritative for:
 
-## First-slice guidance
+- whether a selector is definitely satisfied, possibly satisfied, unsupported, or not satisfied under bounded analysis
 
-For the first target, this stage should support answering:
+Traceability expectation:
+Required. This is the most directly user-facing reasoning stage short of rule execution.
 
-- can `.ancestor .child` match under same-file bounded analysis?
+### 10. `rule-execution`
 
-This is the first flagship capability for the new engine.
+Purpose:
+Turn engine analysis outputs into findings and other product-facing conclusions.
 
-## Stage 11: Rule Execution
+Consumes:
 
-## Purpose
+- CSS analysis outputs
+- selector-analysis outputs
+- other stage outputs as required by future rules
 
-Run new-engine-native rules on top of the richer analysis model.
+Emits:
 
-## Responsibilities
+- findings
+- confidence/severity assignments
+- explanation-ready references to upstream decisions and traces
 
-- consume selector match results
-- consume class-flow and render-structure conclusions
-- emit findings with confidence and metadata
+This stage is authoritative for:
 
-## Output
+- final finding semantics
+- mapping engine reasoning into product output
 
-- new-engine findings
-- new-engine summary data
+Traceability expectation:
+Required. Findings should preserve or point to the upstream decisions that justify them.
 
-## Initial rule strategy
+## Target Data Flow
 
-The first rule or rule-like output should be tightly aligned to the first target capability.
+The intended high-level flow is:
 
-Good early candidates:
+`parse -> module-graph -> symbol-resolution -> abstract-values -> render-graph -> render-ir`
 
-- experimental ancestor-qualified selector satisfiability finding
-- debug-only selector satisfiability report
-- comparison-only signal against current behavior
+and in parallel on the CSS side:
 
-The point is to validate the engine architecture before broad rule migration.
+`parse -> css-analysis`
 
-## Stage 12: Explanation And Reporting
+then:
 
-## Purpose
+`module-graph + render-graph + render-ir + css-analysis -> reachability`
 
-Make engine conclusions understandable.
+then:
 
-## Responsibilities
+`css-analysis + render-ir + reachability -> selector-analysis`
 
-- assemble traces into structured debug output
-- expose technical explanation payloads for tests and debugging
-- later support human-readable explanations if needed
+then:
 
-## Output
+`selector-analysis + css-analysis -> rule-execution`
 
-- debug trace trees
-- structured explanation metadata
-- optional summarized human-readable explanations
+## Authoritative Models
 
-## Product guidance
+The target architecture should treat these outputs as authoritative:
 
-The first explanation mode can be technical and hidden by default.
+- `ModuleGraph` for module-level source relationships
+- symbol-resolution outputs for cross-file name meaning
+- abstract-values outputs for bounded expression meaning
+- `RenderGraph` for component composition relationships
+- render subtree IR for approximate rendered structure
+- `ReachabilitySummary` for stylesheet availability
+- selector-analysis results for selector satisfaction outcomes
 
-It does not need to be polished prose at first.
-It does need to be useful for maintainers.
+No later stage should recreate earlier semantic work if an authoritative stage output already exists for it.
 
-## Cross-Cutting Architectural Concerns
+## Temporary Structures That Should Not Survive Into The Final Product
 
-These concerns affect multiple stages and should be treated as first-class architectural constraints.
+The current implementation has useful temporary seams that should not define the target architecture.
 
-## 1. Uncertainty Model
+Most importantly:
 
-The architecture must distinguish semantic possibility from technical inability to answer.
+- `buildProjectRenderContext.ts` is a temporary compression seam, not a final product layer
+- ad hoc cross-file const/helper propagation inside render preparation should move toward symbol/value-owned summaries
+- old-engine type reuse is temporary comparison scaffolding only
 
-At minimum, the engine should support internal states like:
+## Shared Libraries
 
-- `definite`
-- `possible`
-- `not-found-under-bounded-analysis`
-- `unsupported`
-- `budget-exceeded`
+The target product should keep shared reusable logic outside `pipeline/`.
 
-Why this matters:
+Examples of likely shared-library areas:
 
-- `possible` means the engine found a plausible path
-- `unsupported` means the engine could not reason about the case
+- selector parsing and normalization
+- source-anchor and trace helpers
+- shared engine policy and budget definitions
+- generic CSS parsing helpers
 
-Those are different product meanings and should not be collapsed too early.
+These are engine libraries, not pipeline stages. They may be consumed by multiple stages, but they should not blur stage ownership of semantic decisions.
 
-## 2. Budgeting
+See `subsystem-boundaries.md` for the boundary rules.
 
-Every stage with branching or cross-file expansion should be budget-aware.
+## Traceability Model
 
-Likely budgets include:
+The target engine should not try to make every stage produce verbose user-facing traces.
 
-- maximum symbol hop depth
-- maximum evaluator recursion
-- maximum branch count
-- maximum component expansion depth
-- maximum selector complexity
+Instead:
 
-When a budget is exceeded, the stage should emit explicit technical uncertainty rather than silently dropping information.
+- traces are required where they support user-visible findings and explanations
+- traces should be emitted by the stage that actually made the decision
+- later stages should preserve and present those traces rather than reverse-engineering them from prose
 
-## 3. Explanation Preservation
+See `end-to-end-traceability.md` for the detailed traceability rules.
 
-Every major stage should preserve enough context for debugging.
+## Budgeting And Boundedness
 
-This means:
+The target engine remains bounded.
 
-- source anchors should flow through the pipeline
-- trace objects should be attachable to decisions
-- IRs should not throw away provenance too early
+Important architectural rules:
 
-## 4. Determinism
+- stages must stop explicitly rather than silently dropping hard cases
+- budget limits should live in shared engine policy modules, not in arbitrary stage-local files when they are cross-cutting
+- unsupported, unknown, and budget-limited outcomes must remain distinguishable
 
-The architecture must preserve deterministic behavior.
+## Isolation From The Old Engine
 
-For the same project and the same budgets, the engine should produce:
+The target product should be fully new-engine-native.
 
-- the same IRs
-- the same selector-match results
-- the same findings
-- the same traces in stable order
+During transition, compatibility wrappers are allowed for:
 
-## 5. Isolation From The Current Scanner
+- comparison
+- testing
+- staged migration
 
-This architecture assumes the new engine is implemented inside:
+But those should be treated as temporary scaffolding rather than part of the target subsystem design.
 
-- `src/static-analysis-engine/`
+## Recommended Near-Term Refactor Direction
 
-with:
+To move from current implementation to target architecture, the highest-value cleanup direction is:
 
-- separate tests
-- separate docs
-- separate internal types
-
-and no casual deep imports from the current scanner.
-
-That isolation is part of the architecture, not just a repository preference.
-
-## Parallelization Strategy
-
-This architecture is staged, but staged does not mean "everything must run serially."
-
-The important distinction is:
-
-- some stages have real dependency ordering
-- many tasks inside a stage can still run in parallel
-
-## Plain-language summary
-
-The pipeline should be understood as a dependency graph, not as one giant single-threaded procedure.
-
-For example:
-
-- selector satisfiability depends on render subtree IR
-- render subtree IR depends on symbol and value reasoning
-- symbol resolution depends on the module graph
-
-Those are real ordering constraints.
-
-But once a stage has the inputs it needs, much of the work inside that stage can often fan out across:
-
-- files
-- modules
-- components
-- selectors
-- CSS resources
-
-So the right model is:
-
-- logically staged
-- internally parallel-capable
-
-## Where parallelization is naturally available
-
-The following kinds of work are strong candidates for parallel execution:
-
-- parsing source files
-- parsing CSS files
-- extracting per-file syntax anchors
-- collecting top-level declarations per module
-- normalizing selectors per CSS file
-- building independent per-module summaries
-- evaluating independent selector checks once render subtree IR exists
-
-These tasks mostly operate on separate inputs and can usually be joined deterministically afterward.
-
-## Where ordering is more real
-
-The following areas have stronger inter-stage dependencies:
-
-- module graph construction after discovery and parsing
-- symbol resolution after the module graph exists
-- bounded value evaluation when it depends on symbol resolution
-- render graph and render subtree construction when they depend on resolved components and values
-- selector satisfiability after render subtree IR and selector constraints exist
-
-These stages are still compatible with internal parallel work, but they are not independent of one another.
-
-## Where parallelization gets more complicated
-
-Some parts of the engine are likely to involve shared caches, repeated refinement, or bounded recursion.
-
-These include:
-
-- cross-file symbol resolution
-- helper and function summarization
-- recursive component expansion
-- value evaluation that depends on previously computed summaries
-- any later fixpoint-style refinement work
-
-These are still potentially parallelizable, but they require more careful coordination because:
-
-- work items may depend on partially computed shared results
-- caches need deterministic ownership rules
-- repeated recomputation can erase the performance benefits if coordination is poor
-
-## Architectural guidance for parallel-capable stages
-
-Even before implementing concurrency, the architecture should be shaped so parallel execution remains possible later.
-
-Recommended design choices:
-
-- prefer explicit stage inputs and outputs
-- avoid hidden global mutable state
-- keep IR construction deterministic
-- make caches stage-owned rather than globally ad hoc
-- favor immutable or append-only intermediate data where practical
-- join fan-out work through stable merge steps
-
-These choices make the engine easier to reason about even if the first implementation is mostly single-threaded.
-
-## Recommendation For Early Implementation
-
-The first implementation of the static-analysis-engine does not need to aggressively parallelize everything.
-
-The better near-term goal is:
-
-- design the stages so they are parallel-friendly
-- keep the dependency structure explicit
-- add parallel execution where it provides clear value
-
-In practice, that likely means:
-
-1. keep the top-level stage ordering clear
-2. allow per-file parsing and extraction to fan out
-3. allow per-selector or per-resource analysis to fan out once prerequisite IRs exist
-4. postpone more complicated concurrent summary/evaluator strategies until the core architecture is stable
+1. document the stage contracts and boundary rules clearly
+2. move shared libraries out of `pipeline/`
+3. shrink and eventually remove `buildProjectRenderContext.ts`
+4. shift cross-file semantic ownership toward symbol-resolution and abstract-values outputs
+5. keep traces concentrated at decision-heavy stages
 
 ## Summary
 
-This architecture should be treated as:
+The target `static-analysis-engine` is a symbol-first staged pipeline with explicit stage contracts and shared libraries outside `pipeline/`.
 
-- sequential at the stage-dependency level
-- parallel-capable inside many stages
+Its central architectural promise is:
 
-That gives the project the best balance of:
-
-- conceptual clarity
-- deterministic behavior
-- future performance headroom
-
-## The First Vertical Slice
-
-To keep implementation grounded, the first vertical slice should likely be:
-
-1. parse same-file JSX
-2. build module graph and symbol bindings for the file
-3. evaluate class expressions into abstract class sets
-4. build a simple render subtree IR for same-file intrinsic JSX
-5. parse a simple ancestor-qualified selector
-6. determine whether that selector is satisfiable against the subtree
-7. emit a technical debug explanation
-
-That slice proves:
-
-- the architecture can support genuinely new reasoning
-- the IRs are useful
-- explanation data can survive the pipeline
-
-Only after that should the engine expand to local component inlining and then cross-file reasoning.
-
-## What This Architecture Does Not Yet Decide
-
-This document intentionally does not fully specify:
-
-- the exact public API of the new engine
-- the final user-facing output format
-- the final migration strategy for every current rule
-- full support for render props, loops, or framework-specific patterns
-
-Those need later design work.
-
-This architecture doc is focused on the bounded core pipeline.
-
-## Recommended Near-Term Follow-Up Docs
-
-After this document, the most useful next architecture-adjacent notes are likely:
-
-- `uncertainty-and-decision-model.md`
-- `module-and-symbol-graph.md`
-- `abstract-values.md`
-- `render-ir.md`
-- `selector-analysis.md`
-- `roadmap.md`
-
-## Definition Of Done For This Architecture Step
-
-This architecture step is done when:
-
-- the project has a clear staged pipeline for the new engine
-- the first bounded target capability is reflected in that pipeline
-- stage boundaries are explicit
-- uncertainty, budgeting, explanation, and isolation are treated as architectural concerns rather than afterthoughts
-
-## Recommendation
-
-Adopt this architecture as the working pipeline for the static-analysis-engine track.
-
-Then implement it in the smallest meaningful vertical slice:
-
-- same-file ancestor-qualified selector satisfiability
-
-That gives the project a realistic first win while keeping the architecture honest and bounded.
+- early stages determine what program structures mean
+- middle stages determine what can render and where CSS is available
+- later stages determine whether selectors and rules hold
+- user-visible explanations are built from structured decisions made at the point where those conclusions were actually reached

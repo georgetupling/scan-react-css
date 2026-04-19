@@ -4,13 +4,15 @@
 
 This note is a return-to-work snapshot for the in-flight `static-analysis-engine` effort.
 
-It compares the current implementation under `src/static-analysis-engine/` against the original design direction in:
+For a narrower implementation-grounded list of current pressure points, see `known-architectural-issues.md`.
 
-- `docs/static-analysis-engine/requirements.md`
-- `docs/static-analysis-engine/directory-structure-and-boundaries.md`
-- `docs/static-analysis-engine/core-irs-and-type-shapes.md`
-- `docs/static-analysis-engine/architecture.md`
-- `docs/static-analysis-engine/end-to-end-traceability.md`
+It compares the current implementation under `src/static-analysis-engine/` against the original design direction archived in:
+
+- `docs/static-analysis-engine/archive/requirements.md`
+- `docs/static-analysis-engine/archive/directory-structure-and-boundaries.md`
+- `docs/static-analysis-engine/archive/core-irs-and-type-shapes.md`
+- `docs/static-analysis-engine/archive/architecture.md`
+- `docs/static-analysis-engine/archive/end-to-end-traceability.md`
 
 It focuses on:
 

@@ -2,197 +2,313 @@
 
 ## Purpose
 
-This note defines the intended direction for explanation, uncertainty, and confidence handling across the static-analysis-engine pipeline.
+This document defines the target traceability model for the `static-analysis-engine`.
 
-It exists because the engine already preserves useful uncertainty internally, but today that information is exposed unevenly:
+The goal is not to trace everything indiscriminately. The goal is to preserve the decisions that help explain user-visible findings and conclusions.
 
-- many stages preserve domain-specific certainty
-- selector analysis flattens that into a final `confidence`
-- explanation mostly lives in freeform `reasons`
+## Core Rule
 
-That is enough for an early bounded slice, but it is not the intended steady state.
+The target rule is:
 
-## Design Goals
+- traces are required only for user-visible findings and explanations
 
-The engine should move toward three explicit design rules.
+That means the engine should preserve structured traces where they help answer questions like:
 
-### 1. Preserve decisions, not just final confidence
+- why was this selector considered definite, possible, unsupported, or not satisfied?
+- why is this stylesheet considered reachable here?
+- why did render reasoning stop at this point?
+- why did a finding receive this confidence?
 
-Stages should preserve structured decision payloads that describe:
+It does not mean every small internal step needs to become a first-class trace artifact.
 
-- the current certainty of the conclusion
-- whether the conclusion is resolved, unsupported, or budget-limited
-- the important uncertainty dimensions that contributed
-- technical reasons and traces
+## Design Principles
 
-The point is to keep enough machine-readable information that later stages do not need to reverse-engineer confidence from prose.
+### 1. Producer-owned traces
 
-### 2. Keep user-facing confidence derived late
+The stage that makes a decision should emit the trace that explains it.
 
-`high` / `medium` / `low` remains useful for findings and selector results, but it should be treated as a derived presentation value.
+Later stages should preserve and reference those traces, not recreate them from freeform reasons.
 
-It should not be the main information passed between stages.
+### 2. Decision-first, confidence-late
 
-Why:
+Confidence remains useful, but it should be derived late from structured decisions and traces.
 
-- multiple uncertainty dimensions already exist
-- those dimensions will expand over time
-- a single confidence bucket is too lossy to act as the pipeline source of truth
+The main pipeline payload should be:
 
-So the intended model is:
+- decision status
+- certainty
+- reasons
+- traces
 
-- stages preserve structured decisions
-- selector analysis derives selector-result confidence from those decisions
-- rule execution derives finding confidence from those decisions
+not just:
 
-### 3. Add minimal structured traces now
+- `high`
+- `medium`
+- `low`
 
-The engine does not need a fully polished explanation UI yet.
+### 3. Structured enough for later presentation
 
-It does need a small shared trace type so explanations stop living only in string arrays.
+Traces should be technical and structured enough that a later presentation layer can turn them into simpler human-readable explanations.
 
-The first trace schema should stay technical and compact.
+The target is not polished prose in every stage. The target is preserving enough meaning that a presentation layer can simplify without inventing.
 
-## Proposed Minimal Shared Types
+### 4. Avoid noisy trace inflation
 
-An initial shared shape should be small enough to adopt immediately:
+If a trace does not help explain a user-visible conclusion, it should usually remain:
+
+- stage-local diagnostic data
+- debug-only output
+- or no trace at all
+
+## Trace Categories
+
+The exact enum can evolve, but the engine should have stable categories that correspond to decision ownership.
+
+Recommended categories:
+
+- `symbol-resolution`
+- `abstract-values`
+- `render-graph`
+- `render-ir`
+- `css-analysis`
+- `reachability`
+- `selector-analysis`
+- `rule-execution`
+
+The important point is that categories should point back to the stage that made the conclusion.
+
+## Shared Trace Shape
+
+The shared trace type should stay small and stable.
+
+Recommended minimum shape:
 
 ```ts
 type AnalysisTrace = {
   traceId: string;
-  category:
-    | "symbol-resolution"
-    | "value-evaluation"
-    | "render-expansion"
-    | "selector-match"
-    | "reachability"
-    | "rule-evaluation";
+  category: string;
   summary: string;
   anchor?: SourceAnchor;
   children: AnalysisTrace[];
   metadata?: Record<string, unknown>;
 };
+```
 
+Recommended shared decision shape:
+
+```ts
 type AnalysisDecision = {
   status: "resolved" | "unsupported" | "budget-exceeded";
   certainty: "definite" | "possible" | "unknown";
-  dimensions: Record<string, AnalysisDimensionState>;
   reasons: string[];
   traces: AnalysisTrace[];
+  metadata?: Record<string, unknown>;
 };
 ```
 
-This is intentionally not a giant trace graph or a final user-facing explanation contract.
+This is intentionally modest. The goal is a stable explanation-carrying contract, not an over-designed trace graph.
 
-It is only the minimum shared shape that lets us preserve explanation and uncertainty in a stable way.
+## Required Trace Responsibilities By Stage
 
-## Decision Dimensions
+### `parse`
 
-The engine is already trending toward several independent uncertainty dimensions.
+Required traces:
 
-Examples:
+- only for parse failures or unsupported syntax that materially affects later analysis
 
-- structural selector certainty
-- stylesheet reachability certainty
-- bounded-support status
-- budget-driven uncertainty
+Usually not required:
 
-Those dimensions should remain explicit inside `AnalysisDecision.dimensions`.
+- routine successful parsing
 
-That does not require every stage to populate every dimension immediately.
+### `module-graph`
 
-It does require new work to stop collapsing all uncertainty into one confidence label too early.
+Required traces:
 
-## Intended First Implementation Slice
+- unresolved or unresolvable import/export structure when it affects later user-visible uncertainty
 
-The first practical adoption should be narrow.
+Usually not required:
 
-### Selector analysis
+- ordinary import/export graph construction
 
-Selector results should carry:
+### `symbol-resolution`
 
-- the existing outcome and status
-- a shared `decision`
-- a derived `confidence`
-- the existing `reasons`
+Required traces:
 
-The first selector traces should cover:
+- imported binding resolved through a non-trivial chain
+- re-export chain followed
+- unresolved imported binding
+- namespace resolution cutoff or unsupported case
+- budget-limited symbol resolution stop
 
-- direct selector outcome classification
-- reachability-based narrowing or downgrading
+Why:
 
-### Rule execution
+- these traces explain where later values or components came from
+- they also explain why the engine stopped following a path
 
-Rule results should preserve upstream selector decisions when they are derived from selector analysis.
+### `abstract-values`
 
-Confidence on rule results should be derived from the preserved decision rather than simply treated as a magical precomputed value.
+Required traces:
 
-### Reachability
+- exact value successfully derived when it directly supports a later conclusion
+- value downgraded from exact to possible
+- unknown introduced because of unsupported expression shape
+- evaluation stopped because of budget or recursion limits
 
-Reachability does not need to adopt the full shared `AnalysisDecision` contract immediately.
+Why:
 
-It should emit its own shared traces at the point where availability conclusions are made, especially for:
+- these traces explain why class or prop reasoning is definite, possible, or unknown
 
-- direct-import availability
-- propagated component availability
-- branch-local render-region availability
-- unsupported or budget-limited `unknown` barriers
+### `render-graph`
 
-Selector analysis should then consume those producer-owned traces rather than reconstructing them from freeform reasons.
+Required traces:
 
-### Render expansion
+- component edge resolved in a non-trivial way
+- component edge left unresolved
+- render-path certainty downgraded
 
-Render expansion should emit shared traces directly from bounded expansion decisions.
+Why:
 
-That includes:
+- these traces explain structural component relationships that feed render and reachability reasoning
 
-- unresolved component references
-- cycle stops
-- budget stops
-- helper-expansion failures
-- bounded unknown render nodes
+### `render-ir`
 
-This lets later stages distinguish "render expansion stopped here" from "reachability became possible here" instead of flattening them into one vague explanation.
+Required traces:
 
-### Selector parsing
+- component expansion succeeded through an important boundary
+- subtree inserted through `children` or JSX-valued prop flow
+- expansion stopped because of unsupported construct
+- cycle detected
+- budget or depth limit reached
+- unknown render node introduced
 
-Selector parsing should also emit producer-owned traces when selector normalization or constraint projection cannot stay inside the supported bounded subset.
+Why:
 
-That is important because structural unsupported outcomes are different from:
+- this is a major explanation-producing stage for "could this actually render?"
 
-- reachability uncertainty
-- render-expansion uncertainty
-- budget-limited subtree uncertainty
+### `css-analysis`
 
-If those all become plain string reasons too early, later stages cannot explain whether a `possible` or `unsupported` result came from selector shape, render support limits, or stylesheet availability.
+Required traces:
 
-## Non-Goals
+- only when unsupported CSS parsing or selector extraction materially affects a user-visible conclusion
 
-This note does not require:
+Usually not required:
 
-- a final human-readable explanation UI
-- a global trace store
-- a dedicated pipeline stage that rewrites every model into trace trees
-- immediate conversion of every subsystem to the shared decision contract
+- routine CSS extraction and normalization
 
-The first success condition is much smaller:
+### `reachability`
 
-- shared trace and decision types exist
-- selector analysis uses them
-- rule execution preserves them
-- producer stages begin emitting shared traces directly
-- confidence becomes a derived view rather than the primary pipeline payload
+Required traces:
 
-## Recommendation
+- stylesheet directly available because of direct import
+- availability propagated through component/render structure
+- availability downgraded to possible
+- unknown barrier introduced
+- availability unavailable because no analyzed path establishes it
 
-This is a good approach.
+Why:
 
-It gives the engine a clean path toward richer explanation and uncertainty handling without forcing a massive rewrite right now.
+- these traces directly support human explanations for selector and finding results
 
-The near-term rule of thumb should be:
+### `selector-analysis`
 
-- preserve structured uncertainty
-- derive confidence late
-- add small technical traces where conclusions are made
+Required traces:
 
-That keeps the system honest and gives future work somewhere stable to attach.
+- selector normalized successfully when that normalization matters to the conclusion
+- selector unsupported
+- selector definitely satisfied
+- selector possibly satisfied
+- selector not satisfied under bounded analysis
+- selector blocked by unknown render or reachability context
+
+Why:
+
+- this stage makes some of the most directly user-visible semantic decisions
+
+### `rule-execution`
+
+Required traces:
+
+- which upstream decision(s) caused the finding
+- why severity/confidence were derived as they were
+- why a rule chose not to emit a finding in an edge case, when useful for comparison or debugging
+
+Why:
+
+- findings are the product-facing output and need an explanation path back to engine reasoning
+
+## What Should Stay Out Of The Main Trace Contract
+
+These may still exist as internal diagnostics, but they should not automatically be part of the main explanation payload:
+
+- per-node successful bookkeeping with no uncertainty
+- low-level parser mechanics
+- stable sorting or normalization steps that do not affect meaning
+- cache hits and internal memoization details
+- repetitive structural steps that add bulk but not understanding
+
+## Trace Propagation Rule
+
+Later stages should preserve upstream traces when they depend on upstream decisions.
+
+For example:
+
+- `selector-analysis` should preserve relevant reachability traces
+- `rule-execution` should preserve relevant selector and reachability traces
+
+But later stages should not flatten all upstream traces into one giant undifferentiated list. They should preserve ownership and structure where practical.
+
+## Human-Readable Explanation Strategy
+
+The target product should eventually be able to produce simplified human-readable explanations from structured trace data.
+
+That presentation layer should:
+
+- pick the highest-signal traces
+- collapse repetitive technical detail
+- preserve the stage that owned the reasoning
+- keep enough provenance for debugging when needed
+
+So the pipeline goal is:
+
+- preserve good structured explanation inputs now
+- simplify them later in presentation
+
+not:
+
+- write final polished prose in every stage right now
+
+## Relationship To Findings
+
+The key success condition is not "every stage has traces".
+
+The key success condition is:
+
+- every important user-visible finding or selector conclusion can point to the stage decisions that justify it
+
+That is the traceability standard the architecture should optimize for.
+
+## Temporary State Vs Target State
+
+Today the implementation already has useful traces in some stages, especially reachability and selector-related work.
+
+The target state is:
+
+- trace responsibilities are documented stage by stage
+- decision-heavy stages emit structured traces intentionally
+- confidence is derived late
+- rule execution preserves explanation lineage
+- the eventual presentation layer can simplify structured traces into human-readable output
+
+## Summary
+
+The target traceability model is selective rather than exhaustive.
+
+The engine should trace:
+
+- meaningful decisions
+- meaningful uncertainty
+- meaningful stopping points
+
+and it should do so in the stage that actually made the call.
+
+That gives the project a path to strong human-readable explanations later without forcing the pipeline to preserve mountains of noisy internal detail now.
