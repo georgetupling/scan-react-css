@@ -40,7 +40,6 @@ import type {
   RuleExecutionStageResult,
   SelectorAnalysisStageResult,
   SelectorInputStageResult,
-  SelectorParsingStageResult,
   SymbolResolutionStageResult,
 } from "./types.js";
 
@@ -220,21 +219,19 @@ export function runSelectorInputStage(input: {
   };
 }
 
-export function runSelectorParsingStage(input: {
-  selectorQueries: SelectorInputStageResult["selectorQueries"];
-}): SelectorParsingStageResult {
-  return {
-    selectorQueries: buildParsedSelectorQueries(input.selectorQueries),
-  };
-}
-
 export function runSelectorAnalysisStage(input: {
-  selectorQueries: SelectorParsingStageResult["selectorQueries"];
+  selectorQueries: SelectorInputStageResult["selectorQueries"];
   renderSubtrees: RenderSubtree[];
   reachabilitySummary: ReachabilitySummary;
 }): SelectorAnalysisStageResult {
+  const parsedSelectorQueries = buildParsedSelectorQueries(input.selectorQueries);
+
   return {
-    selectorQueryResults: analyzeSelectorQueries(input),
+    selectorQueryResults: analyzeSelectorQueries({
+      selectorQueries: parsedSelectorQueries,
+      renderSubtrees: input.renderSubtrees,
+      reachabilitySummary: input.reachabilitySummary,
+    }),
   };
 }
 

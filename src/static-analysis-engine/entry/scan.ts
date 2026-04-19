@@ -14,7 +14,6 @@ import {
   runRuleExecutionStage,
   runSelectorAnalysisStage,
   runSelectorInputStage,
-  runSelectorParsingStage,
   runSymbolResolutionStage,
 } from "./stages/basicStages.js";
 import { buildProjectRenderContext } from "./stages/buildProjectRenderContext.js";
@@ -63,11 +62,8 @@ export function analyzeSourceText(input: {
     selectorQueries: input.selectorQueries ?? [],
     selectorCssSources: input.selectorCssSources ?? [],
   });
-  const selectorParsingStage = runSelectorParsingStage({
-    selectorQueries: selectorInputStage.selectorQueries,
-  });
   const selectorAnalysisStage = runSelectorAnalysisStage({
-    selectorQueries: selectorParsingStage.selectorQueries,
+    selectorQueries: selectorInputStage.selectorQueries,
     renderSubtrees: renderIrStage.renderSubtrees,
     reachabilitySummary: reachabilityStage.reachabilitySummary,
   });
@@ -143,11 +139,8 @@ export function analyzeProjectSourceTexts(input: {
     selectorQueries: input.selectorQueries ?? [],
     selectorCssSources: input.selectorCssSources ?? [],
   });
-  const selectorParsingStage = runSelectorParsingStage({
-    selectorQueries: selectorInputStage.selectorQueries,
-  });
   const selectorAnalysisStage = runSelectorAnalysisStage({
-    selectorQueries: selectorParsingStage.selectorQueries,
+    selectorQueries: selectorInputStage.selectorQueries,
     renderSubtrees: renderIrStage.renderSubtrees,
     reachabilitySummary: reachabilityStage.reachabilitySummary,
   });

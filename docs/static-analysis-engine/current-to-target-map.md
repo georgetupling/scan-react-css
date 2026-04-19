@@ -80,9 +80,8 @@ For project analysis, the live flow is:
 9. CSS analysis
 10. reachability
 11. selector input
-12. selector parsing
-13. selector analysis
-14. rule execution
+12. selector analysis
+13. rule execution
 
 For single-file analysis, the flow is simpler and bypasses some project-wide
 scaffolding, but it still mirrors the same broad pipeline shape.
@@ -434,6 +433,11 @@ Exit criteria:
 - the pipeline no longer describes `selector input` as a first-class stage-like
   step
 
+Migration note:
+
+- selector parsing is no longer a separate top-level orchestration seam
+- the remaining temporary seam is selector-input assembly, not selector parsing
+
 ### Temporary Seam 5: Old-engine compatibility at the rule/CSS edge
 
 Current owners:
@@ -502,7 +506,8 @@ Migration note:
 Current location:
 
 - `libraries/policy/` for shared budgets
-- render-IR shared internals for render-specific expansion reasons and helpers
+- `pipeline/render-ir/shared/expansionSemantics.ts` for render-specific
+  expansion reasons and helper semantics
 
 Durable target:
 
@@ -512,6 +517,9 @@ Migration note:
 
 - tranche 4 moved cross-cutting budgets and propagation limits into shared
   policy space
+- tranche 4 also split render-local expansion semantics out of the old
+  compatibility shim, so render-IR-specific reasoning no longer masquerades as
+  shared policy
 - any new cross-cutting budget or propagation limit should continue to land in
   shared policy modules, not in stage-private helpers
 
@@ -835,6 +843,8 @@ Completed changes:
 - cross-engine budget constants now live under `libraries/policy/`
 - symbol-resolution and render preparation no longer import shared budget
   constants from render-IR-private helpers
+- render-IR-specific expansion reasons and unsupported-parameter semantics now
+  live in a render-IR-local helper instead of a policy compatibility shim
 
 Why this counts for tranche 4:
 
@@ -842,12 +852,15 @@ Why this counts for tranche 4:
   pipeline stage
 - shared policy ownership for cross-engine budgets is now explicit in a
   top-level library space
+- render-local semantics are now clearly separated from shared cross-engine
+  policy
 
 What did not change yet:
 
-- the entry pipeline still has a temporary `selector parsing` orchestration step
+- the entry pipeline still has a temporary `selector input` orchestration step
 - render-IR-specific expansion reasons still live with render-IR helpers, which
-  is acceptable because they are no longer acting as cross-engine policy
+  is acceptable because they are render-local semantics rather than cross-engine
+  policy
 - old-engine compatibility seams at the CSS and rule edge still remain for
   later cleanup
 

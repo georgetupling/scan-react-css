@@ -27,7 +27,6 @@ The actual top-level pipeline stages are the ones wired in `src/static-analysis-
 - CSS analysis
 - reachability
 - selector input
-- selector parsing
 - selector analysis
 - rule execution
 
@@ -123,7 +122,8 @@ For example:
 
 - `selector-analysis` depends on `selector-parsing`
 - `parser/parseCssStyleRules.ts` also depends on `selector-parsing`
-- `symbol-resolution/resolveProjectBindings.ts` imports `MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH` from `render-ir/shared/expansionPolicy.ts`
+- `symbol-resolution/resolveProjectBindings.ts` imports shared budget policy from
+  `libraries/policy/`
 
 ### Why it matters
 
@@ -136,7 +136,7 @@ For example:
 - `src/static-analysis-engine/pipeline/selector-analysis/buildParsedSelectorQueries.ts`
 - `src/static-analysis-engine/parser/parseCssStyleRules.ts`
 - `src/static-analysis-engine/pipeline/symbol-resolution/resolveProjectBindings.ts`
-- `src/static-analysis-engine/pipeline/render-ir/shared/expansionPolicy.ts`
+- `src/static-analysis-engine/libraries/policy/analysisBudgets.ts`
 
 ### Likely cleanup direction
 
@@ -148,7 +148,10 @@ Promote shared libraries that are intentionally multi-consumer into clearer shar
 
 Your intuition was directionally correct.
 
-`css-analysis` does not import `selector-parsing` directly. But it does call `parser/parseCssStyleRules.ts`, and that parser uses `pipeline/selector-parsing/` to parse selector preludes into selector branch facts.
+`css-analysis` does not import `selector-parsing` directly. But it does call
+`parser/parseCssStyleRules.ts`, and that parser uses
+`libraries/selector-parsing/` to parse selector preludes into selector branch
+facts.
 
 Separately:
 
@@ -172,7 +175,7 @@ So selector parsing is already shared infrastructure for multiple later concerns
 - `src/static-analysis-engine/parser/parseCssStyleRules.ts`
 - `src/static-analysis-engine/pipeline/selector-analysis/extractSelectorQueriesFromCssText.ts`
 - `src/static-analysis-engine/pipeline/selector-analysis/buildParsedSelectorQueries.ts`
-- `src/static-analysis-engine/pipeline/selector-parsing/index.ts`
+- `src/static-analysis-engine/libraries/selector-parsing/index.ts`
 
 ### Likely cleanup direction
 
@@ -207,26 +210,37 @@ That is not wrong by itself, because reachability is mostly about import availab
 
 This may not need a direct reachability-to-symbol dependency. But the project should decide more explicitly which later stages are supposed to consume symbol/value summaries and which are intentionally structural.
 
-## Issue 6: Shared Policy And Budget Controls Are Not Owned Cleanly
+## Issue 6: Shared Policy Ownership Is Better, But Render Seams Still Need Cleanup
 
 ### What is happening
 
-`MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH` currently lives in `render-ir/shared/expansionPolicy.ts`, but it is used outside render IR by symbol-resolution code.
+Cross-engine budget constants now live in `libraries/policy/`, which is the
+right ownership direction.
+
+The remaining pressure point is different:
+
+- render-IR-specific expansion semantics still live near render-IR, as they
+  should
+- but `buildProjectRenderContext.ts` still carries cross-file helper and
+  component availability work that should keep shrinking over time
 
 ### Why it matters
 
-- it suggests a subsystem-specific constant has become a cross-engine policy knob
-- that makes ownership unclear
+- policy ownership is clearer now, which is good
+- the next architecture pressure point is no longer shared budgets; it is the
+  remaining render-context bridge responsibility
 
 ### Evidence in code
 
-- `src/static-analysis-engine/pipeline/render-ir/shared/expansionPolicy.ts`
-- `src/static-analysis-engine/pipeline/symbol-resolution/resolveProjectBindings.ts`
+- `src/static-analysis-engine/libraries/policy/analysisBudgets.ts`
+- `src/static-analysis-engine/pipeline/render-ir/shared/expansionSemantics.ts`
 - `src/static-analysis-engine/entry/stages/buildProjectRenderContext.ts`
 
 ### Likely cleanup direction
 
-Move cross-engine limits into a dedicated engine policy or budget module if they are meant to govern more than render-IR expansion.
+Keep shared budgets in shared policy modules, keep render-specific semantics
+local to render-IR, and continue shrinking `buildProjectRenderContext.ts` so it
+acts more like a thin adapter than a semantic owner.
 
 ## Issue 7: Old-Engine Coupling Still Leaks Through Experimental Rule Execution
 

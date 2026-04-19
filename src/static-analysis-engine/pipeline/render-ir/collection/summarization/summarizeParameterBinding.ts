@@ -1,7 +1,7 @@
 import ts from "typescript";
 
 import type { DestructuredPropBinding, SameFileComponentDefinition } from "../shared/types.js";
-import { UNSUPPORTED_PARAMETER_BINDING_REASONS } from "../../shared/expansionPolicy.js";
+import { UNSUPPORTED_PARAMETER_BINDING_REASONS } from "../../shared/expansionSemantics.js";
 
 export function summarizeParameterBinding(
   parameters: readonly ts.ParameterDeclaration[],

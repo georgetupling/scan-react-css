@@ -9,7 +9,6 @@ import type { RenderSubtree } from "../../pipeline/render-ir/index.js";
 import type { ExperimentalRuleResult } from "../../pipeline/rule-execution/index.js";
 import type {
   ExtractedSelectorQuery,
-  ParsedSelectorQuery,
   SelectorQueryResult,
 } from "../../pipeline/selector-analysis/index.js";
 import type {
@@ -92,8 +91,4 @@ export type RuleExecutionStageResult = {
 
 export type SelectorInputStageResult = {
   selectorQueries: ExtractedSelectorQuery[];
-};
-
-export type SelectorParsingStageResult = {
-  selectorQueries: ParsedSelectorQuery[];
 };

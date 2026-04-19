@@ -1,9 +1,3 @@
-export {
-  MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH,
-  MAX_LOCAL_COMPONENT_EXPANSION_DEPTH,
-  MAX_LOCAL_HELPER_EXPANSION_DEPTH,
-} from "../../../libraries/policy/index.js";
-
 export const COMPONENT_DEFINITION_NOT_FOUND_REASON = "component-definition-not-found";
 
 export const EXPANSION_SCOPES = {

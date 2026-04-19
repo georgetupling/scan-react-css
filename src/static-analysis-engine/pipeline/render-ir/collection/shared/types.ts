@@ -1,7 +1,7 @@
 import ts from "typescript";
 
 import type { SourceAnchor } from "../../../../types/core.js";
-import type { UnsupportedParameterBindingReason } from "../../shared/expansionPolicy.js";
+import type { UnsupportedParameterBindingReason } from "../../shared/expansionSemantics.js";
 
 export type SameFileComponentDefinition = {
   componentName: string;

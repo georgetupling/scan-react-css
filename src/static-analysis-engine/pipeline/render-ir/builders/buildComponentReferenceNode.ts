@@ -9,7 +9,7 @@ import {
   buildUnsupportedParameterExpansionReason,
   COMPONENT_DEFINITION_NOT_FOUND_REASON,
   getExpansionScope,
-} from "../shared/expansionPolicy.js";
+} from "../shared/expansionSemantics.js";
 import {
   applyPlacementAnchor,
   createRenderExpansionTrace,
@@ -169,7 +169,7 @@ function buildComponentExpansionBindings(
   definition: SameFileComponentDefinition,
   attributes: ts.JsxAttributes,
   children: readonly ts.JsxChild[],
-  expansionScope: import("../shared/expansionPolicy.js").ExpansionScope,
+  expansionScope: import("../shared/expansionSemantics.js").ExpansionScope,
   context: BuildContext,
   buildRenderNode: (node: ts.Expression | ts.JsxChild, context: BuildContext) => RenderNode,
 ):
@@ -273,7 +273,7 @@ function buildComponentExpansionBindings(
 
 function collectLocalComponentAttributeExpressions(
   attributes: ts.JsxAttributes,
-  expansionScope: import("../shared/expansionPolicy.js").ExpansionScope,
+  expansionScope: import("../shared/expansionSemantics.js").ExpansionScope,
   context: BuildContext,
   buildRenderNode: (node: ts.Expression | ts.JsxChild, context: BuildContext) => RenderNode,
 ):

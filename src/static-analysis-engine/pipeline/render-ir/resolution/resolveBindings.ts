@@ -7,7 +7,7 @@ import {
   buildHelperExpansionReason,
   getExpansionScope,
   type HelperExpansionReason,
-} from "../shared/expansionPolicy.js";
+} from "../shared/expansionSemantics.js";
 
 export function resolveBoundExpression(
   expression: ts.Expression,
