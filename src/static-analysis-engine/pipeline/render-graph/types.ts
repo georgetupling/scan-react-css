@@ -16,6 +16,7 @@ export type RenderGraphEdge = {
   sourceAnchor: SourceAnchor;
   resolution: "resolved" | "unresolved";
   traversal: "direct-jsx";
+  renderPath: "definite" | "possible";
 };
 
 export type RenderGraph = {

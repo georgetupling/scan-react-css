@@ -76,6 +76,10 @@ function collectRenderEdgesForComponent(input: {
       ),
       resolution: targetDefinition ? "resolved" : "unresolved",
       traversal: "direct-jsx",
+      renderPath: classifyRenderPath({
+        jsxNode: node,
+        componentRootExpression: input.definition.rootExpression,
+      }),
     });
   });
 
@@ -97,6 +101,36 @@ function resolveComponentDefinition(
 function visitNode(node: ts.Node, visitor: (node: ts.Node) => void): void {
   visitor(node);
   ts.forEachChild(node, (child) => visitNode(child, visitor));
+}
+
+function classifyRenderPath(input: {
+  jsxNode: ts.JsxElement | ts.JsxSelfClosingElement;
+  componentRootExpression: ts.Expression;
+}): RenderGraphEdge["renderPath"] {
+  let current: ts.Node | undefined = input.jsxNode;
+
+  while (current && current !== input.componentRootExpression) {
+    const parent = current.parent;
+    if (!parent) {
+      break;
+    }
+
+    if (
+      ts.isConditionalExpression(parent) ||
+      (ts.isBinaryExpression(parent) &&
+        (parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+          parent.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+          parent.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken)) ||
+      ts.isArrayLiteralExpression(parent) ||
+      ts.isCallExpression(parent)
+    ) {
+      return "possible";
+    }
+
+    current = parent;
+  }
+
+  return "definite";
 }
 
 function toSourceAnchor(

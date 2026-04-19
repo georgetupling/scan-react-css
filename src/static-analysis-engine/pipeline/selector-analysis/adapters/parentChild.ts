@@ -1,7 +1,8 @@
-import type { RenderNode, RenderSubtree } from "../../render-ir/types.js";
-import type { ParsedSelectorQuery, SelectorQueryResult } from "../types.js";
+import type { RenderNode } from "../../render-ir/types.js";
+import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
 import type { RenderNodeInspectionAdapter } from "../renderInspection.js";
 import { inspectRenderNode } from "../renderInspection.js";
+import { attachMatchedReachability } from "../reachabilityResultUtils.js";
 import {
   combinePresence,
   evaluateSingleClassPresence,
@@ -18,14 +19,15 @@ type ParentChildState = {
 export function analyzeParentChildConstraint(input: {
   selectorQuery: ParsedSelectorQuery;
   constraint: ParentChildConstraint;
-  renderSubtrees: RenderSubtree[];
+  analysisTargets: SelectorAnalysisTarget[];
 }): SelectorQueryResult {
   let sawUnsupportedDynamicClass = false;
   let sawPossibleMatch = false;
+  const matchedTargets: SelectorAnalysisTarget[] = [];
 
-  for (const subtree of input.renderSubtrees) {
+  for (const analysisTarget of input.analysisTargets) {
     const evaluation = inspectRenderNode({
-      node: subtree.root,
+      node: analysisTarget.renderSubtree.root,
       state: {
         parentClassName: input.constraint.parentClassName,
         childClassName: input.constraint.childClassName,
@@ -34,21 +36,32 @@ export function analyzeParentChildConstraint(input: {
     });
 
     if (evaluation === "match") {
-      return {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.constraint,
-        outcome: "match",
-        status: "resolved",
-        confidence: "high",
-        reasons: [
-          `found a rendered child with class "${input.constraint.childClassName}" directly under a parent with class "${input.constraint.parentClassName}"`,
-        ],
-      };
+      if (analysisTarget.reachabilityAvailability === "possible") {
+        sawPossibleMatch = true;
+        matchedTargets.push(analysisTarget);
+        continue;
+      }
+
+      return attachMatchedReachability({
+        selectorQuery: input.selectorQuery,
+        matchedTargets: [analysisTarget],
+        result: {
+          selectorText: input.selectorQuery.selectorText,
+          source: input.selectorQuery.source,
+          constraint: input.constraint,
+          outcome: "match",
+          status: "resolved",
+          confidence: "high",
+          reasons: [
+            `found a rendered child with class "${input.constraint.childClassName}" directly under a parent with class "${input.constraint.parentClassName}"`,
+          ],
+        },
+      });
     }
 
     if (evaluation === "possible-match") {
       sawPossibleMatch = true;
+      matchedTargets.push(analysisTarget);
     }
 
     if (evaluation === "unsupported") {
@@ -57,17 +70,21 @@ export function analyzeParentChildConstraint(input: {
   }
 
   if (sawPossibleMatch) {
-    return {
-      selectorText: input.selectorQuery.selectorText,
-      source: input.selectorQuery.source,
-      constraint: input.constraint,
-      outcome: "possible-match",
-      status: "resolved",
-      confidence: "medium",
-      reasons: [
-        `found a plausible direct parent-child match for "${input.constraint.parentClassName} > ${input.constraint.childClassName}" on at least one bounded path`,
-      ],
-    };
+    return attachMatchedReachability({
+      selectorQuery: input.selectorQuery,
+      matchedTargets,
+      result: {
+        selectorText: input.selectorQuery.selectorText,
+        source: input.selectorQuery.source,
+        constraint: input.constraint,
+        outcome: "possible-match",
+        status: "resolved",
+        confidence: "medium",
+        reasons: [
+          `found a plausible direct parent-child match for "${input.constraint.parentClassName} > ${input.constraint.childClassName}" on at least one bounded path`,
+        ],
+      },
+    });
   }
 
   if (sawUnsupportedDynamicClass) {

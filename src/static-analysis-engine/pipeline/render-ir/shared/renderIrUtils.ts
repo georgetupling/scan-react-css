@@ -12,6 +12,13 @@ export function createEmptyFragmentNode(node: ts.Node, context: BuildContext): R
   };
 }
 
+export function applyPlacementAnchor(node: RenderNode, placementAnchor: SourceAnchor): RenderNode {
+  return {
+    ...node,
+    placementAnchor,
+  };
+}
+
 export function isUndefinedIdentifier(node: ts.Node): node is ts.Identifier {
   return ts.isIdentifier(node) && node.text === "undefined";
 }

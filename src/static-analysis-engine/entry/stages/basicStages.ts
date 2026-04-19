@@ -21,6 +21,7 @@ import {
 } from "../../pipeline/symbol-resolution/index.js";
 import type { ModuleGraph } from "../../pipeline/module-graph/index.js";
 import type { ReachabilitySummary } from "../../pipeline/reachability/index.js";
+import type { RenderGraph } from "../../pipeline/render-graph/index.js";
 import type { RenderSubtree } from "../../pipeline/render-ir/index.js";
 import type { ExperimentalCssFileAnalysis } from "../../pipeline/css-analysis/index.js";
 import type { SelectorSourceInput } from "../../pipeline/selector-analysis/index.js";
@@ -180,11 +181,15 @@ export function runCssAnalysisStage(input: {
 
 export function runReachabilityStage(input: {
   moduleGraph: ModuleGraph;
+  renderGraph: RenderGraph;
+  renderSubtrees: RenderSubtree[];
   selectorCssSources: SelectorSourceInput[];
 }): ReachabilityStageResult {
   return {
     reachabilitySummary: buildReachabilitySummary({
       moduleGraph: input.moduleGraph,
+      renderGraph: input.renderGraph,
+      renderSubtrees: input.renderSubtrees,
       cssSources: input.selectorCssSources,
     }),
   };

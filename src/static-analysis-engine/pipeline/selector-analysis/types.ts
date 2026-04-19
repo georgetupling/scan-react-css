@@ -1,5 +1,8 @@
 import type { SourceAnchor } from "../../types/core.js";
-import type { ReachabilityAvailability } from "../reachability/types.js";
+import type {
+  ReachabilityAvailability,
+  StylesheetReachabilityContextRecord,
+} from "../reachability/types.js";
 
 export type SemanticOutcome = "match" | "possible-match" | "no-match-under-bounded-analysis";
 
@@ -131,7 +134,14 @@ export type SelectorQueryResult = {
         kind: "css-source";
         cssFilePath?: string;
         availability: ReachabilityAvailability;
-        directlyImportingSourceFilePaths: string[];
+        contexts: StylesheetReachabilityContextRecord[];
+        matchedContexts?: StylesheetReachabilityContextRecord[];
         reasons: string[];
       };
+};
+
+export type SelectorAnalysisTarget = {
+  renderSubtree: import("../render-ir/types.js").RenderSubtree;
+  reachabilityAvailability: Extract<ReachabilityAvailability, "definite" | "possible">;
+  reachabilityContexts: StylesheetReachabilityContextRecord[];
 };

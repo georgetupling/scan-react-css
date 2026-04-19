@@ -12,7 +12,10 @@ export {
   summarizeClassNameExpression,
   toAbstractClassSet,
 } from "./pipeline/abstract-values/index.js";
-export { buildSameFileRenderSubtrees } from "./pipeline/render-ir/index.js";
+export {
+  buildSameFileRenderSubtrees,
+  collectRenderRegionsFromSubtrees,
+} from "./pipeline/render-ir/index.js";
 export {
   analyzeSelectorQueries,
   extractSelectorQueriesFromCssText,
@@ -41,6 +44,8 @@ export type {
 export type {
   ReachabilityAvailability,
   ReachabilitySummary,
+  StylesheetReachabilityContext,
+  StylesheetReachabilityContextRecord,
   StylesheetReachabilityRecord,
 } from "./pipeline/reachability/index.js";
 export type {
@@ -67,6 +72,9 @@ export type {
   RenderNode,
   RenderNodeKind,
   RenderRepeatedRegionNode,
+  RenderRegion,
+  RenderRegionKind,
+  RenderRegionPathSegment,
   RenderSubtree,
   RenderUnknownNode,
 } from "./pipeline/render-ir/index.js";

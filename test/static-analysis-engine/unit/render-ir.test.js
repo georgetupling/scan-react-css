@@ -206,6 +206,7 @@ test("static analysis engine exposes a lightweight render graph for cross-file c
   assert.equal(result.renderGraph.edges[0].toFilePath, "src/PanelShell.tsx");
   assert.equal(result.renderGraph.edges[0].resolution, "resolved");
   assert.equal(result.renderGraph.edges[0].traversal, "direct-jsx");
+  assert.equal(result.renderGraph.edges[0].renderPath, "definite");
 });
 
 test("static analysis engine expands multi-hop imported wrapper components across files", () => {

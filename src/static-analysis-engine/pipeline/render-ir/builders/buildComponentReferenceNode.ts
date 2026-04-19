@@ -10,7 +10,7 @@ import {
   getExpansionScope,
   MAX_LOCAL_COMPONENT_EXPANSION_DEPTH,
 } from "../shared/expansionPolicy.js";
-import { toSourceAnchor } from "../shared/renderIrUtils.js";
+import { applyPlacementAnchor, toSourceAnchor } from "../shared/renderIrUtils.js";
 import { mergeExpressionBindings, mergeHelperDefinitions } from "../resolution/resolveBindings.js";
 import type { RenderNode } from "../types.js";
 import { buildChildren } from "./buildIntrinsicNode.js";
@@ -72,27 +72,30 @@ export function buildComponentReferenceNode(
     };
   }
 
-  return buildRenderNode(definition.rootExpression, {
-    ...context,
-    filePath: definition.filePath,
-    parsedSourceFile: definition.parsedSourceFile,
-    currentComponentFilePath: definition.filePath,
-    currentDepth: context.currentDepth + 1,
-    expansionStack: [...context.expansionStack, componentName],
-    expressionBindings: mergeExpressionBindings(
-      expansionBinding.expressionBindings,
-      definition.localExpressionBindings,
-    ),
-    helperDefinitions: mergeHelperDefinitions(
-      context.helperDefinitions,
-      definition.localHelperDefinitions,
-    ),
-    helperExpansionStack: [],
-    propsObjectBindingName: expansionBinding.propsObjectBindingName,
-    propsObjectProperties: expansionBinding.propsObjectProperties,
-    propsObjectSubtreeProperties: expansionBinding.propsObjectSubtreeProperties,
-    subtreeBindings: expansionBinding.subtreeBindings,
-  });
+  return applyPlacementAnchor(
+    buildRenderNode(definition.rootExpression, {
+      ...context,
+      filePath: definition.filePath,
+      parsedSourceFile: definition.parsedSourceFile,
+      currentComponentFilePath: definition.filePath,
+      currentDepth: context.currentDepth + 1,
+      expansionStack: [...context.expansionStack, componentName],
+      expressionBindings: mergeExpressionBindings(
+        expansionBinding.expressionBindings,
+        definition.localExpressionBindings,
+      ),
+      helperDefinitions: mergeHelperDefinitions(
+        context.helperDefinitions,
+        definition.localHelperDefinitions,
+      ),
+      helperExpansionStack: [],
+      propsObjectBindingName: expansionBinding.propsObjectBindingName,
+      propsObjectProperties: expansionBinding.propsObjectProperties,
+      propsObjectSubtreeProperties: expansionBinding.propsObjectSubtreeProperties,
+      subtreeBindings: expansionBinding.subtreeBindings,
+    }),
+    toSourceAnchor(tagNameNode, context.parsedSourceFile, context.filePath),
+  );
 }
 
 function resolveComponentDefinition(

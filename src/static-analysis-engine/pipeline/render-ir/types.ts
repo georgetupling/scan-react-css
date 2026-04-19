@@ -12,6 +12,7 @@ export type RenderNodeKind =
 export type RenderNodeBase = {
   kind: RenderNodeKind;
   sourceAnchor: SourceAnchor;
+  placementAnchor?: SourceAnchor;
 };
 
 export type RenderElementNode = RenderNodeBase & {
@@ -62,5 +63,21 @@ export type RenderSubtree = {
   root: RenderNode;
   exported: boolean;
   componentName?: string;
+  sourceAnchor: SourceAnchor;
+};
+
+export type RenderRegionPathSegment =
+  | { kind: "root" }
+  | { kind: "fragment-child"; childIndex: number }
+  | { kind: "conditional-branch"; branch: "when-true" | "when-false" }
+  | { kind: "repeated-template" };
+
+export type RenderRegionKind = "subtree-root" | "conditional-branch" | "repeated-template";
+
+export type RenderRegion = {
+  filePath: string;
+  componentName?: string;
+  kind: RenderRegionKind;
+  path: RenderRegionPathSegment[];
   sourceAnchor: SourceAnchor;
 };

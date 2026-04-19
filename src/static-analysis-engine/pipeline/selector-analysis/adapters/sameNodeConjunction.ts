@@ -1,6 +1,7 @@
-import type { RenderNode, RenderSubtree } from "../../render-ir/types.js";
-import type { ParsedSelectorQuery, SelectorQueryResult } from "../types.js";
+import type { RenderNode } from "../../render-ir/types.js";
+import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
 import { mergeBranchEvaluations, mergeInspectionEvaluations } from "../renderInspection.js";
+import { attachMatchedReachability } from "../reachabilityResultUtils.js";
 import { evaluateClassRequirement } from "../selectorEvaluationUtils.js";
 
 type SameNodeConstraint = Extract<
@@ -11,29 +12,44 @@ type SameNodeConstraint = Extract<
 export function analyzeSameNodeClassConjunction(input: {
   selectorQuery: ParsedSelectorQuery;
   constraint: SameNodeConstraint;
-  renderSubtrees: RenderSubtree[];
+  analysisTargets: SelectorAnalysisTarget[];
 }): SelectorQueryResult {
   let sawUnsupportedDynamicClass = false;
   let sawPossibleMatch = false;
+  const matchedTargets: SelectorAnalysisTarget[] = [];
 
-  for (const subtree of input.renderSubtrees) {
-    const evaluation = inspectNodeForSameNodeConstraint(subtree.root, input.constraint.classNames);
+  for (const analysisTarget of input.analysisTargets) {
+    const evaluation = inspectNodeForSameNodeConstraint(
+      analysisTarget.renderSubtree.root,
+      input.constraint.classNames,
+    );
     if (evaluation === "match") {
-      return {
-        selectorText: input.selectorQuery.selectorText,
-        source: input.selectorQuery.source,
-        constraint: input.constraint,
-        outcome: "match",
-        status: "resolved",
-        confidence: "high",
-        reasons: [
-          `found a rendered element with all required classes: ${input.constraint.classNames.join(", ")}`,
-        ],
-      };
+      if (analysisTarget.reachabilityAvailability === "possible") {
+        sawPossibleMatch = true;
+        matchedTargets.push(analysisTarget);
+        continue;
+      }
+
+      return attachMatchedReachability({
+        selectorQuery: input.selectorQuery,
+        matchedTargets: [analysisTarget],
+        result: {
+          selectorText: input.selectorQuery.selectorText,
+          source: input.selectorQuery.source,
+          constraint: input.constraint,
+          outcome: "match",
+          status: "resolved",
+          confidence: "high",
+          reasons: [
+            `found a rendered element with all required classes: ${input.constraint.classNames.join(", ")}`,
+          ],
+        },
+      });
     }
 
     if (evaluation === "possible-match") {
       sawPossibleMatch = true;
+      matchedTargets.push(analysisTarget);
     }
 
     if (evaluation === "unsupported") {
@@ -42,17 +58,21 @@ export function analyzeSameNodeClassConjunction(input: {
   }
 
   if (sawPossibleMatch) {
-    return {
-      selectorText: input.selectorQuery.selectorText,
-      source: input.selectorQuery.source,
-      constraint: input.constraint,
-      outcome: "possible-match",
-      status: "resolved",
-      confidence: "medium",
-      reasons: [
-        `at least one rendered element may emit all required classes together: ${input.constraint.classNames.join(", ")}`,
-      ],
-    };
+    return attachMatchedReachability({
+      selectorQuery: input.selectorQuery,
+      matchedTargets,
+      result: {
+        selectorText: input.selectorQuery.selectorText,
+        source: input.selectorQuery.source,
+        constraint: input.constraint,
+        outcome: "possible-match",
+        status: "resolved",
+        confidence: "medium",
+        reasons: [
+          `at least one rendered element may emit all required classes together: ${input.constraint.classNames.join(", ")}`,
+        ],
+      },
+    });
   }
 
   if (sawUnsupportedDynamicClass) {

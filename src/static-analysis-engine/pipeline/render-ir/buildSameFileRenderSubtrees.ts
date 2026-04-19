@@ -10,6 +10,7 @@ import {
 import { collectSameFileComponents } from "./collection/discovery/collectSameFileComponents.js";
 import type { BuildContext } from "./shared/internalTypes.js";
 import {
+  applyPlacementAnchor,
   createEmptyFragmentNode,
   isUndefinedIdentifier,
   toSourceAnchor,
@@ -112,11 +113,17 @@ function buildRenderNode(node: ts.Expression | ts.JsxChild, context: BuildContex
   if (ts.isConditionalExpression(node)) {
     const resolvedCondition = resolveExactBooleanExpression(node.condition, context);
     if (resolvedCondition === true) {
-      return buildRenderNode(node.whenTrue, context);
+      return applyPlacementAnchor(
+        buildRenderNode(node.whenTrue, context),
+        toSourceAnchor(node.whenTrue, context.parsedSourceFile, context.filePath),
+      );
     }
 
     if (resolvedCondition === false) {
-      return buildRenderNode(node.whenFalse, context);
+      return applyPlacementAnchor(
+        buildRenderNode(node.whenFalse, context),
+        toSourceAnchor(node.whenFalse, context.parsedSourceFile, context.filePath),
+      );
     }
 
     return {
@@ -222,7 +229,10 @@ function buildRenderNode(node: ts.Expression | ts.JsxChild, context: BuildContex
 
     const helperResolution = resolveHelperCallContext(node, context);
     if (helperResolution) {
-      return buildRenderNode(helperResolution.expression, helperResolution.context);
+      return applyPlacementAnchor(
+        buildRenderNode(helperResolution.expression, helperResolution.context),
+        toSourceAnchor(node, context.parsedSourceFile, context.filePath),
+      );
     }
 
     const helperFailureReason = getHelperCallResolutionFailureReason(node, context);

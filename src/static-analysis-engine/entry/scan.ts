@@ -55,6 +55,8 @@ export function analyzeSourceText(input: {
   });
   const reachabilityStage = runReachabilityStage({
     moduleGraph: moduleGraphStage.moduleGraph,
+    renderGraph: renderGraphStage.renderGraph,
+    renderSubtrees: renderIrStage.renderSubtrees,
     selectorCssSources: input.selectorCssSources ?? [],
   });
   const selectorInputStage = runSelectorInputStage({
@@ -126,6 +128,8 @@ export function analyzeProjectSourceTexts(input: {
   });
   const reachabilityStage = runReachabilityStage({
     moduleGraph: moduleGraphStage.moduleGraph,
+    renderGraph: renderGraphStage.renderGraph,
+    renderSubtrees: renderIrStage.renderSubtrees,
     selectorCssSources: input.selectorCssSources ?? [],
   });
   const selectorInputStage = runSelectorInputStage({
