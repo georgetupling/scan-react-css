@@ -1,5 +1,9 @@
-import type { Finding, FindingConfidence, FindingSeverity } from "../../runtime/types.js";
-import type { ScanResult } from "../../runtime/types.js";
+import type {
+  CompatibilityScanResult,
+  Finding,
+  FindingConfidence,
+  FindingSeverity,
+} from "../runtime/compatTypes.js";
 import type { ExperimentalRuleResult } from "../pipeline/rule-execution/types.js";
 import type { StaticAnalysisEngineResult } from "../types/runtime.js";
 
@@ -46,5 +50,5 @@ export type ExperimentalSelectorPilotArtifact = {
 };
 
 export type ExperimentalSelectorPilotShadowArtifact = ExperimentalSelectorPilotArtifact & {
-  baselineScanResult: ScanResult;
+  baselineScanResult: CompatibilityScanResult;
 };

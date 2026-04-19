@@ -24,3 +24,31 @@ export type EngineSymbol = {
     | { kind: "unresolved"; reason: string };
   metadata?: Record<string, unknown>;
 };
+
+export type ResolvedProjectExport = {
+  targetModuleId: EngineModuleId;
+  targetFilePath: string;
+  targetExportName: string;
+  targetSymbolId?: EngineSymbolId;
+};
+
+export type ResolvedImportedBinding = {
+  localName: string;
+  importedName: string;
+  targetModuleId: EngineModuleId;
+  targetFilePath: string;
+  targetExportName: string;
+  targetSymbolId?: EngineSymbolId;
+};
+
+export type ResolvedNamespaceImport = {
+  localName: string;
+  exports: Map<string, ResolvedProjectExport>;
+};
+
+export type ProjectBindingResolution = {
+  symbols: Map<EngineSymbolId, EngineSymbol>;
+  symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
+  resolvedImportedBindingsByFilePath: Map<string, ResolvedImportedBinding[]>;
+  resolvedNamespaceImportsByFilePath: Map<string, ResolvedNamespaceImport[]>;
+};

@@ -1,4 +1,4 @@
-import type { Finding } from "../../runtime/types.js";
+import type { Finding } from "../runtime/compatTypes.js";
 import type { ExperimentalRuleResult } from "../pipeline/rule-execution/types.js";
 import { compareExperimentalFindings } from "./compareExperimentalFindings.js";
 import { summarizeExperimentalComparison } from "./summarizeExperimentalComparison.js";

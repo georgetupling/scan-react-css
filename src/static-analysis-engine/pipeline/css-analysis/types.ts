@@ -2,7 +2,7 @@ import type {
   CssAtRuleContextFact,
   CssClassDefinitionFact,
   CssStyleRuleFact,
-} from "../../../facts/types.js";
+} from "../../facts/types.js";
 
 export type ExperimentalCssFileAnalysis = {
   filePath?: string;

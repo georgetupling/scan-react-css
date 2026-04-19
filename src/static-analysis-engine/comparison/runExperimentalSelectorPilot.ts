@@ -1,11 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import type { ScanInput } from "../../runtime/types.js";
-import type { Finding } from "../../runtime/types.js";
 import { scanReactCss } from "../../index.js";
-import { discoverProjectFiles } from "../../files/discoverFiles.js";
 import { analyzeProjectSourceTexts, analyzeSourceText } from "../entry/scan.js";
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/types.js";
+import type { CompatibilityScanInput as ScanInput, Finding } from "../runtime/compatTypes.js";
+import { discoverProjectFilesForComparison } from "../adapters/current-scanner/fileDiscovery.js";
 import { compareExperimentalRuleResults } from "./compareExperimentalRuleResults.js";
 import { formatExperimentalComparisonReport } from "./formatExperimentalComparisonReport.js";
 import type {
@@ -64,7 +63,10 @@ export async function runExperimentalSelectorPilotAgainstCurrentScanner(
 ): Promise<ExperimentalSelectorPilotShadowArtifact> {
   const baselineScanResult = await scanReactCss(input);
   const scanCwd = resolveScanCwd(input);
-  const discoveredFiles = await discoverProjectFiles(baselineScanResult.config, scanCwd);
+  const discoveredFiles = await discoverProjectFilesForComparison(
+    baselineScanResult.config,
+    scanCwd,
+  );
   const [sourceFiles, selectorCssSources] = await Promise.all([
     Promise.all(
       discoveredFiles.sourceFiles.map(async (sourceFile) => ({

@@ -1,4 +1,4 @@
-import type { FindingConfidence, FindingSeverity } from "../../../runtime/types.js";
+import type { FindingConfidence, FindingSeverity } from "../../runtime/compatTypes.js";
 import type { ExperimentalCssFileAnalysis } from "../css-analysis/types.js";
 import type { SelectorQueryResult } from "../selector-analysis/types.js";
 

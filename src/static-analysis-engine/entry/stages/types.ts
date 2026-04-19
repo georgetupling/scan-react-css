@@ -12,7 +12,11 @@ import type {
   ParsedSelectorQuery,
   SelectorQueryResult,
 } from "../../pipeline/selector-analysis/index.js";
-import type { EngineSymbol } from "../../pipeline/symbol-resolution/index.js";
+import type {
+  EngineSymbol,
+  ResolvedImportedBinding,
+  ResolvedNamespaceImport,
+} from "../../pipeline/symbol-resolution/index.js";
 import type { EngineModuleId, EngineSymbolId } from "../../types/core.js";
 import type { ProjectRenderContext } from "./buildProjectRenderContext.js";
 
@@ -37,6 +41,13 @@ export type SymbolResolutionStageResult = {
 export type ProjectSymbolResolutionStageResult = {
   symbols: Map<EngineSymbolId, EngineSymbol>;
   symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
+};
+
+export type ProjectBindingResolutionStageResult = {
+  symbols: Map<EngineSymbolId, EngineSymbol>;
+  symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
+  resolvedImportedBindingsByFilePath: Map<string, ResolvedImportedBinding[]>;
+  resolvedNamespaceImportsByFilePath: Map<string, ResolvedNamespaceImport[]>;
 };
 
 export type ModuleGraphStageResult = {

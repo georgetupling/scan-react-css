@@ -15,7 +15,10 @@ import {
   extractSelectorQueriesFromCssText,
   parseSelectorQueries,
 } from "../../pipeline/selector-analysis/index.js";
-import { collectTopLevelSymbols } from "../../pipeline/symbol-resolution/index.js";
+import {
+  buildProjectBindingResolution,
+  collectTopLevelSymbols,
+} from "../../pipeline/symbol-resolution/index.js";
 import type { ModuleGraph } from "../../pipeline/module-graph/index.js";
 import type { ReachabilitySummary } from "../../pipeline/reachability/index.js";
 import type { RenderSubtree } from "../../pipeline/render-ir/index.js";
@@ -28,6 +31,7 @@ import type {
   CssAnalysisStageResult,
   ModuleGraphStageResult,
   ParseStageResult,
+  ProjectBindingResolutionStageResult,
   ParsedProjectFile,
   ProjectParseStageResult,
   ProjectSymbolResolutionStageResult,
@@ -135,6 +139,13 @@ export function runProjectModuleGraphStage(input: {
       })),
     ),
   };
+}
+
+export function runProjectBindingResolutionStage(input: {
+  moduleGraph: ModuleGraph;
+  symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
+}): ProjectBindingResolutionStageResult {
+  return buildProjectBindingResolution(input);
 }
 
 export function runAbstractValueStage(input: {

@@ -5,6 +5,7 @@ import {
   runCssAnalysisStage,
   runModuleGraphStage,
   runParseStage,
+  runProjectBindingResolutionStage,
   runProjectAbstractValueStage,
   runProjectModuleGraphStage,
   runProjectParseStage,
@@ -105,9 +106,14 @@ export function analyzeProjectSourceTexts(input: {
   const abstractValueStage = runProjectAbstractValueStage({
     parsedFiles: parseStage.parsedFiles,
   });
+  const bindingResolutionStage = runProjectBindingResolutionStage({
+    moduleGraph: moduleGraphStage.moduleGraph,
+    symbolsByFilePath: symbolResolutionStage.symbolsByFilePath,
+  });
   const projectRenderContext = buildProjectRenderContext({
     parsedFiles: parseStage.parsedFiles,
-    moduleGraph: moduleGraphStage.moduleGraph,
+    resolvedImportedBindingsByFilePath: bindingResolutionStage.resolvedImportedBindingsByFilePath,
+    resolvedNamespaceImportsByFilePath: bindingResolutionStage.resolvedNamespaceImportsByFilePath,
   });
   const renderGraphStage = runProjectRenderGraphStage({
     projectRenderContext,
@@ -141,7 +147,7 @@ export function analyzeProjectSourceTexts(input: {
 
   return {
     moduleGraph: moduleGraphStage.moduleGraph,
-    symbols: symbolResolutionStage.symbols,
+    symbols: bindingResolutionStage.symbols,
     classExpressions: abstractValueStage.classExpressions,
     cssFiles: cssAnalysisStage.cssFiles,
     reachabilitySummary: reachabilityStage.reachabilitySummary,

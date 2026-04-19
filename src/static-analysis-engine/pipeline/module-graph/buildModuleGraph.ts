@@ -24,6 +24,14 @@ export function buildModuleGraphFromSource(input: {
       continue;
     }
 
+    if (
+      ts.isFunctionDeclaration(statement) ||
+      ts.isVariableStatement(statement) ||
+      ts.isExportAssignment(statement)
+    ) {
+      exports.push(...buildLocalExportRecords(statement, moduleId));
+    }
+
     if (ts.isExportDeclaration(statement)) {
       exports.push(...buildExportRecords(statement, input.filePath, input.resolveImportSpecifier));
       continue;
@@ -197,6 +205,69 @@ function buildExportRecords(
   return [];
 }
 
+function buildLocalExportRecords(
+  statement: ts.FunctionDeclaration | ts.VariableStatement | ts.ExportAssignment,
+  moduleId: EngineModuleId,
+): ModuleExportRecord[] {
+  if (ts.isFunctionDeclaration(statement) && statement.name) {
+    const localSymbolId = createTopLevelSymbolId(moduleId, statement.name.text);
+    const records: ModuleExportRecord[] = [];
+    if (isExported(statement)) {
+      records.push({
+        exportedName: statement.name.text,
+        sourceExportedName: statement.name.text,
+        localSymbolId,
+      });
+    }
+
+    if (isDefaultExported(statement)) {
+      records.push({
+        exportedName: "default",
+        sourceExportedName: statement.name.text,
+        localSymbolId,
+      });
+    }
+
+    return records;
+  }
+
+  if (ts.isVariableStatement(statement)) {
+    if (!isExported(statement)) {
+      return [];
+    }
+
+    return statement.declarationList.declarations.flatMap((declaration) => {
+      if (!ts.isIdentifier(declaration.name)) {
+        return [];
+      }
+
+      return [
+        {
+          exportedName: declaration.name.text,
+          sourceExportedName: declaration.name.text,
+          localSymbolId: createTopLevelSymbolId(moduleId, declaration.name.text),
+        },
+      ];
+    });
+  }
+
+  if (statement.isExportEquals) {
+    return [];
+  }
+
+  if (ts.isIdentifier(statement.expression)) {
+    return [
+      {
+        exportedName: "default",
+        sourceExportedName: statement.expression.text,
+        localSymbolId: createTopLevelSymbolId(moduleId, statement.expression.text),
+      },
+    ];
+  }
+
+  return [{ exportedName: "default" }];
+}
+
 function classifyImportKind(specifier: string, isTypeOnly: boolean): ModuleImportKind {
   if (isTypeOnly) {
     return "type-only";
@@ -256,4 +327,29 @@ function normalizeSegments(segments: string[]): string {
 
 function normalizeProjectPath(filePath: string): string {
   return filePath.replace(/\\/g, "/");
+}
+
+function createTopLevelSymbolId(moduleId: EngineModuleId, localName: string): string {
+  return `symbol:${moduleId}:${localName}`;
+}
+
+function isExported(
+  statement:
+    | ts.FunctionDeclaration
+    | ts.VariableStatement
+    | (ts.Statement & { modifiers?: ts.NodeArray<ts.ModifierLike> }),
+): boolean {
+  return (
+    statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false
+  );
+}
+
+function isDefaultExported(
+  statement:
+    | ts.FunctionDeclaration
+    | (ts.Statement & { modifiers?: ts.NodeArray<ts.ModifierLike> }),
+): boolean {
+  return (
+    statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.DefaultKeyword) ?? false
+  );
 }

@@ -31,6 +31,10 @@ test("static analysis engine builds a same-file module model with imports and sy
       ["./App.css", "css"],
     ],
   );
+  assert.deepEqual(
+    moduleNode.exports.map((entry) => [entry.exportedName, entry.sourceExportedName ?? null]),
+    [["App", "App"]],
+  );
   assert.ok(result.symbols.has("symbol:module:src/App.tsx:React"));
   assert.ok(result.symbols.has("symbol:module:src/App.tsx:Button"));
   assert.ok(result.symbols.has("symbol:module:src/App.tsx:App"));
@@ -118,9 +122,21 @@ test("static analysis engine builds a multi-file module graph with resolved rela
 
   assert.equal(result.moduleGraph.modulesById.size, 2);
   const appModule = result.moduleGraph.modulesById.get("module:src/App.tsx");
+  const importedPanelShellSymbol = result.symbols.get("symbol:module:src/App.tsx:PanelShell");
   assert.ok(appModule);
   assert.equal(appModule.imports.length, 1);
   assert.equal(appModule.imports[0].resolvedModuleId, "module:src/PanelShell.tsx");
+  assert.deepEqual(
+    result.moduleGraph.modulesById
+      .get("module:src/PanelShell.tsx")
+      ?.exports.map((entry) => [entry.exportedName, entry.sourceExportedName ?? null]),
+    [["PanelShell", "PanelShell"]],
+  );
+  assert.deepEqual(importedPanelShellSymbol?.resolution, {
+    kind: "imported",
+    targetModuleId: "module:src/PanelShell.tsx",
+    targetSymbolId: "symbol:module:src/PanelShell.tsx:PanelShell",
+  });
   assert.ok(result.symbols.has("symbol:module:src/App.tsx:PanelShell"));
   assert.ok(result.symbols.has("symbol:module:src/PanelShell.tsx:PanelShell"));
 });

@@ -2,7 +2,7 @@ import {
   getAtRuleContextSignature,
   getDeclarationSignature,
   isSimpleRootClassDefinition,
-} from "../../../../rules/cssDefinitionUtils.js";
+} from "./cssDefinitionUtils.js";
 import type { ExperimentalCssFileAnalysis } from "../../css-analysis/types.js";
 import type { ExperimentalRuleResult } from "../types.js";
 

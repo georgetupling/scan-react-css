@@ -1,4 +1,4 @@
-import type { Finding } from "../../runtime/types.js";
+import type { Finding } from "../runtime/compatTypes.js";
 import type { ExperimentalFindingComparison, ExperimentalFindingLike } from "./types.js";
 
 export function compareExperimentalFindings(input: {
