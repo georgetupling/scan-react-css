@@ -1,0 +1,415 @@
+# Static Analysis Engine Replacement Readiness Plan
+
+## Purpose
+
+This document defines the close-out plan for replacing the current shipped
+scanner implementation with the `static-analysis-engine`.
+
+It exists because tranche 5 established bounded replacement-readiness
+validation, but did not by itself define the full replacement gate for the
+product.
+
+This plan is intentionally:
+
+- parity-first with the current shipped rules and rule families
+- explicit about what still blocks replacement
+- separate from any later rule-catalog redesign work
+
+## Decision: Parity First, Redesign Later
+
+The replacement target is:
+
+- first replace the shipped scanner with a new-engine-backed implementation that
+  preserves the current shipped rule families and product contract as closely as
+  practical
+- then treat rule and family redesign as a separate follow-on workstream
+
+Why this is the chosen baseline:
+
+- it keeps replacement measurable
+- it avoids mixing engine replacement with product semantics redesign
+- it makes comparison results easier to interpret
+- it gives later rule redesign a cleaner and safer baseline
+
+This means this document does **not** treat rule-family rework as part of the
+replacement gate unless a specific rule is proven to block parity-first
+replacement.
+
+## Replacement Target
+
+The target end-state is:
+
+- the main scanner is powered by the `static-analysis-engine`
+- the current shipped rule families are available on top of the new engine
+- temporary architectural seams have been either removed or reduced to explicit
+  migration adapters
+- replacement confidence is grounded in comparison, scenario coverage, and
+  deliberate migration gates rather than intuition
+
+The target is **not**:
+
+- "new engine plus a redesigned rule catalog"
+- "perfect support for every React abstraction style"
+- "full runtime simulation"
+
+The engine remains bounded and explicit about uncertainty.
+
+## What Is Already In Place
+
+The current subsystem already has meaningful replacement foundations:
+
+- project-wide parsing, symbol resolution, module graph, render graph, render
+  IR, reachability, selector analysis, and experimental rule execution
+- comparison tooling against the current scanner
+- producer-owned trace propagation through the main selector-derived reasoning
+  path
+- a static-analysis-engine-specific feature validation bucket under
+  `test/static-analysis-engine/feature/`
+
+This is enough to plan close-out deliberately rather than continuing with open-
+ended exploratory work.
+
+## Remaining Workstreams
+
+The remaining work falls into five workstreams.
+
+### 1. Architecture close-out
+
+Goal:
+
+- make the live engine match the documented target subsystem boundaries closely
+  enough that replacement does not rely on temporary internal seams
+
+Still open:
+
+- reduce or remove `entry/stages/buildProjectRenderContext.ts` as a semantic
+  owner
+- eliminate the named top-level `selector input` orchestration seam
+- remove direct old-engine type leakage from CSS analysis and rule execution
+- keep later stages consuming authoritative upstream outputs instead of
+  re-deriving meaning
+
+Done when:
+
+- `buildProjectRenderContext.ts` is deleted or reduced to a thin adapter with no
+  cross-file semantic ownership
+- CSS analysis and rule execution use new-engine-native contracts at their
+  durable subsystem boundary
+- the live entry pipeline shape matches the documented target architecture or
+  any remaining seams are documented as deliberate migration adapters
+
+### 2. Capability completion for parity-first replacement
+
+Goal:
+
+- cover the bounded capability set needed to replace the current shipped scanner
+  on its real rule set
+
+Important framing:
+
+- this is not "support every imaginable React pattern"
+- this is "support enough bounded render/value cases to replace the shipped
+  product with acceptable confidence"
+
+Current capability notes:
+
+- `children` flow and JSX-valued subtree props are already supported in bounded
+  forms
+- imported constants and imported helper behavior are already supported in
+  several bounded cross-file cases
+- unsupported helper argument flows still degrade to explicit unknown outcomes,
+  which is acceptable as long as the product contract handles them deliberately
+- broad render-prop or arbitrary component-as-prop support is **not** assumed to
+  be part of the current replacement baseline unless a shipped rule truly needs
+  it
+
+Still open:
+
+- decide exactly which currently shipped rules require additional render/value
+  capability before they can migrate cleanly
+- add any missing bounded support required for those rules
+- distinguish "needed for parity-first replacement" from "nice follow-on engine
+  expansion"
+
+Done when:
+
+- every shipped rule family has a documented dependency on existing engine
+  capabilities, planned engine work, or an explicit migration adapter
+- no shipped rule migration is blocked by an unowned capability gap
+
+### 3. Rule migration and parity
+
+Goal:
+
+- move from experimental new-engine rules to deliberate support for the current
+  shipped rule families
+
+Still open:
+
+- define which current rules migrate directly onto the new engine
+- define where temporary adapters or shadow-mode coexistence remain acceptable
+- confirm severity, confidence, deterministic finding identity, and output
+  semantics match the shipped product contract closely enough
+
+Recommended migration order:
+
+1. rules already closest to selector/reachability evidence
+2. CSS-structure rules already partially implemented experimentally
+3. ownership and broader file-organization rules
+4. remaining rule families that need explicit compatibility decisions
+
+Done when:
+
+- each shipped rule family is marked as one of:
+  - migrated to new-engine-native implementation
+  - wrapped through an explicit temporary compatibility adapter
+  - intentionally deferred with a written replacement decision
+- product-facing output semantics are documented and verified for migrated rule
+  families
+
+### 4. Validation, testing, and comparison gate
+
+Goal:
+
+- prove replacement readiness with scenario coverage and measured comparison
+
+Still open:
+
+- extend feature coverage beyond the initial tranche-5 validation slice
+- add stronger integration-style validation for multi-file React projects and
+  real scanner entry behavior
+- define comparison expectations rule-family by rule-family rather than only in
+  ad hoc scenarios
+- make replacement gates explicit enough that a future switch can be approved or
+  rejected deliberately
+
+Required validation layers:
+
+- unit validation for stage-local behavior
+- feature validation for multi-stage scenarios
+- comparison validation against the current scanner
+- integration validation for end-to-end scan behavior
+
+Minimum replacement gate:
+
+- critical migrated rule families have scenario coverage for:
+  - direct success paths
+  - bounded possible/unknown paths
+  - representative cross-file composition paths
+- comparison results are reviewed intentionally rather than treated as raw pass/
+  fail numbers
+- known divergences are cataloged as:
+  - expected improvement
+  - acceptable temporary gap
+  - blocking regression
+
+Done when:
+
+- the repo has a stable replacement-readiness suite, not only exploratory tests
+- the comparison story is explicit enough to support a deliberate ship/no-ship
+  decision
+
+### 5. Product cutover and deprecation plan
+
+Goal:
+
+- switch to the new engine deliberately, with clear rollback and follow-up work
+
+Still open:
+
+- choose the first product-facing cutover shape
+- document whether rollout is:
+  - internal/shadow only
+  - opt-in
+  - default-on with fallback
+  - full replacement
+- define when comparison tooling remains in the repo after cutover
+- define when old-engine-only rule logic can be removed
+
+Done when:
+
+- there is a written cutover sequence
+- ownership of post-cutover cleanup is explicit
+- removal criteria for old-engine internals are named
+
+## Current Blocking Items
+
+These are the main blockers to full replacement today.
+
+### Blocker 1: `buildProjectRenderContext.ts` still owns too much cross-file meaning
+
+Why it blocks close-out:
+
+- the target architecture says later stages should consume normalized upstream
+  summaries
+- this file still performs transitive helper propagation, component availability
+  assembly, and namespace materialization
+
+Required close-out action:
+
+- move remaining cross-file semantic ownership upward into symbol-resolution or
+  abstract-value-owned summaries, then leave only a thin render adapter if one
+  is still useful
+
+### Blocker 2: old-engine type leakage still exists at the CSS/rule edge
+
+Why it blocks close-out:
+
+- the target architecture explicitly says these edges should become
+  new-engine-native
+- durable replacement should not depend on deep old-engine fact/runtime types at
+  the new-engine boundary
+
+Required close-out action:
+
+- replace reused old-engine shapes with new-engine-native contracts or thin
+  compatibility wrappers that live only at deliberate migration boundaries
+
+### Blocker 3: full rule-family replacement planning is not written down
+
+Why it blocks close-out:
+
+- replacement cannot be approved from engine capability alone
+- the shipped product is defined by its rule behavior and output contract
+
+Required close-out action:
+
+- create a per-rule-family migration matrix with parity status, dependencies,
+  remaining gaps, and validation expectations
+
+### Blocker 4: replacement-grade validation is still too narrow
+
+Why it blocks close-out:
+
+- tranche 5 added the first real feature bucket, but that is only the start of
+  a replacement gate
+- the project still needs broader scenario and integration coverage
+
+Required close-out action:
+
+- expand the validation suite to cover the highest-risk shipped rule families
+  and real multi-file project patterns
+
+### Blocker 5: cutover mechanics are still undefined
+
+Why it blocks close-out:
+
+- even a technically ready engine is not ready to replace production behavior
+  without a rollout and cleanup plan
+
+Required close-out action:
+
+- write the cutover sequence and the criteria for removing old-engine paths
+
+## Recommended Execution Order
+
+This is the recommended close-out sequence.
+
+### Phase 1: lock the replacement contract
+
+Deliverables:
+
+- this parity-first replacement plan
+- a per-rule-family migration matrix
+- a short definition of what counts as a blocking regression versus an expected
+  improvement
+
+Why first:
+
+- it keeps the rest of the work measurable
+
+### Phase 2: finish architectural cleanup
+
+Deliverables:
+
+- thinner or removed `buildProjectRenderContext.ts`
+- reduced temporary seam count
+- new-engine-native CSS/rule boundary contracts
+
+Why second:
+
+- it lowers long-term maintenance risk before rule migration goes broader
+
+### Phase 3: migrate rule families in priority order
+
+Deliverables:
+
+- parity-first implementations or explicit compatibility adapters for shipped
+  rule families
+- documented output-contract checks
+
+Why third:
+
+- this is the first point where replacement can become product-real
+
+### Phase 4: broaden replacement validation
+
+Deliverables:
+
+- larger feature suite
+- targeted integration coverage
+- curated comparison baselines and reviewed known divergences
+
+Why fourth:
+
+- this is where local confidence becomes release confidence
+
+### Phase 5: plan and execute cutover
+
+Deliverables:
+
+- rollout decision
+- cutover checklist
+- post-cutover cleanup plan
+
+Why fifth:
+
+- replacement should be the last deliberate act, not an implicit drift
+
+## What Is Explicitly Deferred
+
+These areas are not part of the parity-first replacement gate unless they prove
+necessary for a shipped rule family.
+
+- broad rule-family redesign
+- speculative new rule families
+- arbitrary render props
+- arbitrary component-as-prop modeling
+- full general-purpose JS evaluation
+- framework-specific abstractions that are not required for current parity
+
+These may become follow-on work once parity-first replacement is complete.
+
+## Immediate Next Documents To Add
+
+The next highest-value close-out artifact after this one is:
+
+- a rule-family migration matrix under `docs/static-analysis-engine/`
+
+That document should list, for each shipped rule family:
+
+- current production owner
+- target new-engine owner
+- parity status
+- capability dependencies
+- known divergences
+- required tests and comparison checks
+- cutover readiness
+
+## Summary
+
+The static-analysis-engine track is now past exploratory architecture work and
+past bounded tranche-5 validation.
+
+The remaining task is not "keep proving the engine exists." The remaining task
+is:
+
+- close the architectural seams
+- migrate the shipped rules deliberately
+- define the replacement gate explicitly
+- cut over on purpose
+
+The core strategic decision is now locked:
+
+- replace the current shipped rule families first
+- redesign rules and families later, as separate work

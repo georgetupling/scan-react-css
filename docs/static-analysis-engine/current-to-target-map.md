@@ -866,3 +866,47 @@ What did not change yet:
 
 This means tranche 4 should now be treated as complete for the bounded scope
 described in this document, while tranche 5 is the next active cleanup target.
+
+## Addendum: Tranche 5 Landed
+
+Tranche 5 is now in for the bounded scope described in this document.
+
+Completed changes:
+
+- `test/static-analysis-engine/feature/` now exists as a first-class
+  static-analysis-engine feature validation bucket
+- replacement-readiness coverage now includes multi-file selector-plus-
+  reachability scenarios for:
+  - definite stylesheet reachability through component composition
+  - possible selector satisfaction through conditional composition
+  - unknown reachability barrier preservation during unsupported cross-file
+    helper expansion
+- the bounded validation slice now exercises the comparison harness against the
+  current scanner in a feature-shaped scenario instead of only unit-shaped
+  cases
+- replacement-readiness confidence is now grounded in explicit validation
+  scenarios rather than only local confidence in individual stage helpers
+
+Why this counts for tranche 5:
+
+- the static-analysis-engine track now has a dedicated feature-level validation
+  bucket, which was the main missing test-structure step called out in the
+  tranche goals
+- comparison tooling is now used in a measured replacement-readiness scenario,
+  not only in isolated harness tests
+- the current bounded readiness story is now stated as concrete validation
+  cases that can be rerun and extended deliberately
+
+What did not change yet:
+
+- this does not by itself establish full replacement criteria for the whole
+  scanner
+- broader integration coverage, migration gating, and product-rule replacement
+  planning still need their own explicit close-out work
+- temporary architectural seams such as `buildProjectRenderContext.ts`,
+  selector-input orchestration, and old-engine compatibility at the CSS/rule
+  edge still remain
+
+This means tranche 5 should now be treated as complete for the bounded scope
+described in this document. Any further work should be planned as explicit
+close-out or migration tranches rather than as missing tranche-5 validation.

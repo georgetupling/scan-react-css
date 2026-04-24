@@ -49,6 +49,7 @@ Static-analysis-engine docs:
 - [docs/static-analysis-engine/subsystem-boundaries.md](./docs/static-analysis-engine/subsystem-boundaries.md)
 - [docs/static-analysis-engine/end-to-end-traceability.md](./docs/static-analysis-engine/end-to-end-traceability.md)
 - [docs/static-analysis-engine/current-to-target-map.md](./docs/static-analysis-engine/current-to-target-map.md)
+- [docs/static-analysis-engine/replacement-readiness-plan.md](./docs/static-analysis-engine/replacement-readiness-plan.md)
 - [docs/static-analysis-engine/known-architectural-issues.md](./docs/static-analysis-engine/known-architectural-issues.md)
 - [docs/static-analysis-engine/progress-snapshot-2026-04-19.md](./docs/static-analysis-engine/progress-snapshot-2026-04-19.md)
 - [docs/static-analysis-engine/archive/requirements.md](./docs/static-analysis-engine/archive/requirements.md)
