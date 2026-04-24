@@ -53,7 +53,7 @@ test("engine current-scanner adapter keeps stylesheet availability possible acro
     });
     const summary = buildEngineRenderContextReachabilityBySourceFile(
       model,
-      engineResult.renderGraph,
+      engineResult.reachabilitySummary,
     );
 
     const childReachability = summary.get("src/Child.tsx");
@@ -96,7 +96,7 @@ test("engine current-scanner adapter keeps stylesheet availability definite acro
     });
     const summary = buildEngineRenderContextReachabilityBySourceFile(
       model,
-      engineResult.renderGraph,
+      engineResult.reachabilitySummary,
     );
 
     const leafReachability = summary.get("src/Leaf.tsx");

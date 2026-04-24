@@ -504,7 +504,7 @@ Current migration note:
 
 - `adapters/current-scanner/` now carries the bounded optimization-family
   migration wave plus the first `definition-and-usage-integrity` family seam
-- the definition-and-usage adapter now prefers a render-graph-backed
+- the definition-and-usage adapter now prefers a native reachability-backed
   render-context summary for parity-critical class findings, while still
   preserving compatibility fallback until the reachability/rule boundary
   publishes class-safe native inputs

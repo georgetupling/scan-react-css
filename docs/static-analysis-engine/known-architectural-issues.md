@@ -205,9 +205,9 @@ That is not wrong by itself, because reachability is mostly about import availab
   native reachability no longer feeds child availability back into
   whole-component availability across sibling paths, and the new family adapter
   now narrows the remaining gap by deriving render-context classification from
-  render-graph routes first, but it still keeps compatibility fallback for
-  `css-class-missing-in-some-contexts` and `unreachable-css` until the
-  class-safe handoff is published
+  the native reachability summary first, but it still keeps compatibility
+  fallback for `css-class-missing-in-some-contexts` and `unreachable-css`
+  until the class-safe handoff is published
 
 ### Evidence in code
 

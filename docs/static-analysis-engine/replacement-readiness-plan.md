@@ -69,9 +69,9 @@ The current subsystem already has meaningful replacement foundations:
   `missing-css-class`, `css-class-missing-in-some-contexts`, and
   `unreachable-css`; the shipped runtime now routes those rules through a
   dedicated adapter seam and shared engine-analysis cache; render-context
-  classification now prefers render-graph-backed adapter summaries, while the
-  remaining class-specific native parity gap still keeps compatibility fallback
-  in place
+  classification now prefers native reachability-backed adapter summaries,
+  while the remaining class-specific native parity gap still keeps
+  compatibility fallback in place
 - native reachability now keeps whole-component stylesheet availability tied to
   renderer ancestry and limits child propagation to region-scoped placement
   evidence, which closes the styled/plain sibling over-credit in the core stage

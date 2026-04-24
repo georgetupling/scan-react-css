@@ -61,13 +61,16 @@ function buildMigratedDefinitionAndUsageIntegrityRuleFindings(
   }
 
   // Warm the shared static-analysis-engine cache for this project while
-  // preserving compatibility fallbacks only where the current engine route model
-  // still does not publish a safe replacement status.
+  // preserving compatibility fallbacks only where the current native reachability
+  // model still does not publish a safe replacement status.
   const engineResult = analyzeProjectModelWithStaticEngine(context.model, {
     includeExternalCssSources: true,
   });
   const engineRenderContextReachabilityBySourceFile =
-    buildEngineRenderContextReachabilityBySourceFile(context.model, engineResult.renderGraph);
+    buildEngineRenderContextReachabilityBySourceFile(
+      context.model,
+      engineResult.reachabilitySummary,
+    );
 
   for (const sourceFile of context.model.graph.sourceFiles) {
     const reachability = context.model.reachability.get(sourceFile.path);
