@@ -82,6 +82,7 @@ export function runRedundantCssDeclarationBlockRule(
       selectorText: selector,
       cssFile,
       metadata: {
+        className,
         selector,
         declarationSignature,
         atRuleContextSignature,

@@ -60,6 +60,11 @@ The current subsystem already has meaningful replacement foundations:
 
 - project-wide parsing, symbol resolution, module graph, render graph, render
   IR, reachability, selector analysis, and experimental rule execution
+- a first shipped runtime migration wave for
+  `duplicate-css-class-definition`, `empty-css-rule`,
+  `redundant-css-declaration-block`, and `unused-compound-selector-branch`
+  through a bounded current-scanner adapter backed by cached project facts and
+  new-engine analysis
 - comparison tooling against the current scanner
 - producer-owned trace propagation through the main selector-derived reasoning
   path
@@ -170,6 +175,16 @@ Still open:
 - define where temporary adapters or shadow-mode coexistence remain acceptable
 - confirm severity, confidence, deterministic finding identity, and output
   semantics match the shipped product contract closely enough
+
+Current migration note:
+
+- the first optimization-family runtime-backed slice is now in through a
+  bounded current-scanner adapter
+- that does **not** yet mean the family is fully cut over for replacement
+  readiness purposes
+- the remaining work is to write the parity contract, review divergences
+  deliberately, and decide when the adapter-backed slice graduates from
+  "landed migration wave" to "accepted replacement path"
 
 Recommended migration order:
 

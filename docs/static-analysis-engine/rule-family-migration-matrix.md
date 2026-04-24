@@ -52,6 +52,8 @@ The statuses in this document mean:
 
 - `experimental coverage exists`: the new engine already has a meaningful rule-
   level or comparison-level slice touching this area, but not yet parity
+- `adapter-backed native slice landed`: the shipped runtime already serves this
+  rule through a bounded current-scanner adapter backed by new-engine analysis
 - `migration path visible`: the rule does not yet exist on the new engine, but
   the target owner and likely migration path are clear
 - `needs migration design`: the target owner is broadly visible, but parity
@@ -71,7 +73,7 @@ The statuses in this document mean:
 | `dynamic-analysis` | `dynamic-class-reference`, `dynamic-missing-css-class` | Engine has bounded value-flow support, but no shipped-rule migration yet | Needs migration design after parity contract is written |
 | `css-modules` | `missing-css-module-class`, `unused-css-module-class` | No meaningful new-engine rule slice yet, and no first-class CSS-Module semantic layer is published yet | Likely compatibility adapter first, unless a native CSS-Module layer is added before cutover |
 | `external-css` | `missing-external-css-class` | First native rule slice now exists on top of imported external CSS, fetch-remote project-wide stylesheets, active declared providers, and native reachability | Native rule path plus explicit first-release runtime adapter for fetch/fallback behavior |
-| `optimization-and-migration` | `utility-class-replacement`, `duplicate-css-class-definition`, `empty-css-rule`, `redundant-css-declaration-block`, `unused-compound-selector-branch` | Strongest current new-engine family; several rules already exist experimentally | Best first family for parity-first migration |
+| `optimization-and-migration` | `utility-class-replacement`, `duplicate-css-class-definition`, `empty-css-rule`, `redundant-css-declaration-block`, `unused-compound-selector-branch` | First runtime-backed migration wave is in for four rules; `utility-class-replacement` still stays on the old engine | Best first family for parity-first migration |
 
 ## Rule Matrix
 
@@ -91,10 +93,10 @@ The statuses in this document mean:
 | `css-modules` | `unused-css-module-class` | old CSS Modules rule engine path | likely `rule-execution` with dedicated CSS Module usage inputs, or compatibility adapter | `likely compatibility adapter first` | Same parity-first logic as above; do not block engine cutover on full CSS Modules redesign if an explicit adapter keeps the product contract stable, unless a native CSS-Module layer is added first |
 | `external-css` | `missing-external-css-class` | old external CSS rule engine path | `rule-execution` on top of `external-css`, `reachability`, and bounded class/value evidence, with runtime fetch/fallback behavior adapter-backed in the first release | `experimental coverage exists` | The current new engine can now classify external CSS imports in the module graph, propagate directly imported and fetch-remote project-wide external CSS through native reachability, publish active declared providers through `externalCssSummary`, emit a first native `missing-external-css-class` rule slice, and compare that slice against the current scanner; the remaining first-release adapter boundary is runtime-specific fetch/fallback behavior rather than rule semantics |
 | `optimization-and-migration` | `utility-class-replacement` | old optimization rule engine path | `rule-execution` on top of CSS-definition analysis and configured utility catalogs | `needs migration design` | The new engine can likely support this later, but it is not currently part of the experimental rule slice and may not need to be first-wave |
-| `optimization-and-migration` | `duplicate-css-class-definition` | old optimization rule engine path | `rule-execution` on top of `css-analysis` | `experimental coverage exists` | Already implemented experimentally in the new engine and covered by comparison tests |
-| `optimization-and-migration` | `empty-css-rule` | old optimization rule engine path | `rule-execution` on top of `css-analysis` | `experimental coverage exists` | Already implemented experimentally in the new engine and covered by comparison tests |
-| `optimization-and-migration` | `redundant-css-declaration-block` | old optimization rule engine path | `rule-execution` on top of `css-analysis` | `experimental coverage exists` | Already implemented experimentally in the new engine and covered by comparison tests |
-| `optimization-and-migration` | `unused-compound-selector-branch` | old optimization rule engine path | `rule-execution` on top of `selector-analysis` and CSS-derived selector evidence | `experimental coverage exists` | Already implemented experimentally in the new engine and compared directly against the current scanner |
+| `optimization-and-migration` | `duplicate-css-class-definition` | current scanner runtime via new-engine-backed adapter | `rule-execution` on top of `css-analysis` | `adapter-backed native slice landed` | The shipped runtime now serves this rule through a bounded adapter that consumes cached project facts, runs the new engine once per model, and maps the result back into the shipped finding shape |
+| `optimization-and-migration` | `empty-css-rule` | current scanner runtime via new-engine-backed adapter | `rule-execution` on top of `css-analysis` | `adapter-backed native slice landed` | The shipped runtime now serves this rule through the same cached-fact adapter path, so stylesheet-only projects no longer depend on old rule-local CSS traversal for this finding |
+| `optimization-and-migration` | `redundant-css-declaration-block` | current scanner runtime via new-engine-backed adapter | `rule-execution` on top of `css-analysis` | `adapter-backed native slice landed` | The current shipped runtime now consumes the new-engine CSS-analysis slice for this rule while preserving the shipped finding contract |
+| `optimization-and-migration` | `unused-compound-selector-branch` | current scanner runtime via new-engine-backed adapter | `rule-execution` on top of `selector-analysis` and CSS-derived selector evidence | `adapter-backed native slice landed` | The current shipped runtime now consumes new-engine selector evidence for this rule through a bounded adapter, while still shaping findings to match the shipped runtime contract |
 
 ## Experimental-To-Shipped Mapping Notes
 
@@ -109,7 +111,9 @@ Important examples:
 
 - `duplicate-css-class-definition`, `empty-css-rule`,
   `redundant-css-declaration-block`, and `unused-compound-selector-branch`
-  already overlap directly with shipped rules
+  already overlap directly with shipped rules and now power the shipped runtime
+  for the bounded optimization-family migration wave through a current-scanner
+  adapter
 - `selector-never-satisfied`, `selector-possibly-satisfied`,
   `selector-analysis-unsupported`, and
   `contextual-selector-branch-never-satisfied` are useful migration signals, but
@@ -174,7 +178,8 @@ Needed before cutover:
 
 Needed before cutover:
 
-- direct parity and comparison review for the experimentally migrated rules
+- keep parity and comparison review current for the adapter-backed migrated
+  rules
 - separate migration decision for `utility-class-replacement`
 
 ## Recommended Migration Order
@@ -219,6 +224,9 @@ The next steps that follow directly from this matrix are:
    still too broad, starting with `optimization-and-migration`
 5. extend replacement validation so comparison is organized around these family
    decisions rather than only around isolated exploratory scenarios
+6. finish the parity contract and divergence log for the now-landed
+   optimization-family adapter wave so the project can decide when that family
+   counts as fully migrated rather than only adapter-backed
 
 ## Open Questions
 
@@ -238,6 +246,8 @@ This matrix makes the current state explicit:
 
 - the new engine is strongest today in the
   `optimization-and-migration` family
+- four optimization-family rules now already run through a bounded
+  new-engine-backed adapter in the shipped runtime
 - the most important parity-first migration family is
   `definition-and-usage-integrity`
 - ownership and CSS Modules are still the strongest compatibility-first

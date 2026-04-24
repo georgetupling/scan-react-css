@@ -34,6 +34,16 @@ export function runUnusedCompoundSelectorBranchRule(
     selectorText: selectorQueryResult.selectorText,
     decision: selectorQueryResult.decision,
     selectorQueryResult,
+    metadata: {
+      requiredClassNames: [...selectorQueryResult.constraint.classNames],
+      atRuleContext:
+        selectorQueryResult.source.kind === "css-source"
+          ? (selectorQueryResult.source.atRuleContext ?? []).map((entry) => ({
+              name: entry.kind,
+              params: entry.queryText,
+            }))
+          : [],
+    },
     traces: createSelectorRuleTraces({
       ruleId: "unused-compound-selector-branch",
       summary: `Compound selector branch "${selectorQueryResult.selectorText}" does not have any convincing reachable React usage where all required classes appear together.`,

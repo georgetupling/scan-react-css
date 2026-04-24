@@ -264,6 +264,29 @@ test("rule engine runs registered rules against the project model without reread
   });
 });
 
+test("migrated optimization rules run from cached fact content without rereading files", async () => {
+  await withTempDir(async (tempDir) => {
+    await writeProjectFile(
+      tempDir,
+      "src/App.tsx",
+      ['import "./App.css";', 'export function App() { return <div className="empty" />; }'].join(
+        "\n",
+      ),
+    );
+    await writeProjectFile(tempDir, "src/App.css", ".empty {}");
+
+    const config = normalizeScanReactCssConfig({});
+    const facts = await extractProjectFacts(config, tempDir);
+    const model = buildProjectModel({ config, facts });
+
+    await rm(path.join(tempDir, "src"), { recursive: true, force: true });
+
+    const result = runRules(model);
+
+    assert.ok(result.findings.some((finding) => finding.ruleId === "empty-css-rule"));
+  });
+});
+
 test("scanReactCss returns the structured runtime shape even before default rules emit findings", async () => {
   await withTempDir(async (tempDir) => {
     await writeProjectFile(tempDir, "src/App.tsx", "export function App() { return null; }");

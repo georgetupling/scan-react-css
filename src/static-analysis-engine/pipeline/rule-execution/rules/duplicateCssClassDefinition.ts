@@ -101,6 +101,7 @@ export function runDuplicateCssClassDefinitionRule(
         }),
         selectorText: sortedDefinitions[0].definition.selector,
         metadata: {
+          className,
           duplicateCssFiles,
           atRuleContextSignature,
           duplicateLocations: sortedDefinitions.map((definition) => ({

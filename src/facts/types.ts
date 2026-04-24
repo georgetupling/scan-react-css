@@ -34,6 +34,7 @@ export type ClassReferenceFact = {
 
 export type SourceFileFact = {
   filePath: string;
+  content: string;
   imports: SourceImportFact[];
   cssModuleImports: CssModuleImportFact[];
   classReferences: ClassReferenceFact[];
@@ -95,6 +96,7 @@ export type CssImportFact = {
 
 export type CssFileFact = {
   filePath: string;
+  content: string;
   styleRules: CssStyleRuleFact[];
   classDefinitions: CssClassDefinitionFact[];
   imports: CssImportFact[];

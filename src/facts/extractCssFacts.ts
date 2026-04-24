@@ -11,6 +11,7 @@ export async function extractCssFileFacts(cssFile: DiscoveredProjectFile): Promi
 
   return {
     filePath: cssFile.relativePath,
+    content,
     styleRules,
     classDefinitions: extractClassDefinitions(styleRules),
     imports: extractCssImports(content),

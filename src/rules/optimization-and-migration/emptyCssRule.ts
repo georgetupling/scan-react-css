@@ -1,3 +1,4 @@
+import { getMigratedOptimizationRuleFindings } from "../../static-analysis-engine/adapters/current-scanner/runMigratedOptimizationRules.js";
 import type { RuleDefinition } from "../types.js";
 
 export const emptyCssRuleRule: RuleDefinition = {
@@ -10,40 +11,6 @@ export const emptyCssRuleRule: RuleDefinition = {
       return [];
     }
 
-    const findings = [];
-
-    for (const cssFile of context.model.graph.cssFiles) {
-      for (const styleRule of cssFile.styleRules) {
-        if (styleRule.declarations.length > 0) {
-          continue;
-        }
-
-        findings.push(
-          context.createFinding({
-            ruleId: "empty-css-rule",
-            family: "optimization-and-migration",
-            severity,
-            confidence: "high",
-            message: `Selector "${styleRule.selector}" in "${cssFile.path}" does not contain any CSS declarations.`,
-            primaryLocation: {
-              filePath: cssFile.path,
-              line: styleRule.line,
-            },
-            subject: {
-              cssFilePath: cssFile.path,
-            },
-            metadata: {
-              selector: styleRule.selector,
-              atRuleContext: styleRule.atRuleContext.map((entry) => ({
-                name: entry.name,
-                params: entry.params,
-              })),
-            },
-          }),
-        );
-      }
-    }
-
-    return findings;
+    return getMigratedOptimizationRuleFindings(context, "empty-css-rule");
   },
 };

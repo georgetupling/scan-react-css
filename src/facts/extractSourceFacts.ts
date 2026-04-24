@@ -238,6 +238,7 @@ export async function extractSourceFileFacts(
 
   return {
     filePath: sourceFile.relativePath,
+    content,
     imports: sortImports(imports),
     cssModuleImports: cssModuleImports.sort((left, right) =>
       left.localName.localeCompare(right.localName),
