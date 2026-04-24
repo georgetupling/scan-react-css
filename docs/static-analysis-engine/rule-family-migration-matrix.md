@@ -54,6 +54,10 @@ The statuses in this document mean:
   level or comparison-level slice touching this area, but not yet parity
 - `adapter-backed native slice landed`: the shipped runtime already serves this
   rule through a bounded current-scanner adapter backed by new-engine analysis
+- `adapter seam landed`: the shipped runtime now routes the rule through a
+  dedicated migration adapter, but parity-critical classification still
+  intentionally relies on compatibility semantics while the native handoff is
+  being validated
 - `migration path visible`: the rule does not yet exist on the new engine, but
   the target owner and likely migration path are clear
 - `needs migration design`: the target owner is broadly visible, but parity
@@ -68,7 +72,7 @@ The statuses in this document mean:
 
 | Family | Shipped rules | Current new-engine position | Close-out direction |
 | --- | --- | --- | --- |
-| `definition-and-usage-integrity` | `missing-css-class`, `css-class-missing-in-some-contexts`, `unreachable-css`, `unused-css-class` | Engine capability is highly relevant, but parity rules are not migrated yet | High-priority parity migration family |
+| `definition-and-usage-integrity` | `missing-css-class`, `css-class-missing-in-some-contexts`, `unreachable-css`, `unused-css-class` | A first current-scanner family adapter is now in for three rules, but parity-critical reachability classification is still compatibility-backed and `unused-css-class` is still old-engine | Finish class-specific native handoff, then migrate `unused-css-class` |
 | `ownership-and-organization` | `component-style-cross-component`, `page-style-used-by-single-component`, `global-css-not-global`, `component-css-should-be-global` | No meaningful new-engine rule slice yet | Probably adapter-first, then selective native migration |
 | `dynamic-analysis` | `dynamic-class-reference`, `dynamic-missing-css-class` | Engine has bounded value-flow support, but no shipped-rule migration yet | Needs migration design after parity contract is written |
 | `css-modules` | `missing-css-module-class`, `unused-css-module-class` | No meaningful new-engine rule slice yet, and no first-class CSS-Module semantic layer is published yet | Likely compatibility adapter first, unless a native CSS-Module layer is added before cutover |
@@ -79,9 +83,9 @@ The statuses in this document mean:
 
 | Family | Rule ID | Current production owner | Target new-engine owner | Current status | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `definition-and-usage-integrity` | `missing-css-class` | old rule engine on `ProjectModel` | `rule-execution` on top of `css-analysis`, `reachability`, `selector-analysis`, and class/value evidence | `migration path visible` | Current feature comparison already shows this rule as a baseline reference point; parity semantics need to be written carefully because the new engine reasons about rendered structure and contextual reachability differently |
-| `definition-and-usage-integrity` | `css-class-missing-in-some-contexts` | old rule engine on `ProjectModel` | `rule-execution` on top of `reachability` and selector/context evidence | `migration path visible` | This rule is conceptually close to new-engine `possible` reasoning, but the exact mapping from engine outcomes to shipped finding semantics still needs a written contract |
-| `definition-and-usage-integrity` | `unreachable-css` | old rule engine on `ProjectModel` | `rule-execution` on top of `reachability` and CSS-definition evidence | `migration path visible` | Likely one of the best fits for new-engine-native replacement once parity semantics are written |
+| `definition-and-usage-integrity` | `missing-css-class` | current scanner runtime via definition-and-usage migration adapter | `rule-execution` on top of `css-analysis`, `reachability`, `selector-analysis`, and class/value evidence | `adapter seam landed` | The shipped runtime now routes this rule through a family adapter that shares cached new-engine analysis setup, while keeping current definition lookup and declared-provider semantics stable during migration |
+| `definition-and-usage-integrity` | `css-class-missing-in-some-contexts` | current scanner runtime via definition-and-usage migration adapter | `rule-execution` on top of `reachability` and selector/context evidence | `adapter seam landed` | The shipped runtime now routes this rule through the family adapter, but partial-path reachability classification deliberately stays compatibility-backed because the current engine reachability summary is not yet class-specific enough for safe parity replacement |
+| `definition-and-usage-integrity` | `unreachable-css` | current scanner runtime via definition-and-usage migration adapter | `rule-execution` on top of `reachability` and CSS-definition evidence | `adapter seam landed` | The shipped runtime now routes this rule through the family adapter while preserving current unreachable-versus-possible classification until the native reachability handoff is safe |
 | `definition-and-usage-integrity` | `unused-css-class` | old rule engine on `ProjectModel` | `rule-execution` on top of `css-analysis`, selector evidence, and bounded usage/reachability evidence | `needs migration design` | New-engine structural reasoning should improve this rule, but the product contract around plain class evidence versus contextual selector evidence must stay aligned with current shipped behavior |
 | `ownership-and-organization` | `component-style-cross-component` | old rule engine on `ProjectModel` ownership model | `rule-execution` on top of ownership data plus new-engine reachability/render evidence | `likely compatibility adapter first` | The engine can strengthen evidence, but parity-first replacement does not require immediate redesign of ownership semantics |
 | `ownership-and-organization` | `page-style-used-by-single-component` | old rule engine on `ProjectModel` ownership model | `rule-execution` on top of ownership data plus usage/reachability evidence | `likely compatibility adapter first` | Probably practical to preserve current ownership logic first, then decide later how much new-engine evidence should reshape the rule |
@@ -131,6 +135,9 @@ Those selector-derived experimental rules should be treated as:
 
 Needed before cutover:
 
+- keep partial-path and deep-ancestor parity scenarios green on the
+  adapter-routed shipped rules until the native class-level reachability handoff
+  lands
 - wrapper and ancestor-route scenarios
 - partial-context reachability scenarios
 - direct match, possible match, unknown barrier, and unavailable stylesheet cases
@@ -210,9 +217,12 @@ The next steps that follow directly from this matrix are:
 1. use `replacement-acceptance-criteria-checklist.md` and
    `cutover-and-old-engine-retirement-checklist.md` to turn first-wave family
    decisions into explicit ship/no-ship gates
-2. write the parity contract for the
-   `definition-and-usage-integrity` family, especially:
-   - how `possible` and `unknown` engine outcomes map to shipped findings
+2. finish the native handoff plan for the
+   `definition-and-usage-integrity` adapter seam, especially:
+   - how class-level `possible` and `unknown` engine outcomes map to shipped
+     findings
+   - which reachability inputs are safe enough to replace the compatibility
+     classifier
    - how contextual selector evidence should and should not satisfy plain class
      checks
 3. decide explicitly which families are adapter-first for initial replacement:
@@ -248,8 +258,9 @@ This matrix makes the current state explicit:
   `optimization-and-migration` family
 - four optimization-family rules now already run through a bounded
   new-engine-backed adapter in the shipped runtime
-- the most important parity-first migration family is
-  `definition-and-usage-integrity`
+- the most important parity-first migration family remains
+  `definition-and-usage-integrity`, and it now has a landed adapter seam for
+  three shipped rules
 - ownership and CSS Modules are still the strongest compatibility-first
   candidates, while external CSS now has a meaningful native path that still
   needs explicit cutover validation

@@ -166,6 +166,67 @@ test("static analysis engine feature validation records possible selector satisf
   }
 });
 
+test("static analysis engine replacement validation keeps partial render-path class findings in the current-scanner adapter", async () => {
+  const project = await new TestProjectBuilder()
+    .withTemplate("basic-react-app")
+    .withSourceFile(
+      "src/StyledLayout.tsx",
+      [
+        'import "./layout.css";',
+        'import { Child } from "./Child";',
+        "export function StyledLayout() { return <Child />; }",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/PlainLayout.tsx",
+      [
+        'import { Child } from "./Child";',
+        "export function PlainLayout() { return <Child />; }",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import { StyledLayout } from "./StyledLayout";',
+        'import { PlainLayout } from "./PlainLayout";',
+        "export function App() { return <><StyledLayout /><PlainLayout /></>; }",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/Child.tsx",
+      'export function Child() { return <div className="page-flow" />; }',
+    )
+    .withCssFile("src/layout.css", ".page-flow { display: block; }\n")
+    .build();
+
+  try {
+    const artifact = await runExperimentalSelectorPilotAgainstCurrentScanner({
+      cwd: project.rootDir,
+    });
+
+    assert.ok(
+      artifact.comparisonResult.comparison.baselineOnly.some(
+        (finding) =>
+          finding.ruleId === "css-class-missing-in-some-contexts" &&
+          finding.subject?.className === "page-flow",
+      ),
+    );
+    assert.ok(
+      !artifact.comparisonResult.comparison.baselineOnly.some(
+        (finding) =>
+          finding.ruleId === "unreachable-css" && finding.subject?.className === "page-flow",
+      ),
+    );
+    assert.ok(
+      artifact.comparisonResult.summary.baselineRuleIds.includes(
+        "css-class-missing-in-some-contexts",
+      ),
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("static analysis engine feature validation preserves unknown stylesheet reachability barrier contexts from unsupported cross-file helper expansion", async () => {
   const project = await new TestProjectBuilder()
     .withTemplate("basic-react-app")

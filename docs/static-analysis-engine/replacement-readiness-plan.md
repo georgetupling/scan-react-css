@@ -65,6 +65,12 @@ The current subsystem already has meaningful replacement foundations:
   `redundant-css-declaration-block`, and `unused-compound-selector-branch`
   through a bounded current-scanner adapter backed by cached project facts and
   new-engine analysis
+- a first `definition-and-usage-integrity` family adapter for
+  `missing-css-class`, `css-class-missing-in-some-contexts`, and
+  `unreachable-css`; the shipped runtime now routes those rules through a
+  dedicated adapter seam and shared engine-analysis cache while deliberately
+  preserving compatibility reachability classification until class-specific
+  native parity is ready
 - comparison tooling against the current scanner
 - producer-owned trace propagation through the main selector-derived reasoning
   path
@@ -180,6 +186,13 @@ Current migration note:
 
 - the first optimization-family runtime-backed slice is now in through a
   bounded current-scanner adapter
+- the first definition-and-usage family adapter seam is now also in for
+  `missing-css-class`, `css-class-missing-in-some-contexts`, and
+  `unreachable-css`
+- for that family, the shipped runtime still intentionally relies on the
+  current compatibility reachability classifier for parity-critical
+  direct/import/render-context decisions until the native reachability handoff
+  is safe
 - that does **not** yet mean the family is fully cut over for replacement
   readiness purposes
 - the remaining work is to write the parity contract, review divergences
@@ -313,6 +326,9 @@ Required close-out action:
 
 - turn the migration matrix into explicit family-level parity contracts,
   adapter decisions, known divergences, and cutover readiness checks
+- finish the native handoff plan for the now-landed
+  `definition-and-usage-integrity` adapter seam so the compatibility
+  reachability classifier can be retired deliberately rather than implicitly
 
 ### Blocker 4: replacement-grade validation is still too narrow
 
@@ -505,6 +521,9 @@ One important nuance for close-out tracking:
 - tranche 5 validation is complete for its bounded scope
 - the remaining work is broader replacement validation, native migration, and
   cutover planning rather than an uncompleted tranche 5
+- some family migration progress is now intentionally adapter-shaped first,
+  including the optimization wave and the first definition-and-usage runtime
+  seam
 
 The core strategic decision is now locked:
 

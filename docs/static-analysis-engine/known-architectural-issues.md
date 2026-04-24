@@ -200,6 +200,11 @@ That is not wrong by itself, because reachability is mostly about import availab
 
 - this is part of why the symbol system feels under-consumed relative to its intended importance
 - it makes the engine feel like "symbol resolution plus a separate render/reachability pipeline" rather than one layered model
+- the current whole-stylesheet reachability summary is still more optimistic
+  than the shipped class-level rule contract in some partial render-path
+  scenarios, so the new family adapter intentionally keeps compatibility
+  reachability classification for `css-class-missing-in-some-contexts` and
+  `unreachable-css`
 
 ### Evidence in code
 
@@ -208,7 +213,12 @@ That is not wrong by itself, because reachability is mostly about import availab
 
 ### Likely cleanup direction
 
-This may not need a direct reachability-to-symbol dependency. But the project should decide more explicitly which later stages are supposed to consume symbol/value summaries and which are intentionally structural.
+This may not need a direct reachability-to-symbol dependency. But the project
+should decide more explicitly which later stages are supposed to consume
+symbol/value summaries and which are intentionally structural. For replacement
+work, the follow-on need is even narrower: publish class-safe reachability
+inputs at the reachability/rule boundary so the shipped definition-and-usage
+adapter can retire its compatibility classifier.
 
 ## Issue 6: Shared Policy Ownership Is Better, But Render Seams Still Need Cleanup
 

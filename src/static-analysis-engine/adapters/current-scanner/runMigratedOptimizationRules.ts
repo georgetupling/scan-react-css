@@ -1,4 +1,4 @@
-import { analyzeProjectSourceTexts } from "../../entry/scan.js";
+import { analyzeProjectModelWithStaticEngine } from "./analyzeProjectModelWithStaticEngine.js";
 import type { ExperimentalRuleResult } from "../../pipeline/rule-execution/types.js";
 import type { ProjectModel } from "../../../model/types.js";
 import { sortFindings } from "../../../runtime/findings.js";
@@ -50,16 +50,7 @@ function buildMigratedOptimizationRuleFindings(
     return findingsByRuleId;
   }
 
-  const engineResult = analyzeProjectSourceTexts({
-    sourceFiles: context.model.facts.sourceFacts.map((sourceFact) => ({
-      filePath: sourceFact.filePath,
-      sourceText: sourceFact.content,
-    })),
-    selectorCssSources: context.model.facts.cssFacts.map((cssFact) => ({
-      filePath: cssFact.filePath,
-      cssText: cssFact.content,
-    })),
-  });
+  const engineResult = analyzeProjectModelWithStaticEngine(context.model);
 
   for (const ruleResult of engineResult.experimentalRuleResults) {
     if (!isMigratedOptimizationRuleId(ruleResult.ruleId)) {

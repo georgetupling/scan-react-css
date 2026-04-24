@@ -483,6 +483,8 @@ Current owners:
 What it owns today:
 
 - compatibility with current severity/confidence and reused CSS fact shapes
+- bounded current-scanner adapters that let shipped rule families migrate in
+  slices before every rule input is fully new-engine-native
 
 Why it is temporary:
 
@@ -497,6 +499,14 @@ Exit criteria:
 
 - rule-execution and CSS-analysis no longer depend directly on old-engine
   implementation types
+
+Current migration note:
+
+- `adapters/current-scanner/` now carries the bounded optimization-family
+  migration wave plus the first `definition-and-usage-integrity` family seam
+- the definition-and-usage adapter intentionally preserves the current
+  compatibility reachability classifier for parity-critical class findings
+  until the reachability/rule boundary publishes class-safe native inputs
 
 ## Shared Infrastructure That Should Move Or Be Clarified
 
