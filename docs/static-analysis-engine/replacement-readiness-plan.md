@@ -139,9 +139,10 @@ Current capability notes:
   fetch-remote project-wide HTML-linked external stylesheets through native
   reachability
 - the current engine now publishes a first-class `externalCssSummary` with
-  active declared providers, and the first native
-  `missing-external-css-class` slice now consumes that summary together with
-  native reachability and class-expression evidence
+  active declared providers, and the shipped runtime now serves
+  `missing-external-css-class` through a bounded adapter whose native rule slice
+  consumes that summary together with native reachability and class-expression
+  evidence
 - first-release decision:
   runtime-specific fetch-remote retrieval, failure fallback, and operational-
   warning shaping stay adapter-backed in the current scanner/runtime layer while
@@ -190,6 +191,8 @@ Current migration note:
   bounded current-scanner adapter
 - the first definition-and-usage family adapter seam is now also in for
   all four shipped rules in that family, including `unused-css-class`
+- the external-css family now also has a shipped runtime migration slice for
+  `missing-external-css-class` through a bounded current-scanner adapter
 - for that family, the shipped runtime now rebuilds
   direct/import/render/global/external reachability from native engine outputs
   instead of calling the old reachability helper
@@ -343,6 +346,27 @@ Required close-out action:
   `definition-and-usage-integrity` adapter seam so the compatibility
   fallback can be retired deliberately rather than implicitly
 
+Current progress note:
+
+- `definition-and-usage-integrity-parity-contract.md` now defines the accepted
+  first-release family contract for the adapter-backed shipped path
+- `definition-and-usage-integrity-divergence-review.md` now records the reviewed
+  comparison differences that are acceptable for adapter-backed cutover but
+  still block native adapter retirement
+- `definition-and-usage-integrity-cutover-checklist.md` now records the
+  family-specific release gate for that family
+- `test/static-analysis-engine/feature/definition-and-usage-integrity-cutover-readiness.test.js`
+  now serves as a focused shipped-runtime readiness suite for that family
+- that readiness suite now explicitly pins a real shipped boundary: source-import
+  ancestry counts as reachable for this family, while wrapper-owned CSS is not
+  automatically credited to descendant class usage
+- `external-css-parity-contract.md`, `external-css-divergence-review.md`, and
+  `external-css-cutover-checklist.md` now define the accepted first-release
+  family contract and remaining runtime-owned boundary for
+  `missing-external-css-class`
+- `test/static-analysis-engine/feature/external-css-cutover-readiness.test.js`
+  now serves as a focused shipped-runtime readiness suite for that family
+
 ### Blocker 4: replacement-grade validation is still too narrow
 
 Why it blocks close-out:
@@ -365,17 +389,16 @@ Why it blocks close-out:
 
 - the shipped CSS-Module rules depend on semantics that the current new engine
   does not yet publish as a first-class layer
-- the shipped external CSS story now has a first meaningful native rule path,
-  but it still needs parity validation before cutover even though the first-
-  release decision is now to keep runtime-specific fetch/fallback behavior
-  adapter-backed
+- the shipped external CSS story now has a landed runtime-backed native slice,
+  but the remaining runtime-specific fetch/fallback behavior is still a
+  deliberate compatibility boundary
 
 Required close-out action:
 
 - add the missing CSS-Module semantic layer needed for native rule migration
-- complete external CSS parity validation on top of the native summary,
-  reachability, and rule surfaces while keeping runtime-specific fetch/fallback
-  behavior in an explicit first-release adapter boundary
+- keep the external CSS parity contract, divergence review, checklist, and
+  readiness coverage current while deciding whether the remaining runtime
+  fetch/fallback boundary should shrink further
 
 ### Blocker 6: cutover mechanics are still undefined
 
@@ -515,6 +538,21 @@ Those artifacts should make these things explicit:
 - which family-specific semantics map engine outcomes onto shipped findings
 - which adapters are allowed in the first replacement release and what retires
   them later
+
+Current progress note:
+
+- the `definition-and-usage-integrity` family now has a parity contract in
+  `definition-and-usage-integrity-parity-contract.md`
+- the `definition-and-usage-integrity` family now also has a reviewed
+  divergence log and a family-specific cutover checklist
+- the `optimization-and-migration` family now also has a parity contract, a
+  reviewed divergence log, a family-specific cutover checklist, and a focused
+  cutover-readiness suite
+- the `external-css` family now also has a parity contract, a reviewed
+  divergence log, a family-specific cutover checklist, and a focused
+  cutover-readiness suite
+- the next close-out artifacts should focus on the remaining first-wave
+  families rather than continuing to invent process for these three
 
 ## Summary
 

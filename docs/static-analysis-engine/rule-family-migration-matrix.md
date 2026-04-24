@@ -72,11 +72,11 @@ The statuses in this document mean:
 
 | Family | Shipped rules | Current new-engine position | Close-out direction |
 | --- | --- | --- | --- |
-| `definition-and-usage-integrity` | `missing-css-class`, `css-class-missing-in-some-contexts`, `unreachable-css`, `unused-css-class` | A full current-scanner family adapter is now in for all four rules; direct/import/render/global/external reachability now comes from a native-backed adapter summary, while current definition lookup and plain-class candidate policy stay adapter-backed for parity | Keep the adapter path as the accepted first replacement shape, then decide when class-safe native rule inputs should replace the remaining parity helpers |
+| `definition-and-usage-integrity` | `missing-css-class`, `css-class-missing-in-some-contexts`, `unreachable-css`, `unused-css-class` | A full current-scanner family adapter is now in for all four rules; direct/import/render/global/external reachability now comes from a native-backed adapter summary, while current definition lookup and plain-class candidate policy stay adapter-backed for parity | Keep the adapter path as the accepted first replacement shape documented in `definition-and-usage-integrity-parity-contract.md`, then decide when class-safe native rule inputs should replace the remaining parity helpers |
 | `ownership-and-organization` | `component-style-cross-component`, `page-style-used-by-single-component`, `global-css-not-global`, `component-css-should-be-global` | No meaningful new-engine rule slice yet | Probably adapter-first, then selective native migration |
 | `dynamic-analysis` | `dynamic-class-reference`, `dynamic-missing-css-class` | Engine has bounded value-flow support, but no shipped-rule migration yet | Needs migration design after parity contract is written |
 | `css-modules` | `missing-css-module-class`, `unused-css-module-class` | No meaningful new-engine rule slice yet, and no first-class CSS-Module semantic layer is published yet | Likely compatibility adapter first, unless a native CSS-Module layer is added before cutover |
-| `external-css` | `missing-external-css-class` | First native rule slice now exists on top of imported external CSS, fetch-remote project-wide stylesheets, active declared providers, and native reachability | Native rule path plus explicit first-release runtime adapter for fetch/fallback behavior |
+| `external-css` | `missing-external-css-class` | The shipped runtime now serves `missing-external-css-class` through a bounded adapter backed by native external CSS summary, native reachability, and native rule execution; runtime-specific fetch/fallback behavior stays outside that rule path | Keep the adapter-backed shipped path as the accepted first replacement shape documented in `external-css-parity-contract.md`, then decide when the remaining runtime fetch/fallback boundary can shrink further |
 | `optimization-and-migration` | `utility-class-replacement`, `duplicate-css-class-definition`, `empty-css-rule`, `redundant-css-declaration-block`, `unused-compound-selector-branch` | First runtime-backed migration wave is in for four rules; `utility-class-replacement` still stays on the old engine | Best first family for parity-first migration |
 
 ## Rule Matrix
@@ -95,7 +95,7 @@ The statuses in this document mean:
 | `dynamic-analysis` | `dynamic-missing-css-class` | old rule engine on `ProjectModel` plus dynamic matching heuristics | `rule-execution` on top of `abstract-values`, CSS-definition evidence, and bounded unknown/possible outcomes | `needs migration design` | This likely needs explicit policy mapping so the new engine does not silently over-report or under-report dynamic missing cases |
 | `css-modules` | `missing-css-module-class` | old CSS Modules rule engine path | likely `rule-execution` with dedicated CSS Module analysis inputs, or compatibility adapter | `likely compatibility adapter first` | The current new engine does not yet expose a first-class CSS-Module semantic layer comparable to the shipped implementation's import/property model |
 | `css-modules` | `unused-css-module-class` | old CSS Modules rule engine path | likely `rule-execution` with dedicated CSS Module usage inputs, or compatibility adapter | `likely compatibility adapter first` | Same parity-first logic as above; do not block engine cutover on full CSS Modules redesign if an explicit adapter keeps the product contract stable, unless a native CSS-Module layer is added first |
-| `external-css` | `missing-external-css-class` | old external CSS rule engine path | `rule-execution` on top of `external-css`, `reachability`, and bounded class/value evidence, with runtime fetch/fallback behavior adapter-backed in the first release | `experimental coverage exists` | The current new engine can now classify external CSS imports in the module graph, propagate directly imported and fetch-remote project-wide external CSS through native reachability, publish active declared providers through `externalCssSummary`, emit a first native `missing-external-css-class` rule slice, and compare that slice against the current scanner; the remaining first-release adapter boundary is runtime-specific fetch/fallback behavior rather than rule semantics |
+| `external-css` | `missing-external-css-class` | current scanner runtime via external-css migration adapter | `rule-execution` on top of `external-css`, `reachability`, and bounded class/value evidence, with runtime fetch/fallback behavior adapter-backed in the first release | `adapter-backed native slice landed` | The shipped runtime now routes this rule through a bounded adapter that consumes native external CSS summary, native reachability, and native rule execution output while preserving shipped finding-shape details such as `column`, `referenceKind`, and reachable external stylesheet specifiers; the remaining first-release adapter boundary is runtime-specific fetch/fallback behavior rather than rule semantics |
 | `optimization-and-migration` | `utility-class-replacement` | old optimization rule engine path | `rule-execution` on top of CSS-definition analysis and configured utility catalogs | `needs migration design` | The new engine can likely support this later, but it is not currently part of the experimental rule slice and may not need to be first-wave |
 | `optimization-and-migration` | `duplicate-css-class-definition` | current scanner runtime via new-engine-backed adapter | `rule-execution` on top of `css-analysis` | `adapter-backed native slice landed` | The shipped runtime now serves this rule through a bounded adapter that consumes cached project facts, runs the new engine once per model, and maps the result back into the shipped finding shape |
 | `optimization-and-migration` | `empty-css-rule` | current scanner runtime via new-engine-backed adapter | `rule-execution` on top of `css-analysis` | `adapter-backed native slice landed` | The shipped runtime now serves this rule through the same cached-fact adapter path, so stylesheet-only projects no longer depend on old rule-local CSS traversal for this finding |
@@ -118,6 +118,9 @@ Important examples:
   already overlap directly with shipped rules and now power the shipped runtime
   for the bounded optimization-family migration wave through a current-scanner
   adapter
+- `missing-external-css-class` now also overlaps directly with a shipped rule
+  and powers the shipped runtime through a bounded current-scanner adapter while
+  runtime-specific fetch/fallback behavior stays outside the rule path
 - `selector-never-satisfied`, `selector-possibly-satisfied`,
   `selector-analysis-unsupported`, and
   `contextual-selector-branch-never-satisfied` are useful migration signals, but
@@ -135,18 +138,34 @@ Those selector-derived experimental rules should be treated as:
 
 Needed before cutover:
 
-- keep partial-path and deep-ancestor parity scenarios green on the
+- keep `definition-and-usage-integrity-parity-contract.md` current as the
+  accepted first-release family contract
+- keep `definition-and-usage-integrity-divergence-review.md` current as the
+  reviewed record for known comparison differences
+- keep `definition-and-usage-integrity-cutover-checklist.md` current as the
+  family release gate
+- keep source-import ancestry and partial-path parity scenarios green on the
   adapter-routed shipped rules
 - keep the native-backed direct/import/render/global/external classification
   aligned with those parity scenarios instead of letting route classification
   drift from shipped behavior
-- wrapper and ancestor-route scenarios
+- direct-import ancestry scenarios
+- explicit non-over-credit checks for wrapper-owned CSS
 - partial-context reachability scenarios
 - direct match, possible match, unknown barrier, and unavailable stylesheet cases
 - partial-template and compound-versus-contextual plain-class evidence cases for
   `unused-css-class`
 - comparison review against current scanner findings, including intentional
   divergences
+
+Current validation note:
+
+- `test/static-analysis-engine/feature/definition-and-usage-integrity-cutover-readiness.test.js`
+  now serves as a focused shipped-runtime readiness suite for the accepted
+  first-wave family contract
+- `test/static-analysis-engine/feature/definition-and-usage-integrity-shadow-divergence.test.js`
+  now serves as a focused comparison-side lock for the reviewed wrapper-owned
+  CSS divergence
 
 ### `ownership-and-organization`
 
@@ -177,6 +196,11 @@ Needed before cutover:
 
 Needed before cutover:
 
+- keep `external-css-parity-contract.md` current as the accepted first-release
+  family contract
+- keep `external-css-divergence-review.md` current as the reviewed record for
+  known family differences
+- keep `external-css-cutover-checklist.md` current as the family release gate
 - keep the native rule path for `missing-external-css-class`
 - keep runtime-specific fetch-remote retrieval, failure fallback, and
   operational-warning shaping adapter-backed in the first replacement release
@@ -185,13 +209,31 @@ Needed before cutover:
 - explicit coverage for unavailable or fallback external stylesheet paths where
   the product contract still expects a deliberate finding or warning shape
 
+Current validation note:
+
+- `test/static-analysis-engine/feature/external-css-cutover-readiness.test.js`
+  now serves as a focused shipped-runtime readiness suite for the accepted
+  first-wave family contract
+
 ### `optimization-and-migration`
 
 Needed before cutover:
 
+- keep `optimization-and-migration-parity-contract.md` current as the accepted
+  first-release family contract
+- keep `optimization-and-migration-divergence-review.md` current as the reviewed
+  record for known family differences
+- keep `optimization-and-migration-cutover-checklist.md` current as the family
+  release gate
 - keep parity and comparison review current for the adapter-backed migrated
   rules
 - separate migration decision for `utility-class-replacement`
+
+Current validation note:
+
+- `test/static-analysis-engine/feature/optimization-and-migration-cutover-readiness.test.js`
+  now serves as a focused shipped-runtime and comparison-side readiness suite
+  for the first-wave family shape
 
 ## Recommended Migration Order
 
@@ -221,25 +263,30 @@ The next steps that follow directly from this matrix are:
 1. use `replacement-acceptance-criteria-checklist.md` and
    `cutover-and-old-engine-retirement-checklist.md` to turn first-wave family
    decisions into explicit ship/no-ship gates
-2. finish the native handoff plan for the
-   `definition-and-usage-integrity` adapter seam, especially:
+2. finish the divergence review and native handoff plan for the
+    `definition-and-usage-integrity` adapter seam, building on the now-landed
+    `definition-and-usage-integrity-parity-contract.md`,
+    `definition-and-usage-integrity-divergence-review.md`, and
+    `definition-and-usage-integrity-cutover-checklist.md`, especially:
    - how class-level `possible` and `unknown` engine outcomes map to shipped
      findings
    - which reachability inputs are safe enough to replace the compatibility
      classifier
    - how contextual selector evidence should and should not satisfy plain class
      checks
-3. decide explicitly which families are adapter-first for initial replacement:
+3. decide explicitly which remaining families are adapter-first for initial
+   replacement:
    - likely `ownership-and-organization`
    - likely `css-modules`
-   - `external-css` now has a visible native path, but the first-release
-     adapter decision still needs to be written down
+   - `external-css` now has a written first-release adapter decision and should
+     stay current rather than implicit
 4. add targeted per-family cutover checklists where the global checklists are
-   still too broad, starting with `optimization-and-migration`
+   still too broad, continuing past the now-landed
+   `definition-and-usage-integrity` and `optimization-and-migration` families
 5. extend replacement validation so comparison is organized around these family
    decisions rather than only around isolated exploratory scenarios
-6. finish the parity contract and divergence log for the now-landed
-   optimization-family adapter wave so the project can decide when that family
+6. keep the now-landed optimization-family parity contract, divergence review,
+   and cutover checklist current so the project can decide when that family
    counts as fully migrated rather than only adapter-backed
 
 ## Open Questions

@@ -41,6 +41,8 @@ It also assumes:
 - [ ] pass the applicable items in
   `replacement-acceptance-criteria-checklist.md`
 - [ ] write the parity contract for each native first-wave rule family
+- [ ] add a family-level divergence review and cutover checklist for each
+  first-wave family that reaches cutover review
 - [ ] freeze the first-wave family decisions:
   native, adapter-backed, or deferred
 - [ ] inventory remaining old-engine dependencies and classify each one as:
@@ -153,9 +155,10 @@ These areas should not be retired early:
 - [ ] CSS Modules old-path logic stays until either a first-class CSS-Module
   layer exists or a deliberate compatibility adapter is proven
 - [ ] external CSS old-path logic stays until the native
-  `missing-external-css-class` path is parity-validated; runtime-specific
-  fetch/fallback behavior is intentionally adapter-backed for the first
-  replacement release and should not be retired with the rule path itself
+  `missing-external-css-class` path and its family cutover artifacts stay
+  parity-validated; runtime-specific fetch/fallback behavior is intentionally
+  adapter-backed for the first replacement release and should not be retired
+  with the rule path itself
 - [ ] ownership-family old-path logic stays until the project explicitly decides
   whether the first replacement release is adapter-first or native-first there
 - [ ] comparison tooling stays at least through the first default-on

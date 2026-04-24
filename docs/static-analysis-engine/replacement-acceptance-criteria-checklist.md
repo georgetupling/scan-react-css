@@ -126,7 +126,10 @@ current:
 
 #### `definition-and-usage-integrity`
 
-- [ ] wrapper and ancestor-route scenarios are covered
+- [ ] the family parity contract, divergence review, and family cutover
+  checklist exist and are current
+- [ ] source-import ancestry and explicit wrapper-owned CSS non-over-credit
+  scenarios are covered
 - [ ] partial-context reachability scenarios are covered
 - [ ] direct match, possible match, unknown barrier, and unavailable stylesheet
   cases are covered
@@ -156,6 +159,8 @@ current:
 
 #### `external-css`
 
+- [ ] the family parity contract, divergence review, and family cutover
+  checklist exist and are current
 - [ ] `missing-external-css-class` has an explicit cutover mode:
   native, with runtime-specific fetch/fallback behavior adapter-backed in the
   first replacement release
@@ -166,6 +171,8 @@ current:
 
 #### `optimization-and-migration`
 
+- [ ] the family parity contract, divergence review, and family cutover
+  checklist exist and are current
 - [ ] parity and comparison review exists for the experimentally migrated rules
 - [ ] `utility-class-replacement` has an explicit first-wave decision:
   included now or deferred as follow-on work

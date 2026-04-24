@@ -20,20 +20,24 @@ test("missing-external-css-class reports missing classes when external css is im
     );
 
     const findings = await runRuleScenario(tempDir);
-
-    assert.ok(
-      findings.some(
-        (finding) =>
-          finding.ruleId === "missing-external-css-class" &&
-          finding.subject?.className === "ghost-btn",
-      ),
+    const ghostFinding = findings.find(
+      (finding) =>
+        finding.ruleId === "missing-external-css-class" &&
+        finding.subject?.className === "ghost-btn",
     );
+
+    assert.ok(ghostFinding);
     assert.ok(
       !findings.some(
         (finding) =>
           finding.ruleId === "missing-external-css-class" && finding.subject?.className === "btn",
       ),
     );
+    assert.deepEqual(ghostFinding?.metadata.externalCssSpecifiers, [
+      "bootstrap/dist/css/bootstrap.css",
+    ]);
+    assert.equal(ghostFinding?.metadata.referenceKind, "string-literal");
+    assert.equal(typeof ghostFinding?.primaryLocation?.column, "number");
   });
 });
 

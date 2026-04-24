@@ -287,6 +287,9 @@ Current migration note:
 
 - first-release fetch-remote retrieval, fallback handling, and operational-
   warning shaping remain a runtime/current-scanner adapter concern
+- the shipped `missing-external-css-class` rule now runs through a bounded
+  current-scanner adapter backed by `pipeline/external-css/`, native
+  reachability, and native rule execution
 - `pipeline/external-css/` should consume normalized HTML/provider inputs and
   publish activation summaries, not own network policy
 
