@@ -1,8 +1,10 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
+import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
 import type { StaticAnalysisEngineResult } from "../types/runtime.js";
 import {
   runAbstractValueStage,
   runCssAnalysisStage,
+  runExternalCssStage,
   runModuleGraphStage,
   runParseStage,
   runProjectBindingResolutionStage,
@@ -24,6 +26,7 @@ export function analyzeSourceText(input: {
   sourceText: string;
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
+  externalCss?: ExternalCssAnalysisInput;
 }): StaticAnalysisEngineResult {
   const parseStage = runParseStage(input);
   const symbolResolutionStage = runSymbolResolutionStage({
@@ -51,11 +54,15 @@ export function analyzeSourceText(input: {
   const cssAnalysisStage = runCssAnalysisStage({
     selectorCssSources: input.selectorCssSources ?? [],
   });
+  const externalCssStage = runExternalCssStage({
+    externalCss: input.externalCss,
+  });
   const reachabilityStage = runReachabilityStage({
     moduleGraph: moduleGraphStage.moduleGraph,
     renderGraph: renderGraphStage.renderGraph,
     renderSubtrees: renderIrStage.renderSubtrees,
     selectorCssSources: input.selectorCssSources ?? [],
+    externalCssSummary: externalCssStage.externalCssSummary,
   });
   const selectorAnalysisStage = runSelectorAnalysisStage({
     selectorQueries: input.selectorQueries ?? [],
@@ -73,6 +80,7 @@ export function analyzeSourceText(input: {
     symbols: symbolResolutionStage.symbols,
     classExpressions: abstractValueStage.classExpressions,
     cssFiles: cssAnalysisStage.cssFiles,
+    externalCssSummary: externalCssStage.externalCssSummary,
     reachabilitySummary: reachabilityStage.reachabilitySummary,
     renderGraph: renderGraphStage.renderGraph,
     renderSubtrees: renderIrStage.renderSubtrees,
@@ -88,6 +96,7 @@ export function analyzeProjectSourceTexts(input: {
   }>;
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
+  externalCss?: ExternalCssAnalysisInput;
 }): StaticAnalysisEngineResult {
   const parseStage = runProjectParseStage(input.sourceFiles);
   const symbolResolutionStage = runProjectSymbolResolutionStage({
@@ -125,11 +134,15 @@ export function analyzeProjectSourceTexts(input: {
   const cssAnalysisStage = runCssAnalysisStage({
     selectorCssSources: input.selectorCssSources ?? [],
   });
+  const externalCssStage = runExternalCssStage({
+    externalCss: input.externalCss,
+  });
   const reachabilityStage = runReachabilityStage({
     moduleGraph: moduleGraphStage.moduleGraph,
     renderGraph: renderGraphStage.renderGraph,
     renderSubtrees: renderIrStage.renderSubtrees,
     selectorCssSources: input.selectorCssSources ?? [],
+    externalCssSummary: externalCssStage.externalCssSummary,
   });
   const selectorAnalysisStage = runSelectorAnalysisStage({
     selectorQueries: input.selectorQueries ?? [],
@@ -147,6 +160,7 @@ export function analyzeProjectSourceTexts(input: {
     symbols: bindingResolutionStage.symbols,
     classExpressions: abstractValueStage.classExpressions,
     cssFiles: cssAnalysisStage.cssFiles,
+    externalCssSummary: externalCssStage.externalCssSummary,
     reachabilitySummary: reachabilityStage.reachabilitySummary,
     renderGraph: renderGraphStage.renderGraph,
     renderSubtrees: renderIrStage.renderSubtrees,

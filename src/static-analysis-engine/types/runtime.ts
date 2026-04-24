@@ -1,5 +1,6 @@
 import type { ClassExpressionSummary } from "../pipeline/abstract-values/types.js";
 import type { ExperimentalCssFileAnalysis } from "../pipeline/css-analysis/types.js";
+import type { ExternalCssSummary } from "../pipeline/external-css/types.js";
 import type { ModuleGraph } from "../pipeline/module-graph/types.js";
 import type { ReachabilitySummary } from "../pipeline/reachability/types.js";
 import type { RenderGraph } from "../pipeline/render-graph/types.js";
@@ -14,6 +15,7 @@ export type StaticAnalysisEngineResult = {
   symbols: Map<EngineSymbolId, EngineSymbol>;
   classExpressions: ClassExpressionSummary[];
   cssFiles: ExperimentalCssFileAnalysis[];
+  externalCssSummary: ExternalCssSummary;
   reachabilitySummary: ReachabilitySummary;
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];

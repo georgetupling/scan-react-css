@@ -12,6 +12,7 @@ export {
   summarizeClassNameExpression,
   toAbstractClassSet,
 } from "./pipeline/abstract-values/index.js";
+export { buildExternalCssSummary } from "./pipeline/external-css/index.js";
 export {
   buildSameFileRenderSubtrees,
   collectRenderRegionsFromSubtrees,
@@ -47,6 +48,14 @@ export type {
 export { deriveAnalysisConfidence } from "./types/analysis.js";
 export type { StaticAnalysisEngineResult } from "./types/runtime.js";
 export type { ExperimentalCssFileAnalysis } from "./pipeline/css-analysis/index.js";
+export type {
+  ActiveExternalCssProvider,
+  ExternalCssAnalysisInput,
+  ExternalCssGlobalProviderConfig,
+  ExternalCssMode,
+  ExternalCssSummary,
+  HtmlStylesheetLinkInput,
+} from "./pipeline/external-css/index.js";
 export type {
   RenderGraph,
   RenderGraphEdge,

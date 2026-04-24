@@ -2,6 +2,7 @@ import ts from "typescript";
 
 import type { ClassExpressionSummary } from "../../pipeline/abstract-values/index.js";
 import type { ExperimentalCssFileAnalysis } from "../../pipeline/css-analysis/index.js";
+import type { ExternalCssSummary } from "../../pipeline/external-css/index.js";
 import type { ModuleGraph } from "../../pipeline/module-graph/index.js";
 import type { ReachabilitySummary } from "../../pipeline/reachability/index.js";
 import type { RenderGraph } from "../../pipeline/render-graph/index.js";
@@ -72,6 +73,10 @@ export type ProjectRenderContextStageResult = {
 
 export type CssAnalysisStageResult = {
   cssFiles: ExperimentalCssFileAnalysis[];
+};
+
+export type ExternalCssStageResult = {
+  externalCssSummary: ExternalCssSummary;
 };
 
 export type ReachabilityStageResult = {

@@ -208,6 +208,7 @@ Important testing decisions:
 - Keep durable implementation docs under `docs/design`
 - Keep non-implemented ideas under `docs/future-work`
 - Do not mix future-work ideas back into the design docs unless they become real product behavior
+- When returning a completed block of work, suggest a concise commit message that summarizes it
 
 If you add or change operational behavior, update the relevant docs in `docs/design`.
 

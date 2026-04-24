@@ -7,6 +7,10 @@ export type ReachabilityDerivation =
       kind: "source-file-direct-import";
     }
   | {
+      kind: "source-file-project-wide-external-css";
+      stylesheetHref: string;
+    }
+  | {
       kind: "whole-component-direct-import";
     }
   | {

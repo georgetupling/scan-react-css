@@ -25,6 +25,7 @@ The actual top-level pipeline stages are the ones wired in `src/static-analysis-
 - render graph
 - render IR
 - CSS analysis
+- external CSS summary
 - reachability
 - selector analysis
 - rule execution

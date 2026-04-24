@@ -78,9 +78,10 @@ For project analysis, the live flow is:
 7. render graph
 8. render IR
 9. CSS analysis
-10. reachability
-11. selector analysis
-12. rule execution
+10. external CSS summary
+11. reachability
+12. selector analysis
+13. rule execution
 
 For single-file analysis, the flow is simpler and bypasses some project-wide
 scaffolding, but it still mirrors the same broad pipeline shape.
@@ -96,9 +97,10 @@ The intended steady-state pipeline remains:
 5. render-graph
 6. render-ir
 7. css-analysis
-8. reachability
-9. selector-analysis
-10. rule-execution
+8. external-css-summary
+9. reachability
+10. selector-analysis
+11. rule-execution
 
 The intended durable top-level subsystem shape is:
 
@@ -127,6 +129,7 @@ That shared-library shape is now partially implemented in code:
 | render graph | `entry/stages/renderGraphStage.ts`, `pipeline/render-graph/` | durable | `pipeline/render-graph/` |
 | render IR | `entry/stages/renderIrStage.ts`, `pipeline/render-ir/` | durable | `pipeline/render-ir/` |
 | CSS analysis | `pipeline/css-analysis/`, `parser/` | durable | `pipeline/css-analysis/` plus shared CSS libraries |
+| external CSS summary | `pipeline/external-css/` | durable | `pipeline/external-css/` plus native reachability/rule inputs |
 | reachability | `pipeline/reachability/` | durable | `pipeline/reachability/` |
 | selector parsing | `libraries/selector-parsing/` | shared infrastructure, not a durable stage | `libraries/selector-parsing/` |
 | selector analysis | `pipeline/selector-analysis/` | durable | `pipeline/selector-analysis/` |

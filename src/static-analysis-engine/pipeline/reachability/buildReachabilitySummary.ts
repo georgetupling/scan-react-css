@@ -6,6 +6,7 @@ import {
   type RenderNode,
   type RenderSubtree,
 } from "../render-ir/index.js";
+import type { ExternalCssSummary } from "../external-css/types.js";
 import type { SelectorSourceInput } from "../selector-analysis/types.js";
 import type { AnalysisTrace } from "../../types/analysis.js";
 import type {
@@ -20,12 +21,19 @@ export function buildReachabilitySummary(input: {
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];
   cssSources: SelectorSourceInput[];
+  externalCssSummary: ExternalCssSummary;
 }): ReachabilitySummary {
   const knownCssFilePaths = new Set(
     input.cssSources
       .map((cssSource) => normalizeProjectPath(cssSource.filePath))
       .filter(Boolean) as string[],
   );
+  const projectWideExternalStylesheetFilePaths = new Set(
+    input.externalCssSummary.projectWideStylesheetFilePaths
+      .map((filePath) => normalizeProjectPath(filePath))
+      .filter(Boolean) as string[],
+  );
+  const analyzedSourceFilePaths = collectAnalyzedSourceFilePaths(input.moduleGraph);
 
   return {
     stylesheets: input.cssSources.map((cssSource) =>
@@ -35,6 +43,8 @@ export function buildReachabilitySummary(input: {
         renderGraph: input.renderGraph,
         renderSubtrees: input.renderSubtrees,
         knownCssFilePaths,
+        projectWideExternalStylesheetFilePaths,
+        analyzedSourceFilePaths,
       }),
     ),
   };
@@ -46,6 +56,8 @@ function buildStylesheetReachabilityRecord(input: {
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];
   knownCssFilePaths: Set<string>;
+  projectWideExternalStylesheetFilePaths: Set<string>;
+  analyzedSourceFilePaths: string[];
 }): StylesheetReachabilityRecord {
   const cssFilePath = normalizeProjectPath(input.cssSource.filePath);
   if (!cssFilePath) {
@@ -91,24 +103,73 @@ function buildStylesheetReachabilityRecord(input: {
     }
   }
 
-  if (directlyImportingSourceFilePaths.length === 0) {
+  const contextRecordsByKey = new Map<string, StylesheetReachabilityContextRecord>();
+  const sortedImportingSourceFilePaths = directlyImportingSourceFilePaths.sort((left, right) =>
+    left.localeCompare(right),
+  );
+
+  if (sortedImportingSourceFilePaths.length > 0) {
+    for (const contextRecord of buildContextRecords({
+      importingSourceFilePaths: sortedImportingSourceFilePaths,
+      renderGraph: input.renderGraph,
+      renderSubtrees: input.renderSubtrees,
+    })) {
+      contextRecordsByKey.set(serializeContextKey(contextRecord), contextRecord);
+    }
+  }
+
+  const isProjectWideExternalStylesheet =
+    input.projectWideExternalStylesheetFilePaths.has(cssFilePath);
+  if (isProjectWideExternalStylesheet) {
+    for (const filePath of input.analyzedSourceFilePaths) {
+      addContextRecord(contextRecordsByKey, {
+        context: {
+          kind: "source-file",
+          filePath,
+        },
+        availability: "definite",
+        reasons: [
+          "source file is covered by a project-wide HTML-linked remote external stylesheet",
+        ],
+        derivations: [
+          {
+            kind: "source-file-project-wide-external-css",
+            stylesheetHref: cssFilePath,
+          },
+        ],
+      });
+    }
+  }
+
+  const contextRecords = [...contextRecordsByKey.values()].sort(compareContextRecords);
+  if (contextRecords.length === 0) {
     return withStylesheetRecordTraces({
       cssFilePath: input.cssSource.filePath,
       availability: "unavailable",
       contexts: [],
-      reasons: ["no analyzed source file directly imports this stylesheet"],
+      reasons: [
+        input.projectWideExternalStylesheetFilePaths.size > 0
+          ? "no analyzed source file directly imports this stylesheet or reaches it project-wide"
+          : "no analyzed source file directly imports this stylesheet",
+      ],
       traces: [],
     });
   }
 
-  const sortedImportingSourceFilePaths = directlyImportingSourceFilePaths.sort((left, right) =>
-    left.localeCompare(right),
+  const reasons: string[] = [];
+  if (sortedImportingSourceFilePaths.length > 0) {
+    reasons.push(
+      `stylesheet is directly imported by ${sortedImportingSourceFilePaths.length} analyzed source file${sortedImportingSourceFilePaths.length === 1 ? "" : "s"}`,
+    );
+  }
+  if (isProjectWideExternalStylesheet) {
+    reasons.push(
+      "stylesheet is active project-wide through an HTML-linked remote external stylesheet",
+    );
+  }
+  reasons.push(
+    `reachability is attached to ${contextRecords.length} explicit render context${contextRecords.length === 1 ? "" : "s"}`,
   );
-  const contextRecords = buildContextRecords({
-    importingSourceFilePaths: sortedImportingSourceFilePaths,
-    renderGraph: input.renderGraph,
-    renderSubtrees: input.renderSubtrees,
-  });
 
   return withStylesheetRecordTraces({
     cssFilePath: input.cssSource.filePath,
@@ -120,12 +181,16 @@ function buildStylesheetReachabilityRecord(input: {
           ? "unknown"
           : "unavailable",
     contexts: contextRecords,
-    reasons: [
-      `stylesheet is directly imported by ${sortedImportingSourceFilePaths.length} analyzed source file${sortedImportingSourceFilePaths.length === 1 ? "" : "s"}`,
-      `reachability is attached to ${contextRecords.length} explicit render context${contextRecords.length === 1 ? "" : "s"}`,
-    ],
+    reasons,
     traces: [],
   });
+}
+
+function collectAnalyzedSourceFilePaths(moduleGraph: ModuleGraph): string[] {
+  return [...moduleGraph.modulesById.values()]
+    .filter((moduleNode) => moduleNode.kind === "source")
+    .map((moduleNode) => normalizeProjectPath(moduleNode.filePath) ?? moduleNode.filePath)
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function buildContextRecords(input: {
@@ -1381,6 +1446,9 @@ function compareDerivations(left: ReachabilityDerivation, right: ReachabilityDer
 function serializeDerivation(derivation: ReachabilityDerivation): string {
   switch (derivation.kind) {
     case "source-file-direct-import":
+      return derivation.kind;
+    case "source-file-project-wide-external-css":
+      return [derivation.kind, derivation.stylesheetHref].join(":");
     case "whole-component-direct-import":
     case "whole-component-all-known-renderers-definite":
     case "whole-component-at-least-one-renderer":

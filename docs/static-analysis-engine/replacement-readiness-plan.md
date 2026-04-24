@@ -122,10 +122,12 @@ Current capability notes:
   which is acceptable as long as the product contract handles them deliberately
 - the current engine does **not** yet expose a first-class CSS-Module semantic
   layer equivalent to the shipped scanner's CSS-Module import/property model
-- the current engine **does** now propagate directly imported external CSS
-  through native reachability, but it does **not** yet cover the broader
-  provider and declared-global external CSS behavior the shipped scanner
-  supports
+- the current engine **does** now propagate directly imported external CSS and
+  fetch-remote project-wide HTML-linked external stylesheets through native
+  reachability
+- the current engine now publishes a first-class `externalCssSummary` with
+  active declared providers, but provider-backed rule behavior is still not
+  wired into native rule execution
 - broad render-prop or arbitrary component-as-prop support is **not** assumed to
   be part of the current replacement baseline unless a shipped rule truly needs
   it
@@ -137,9 +139,9 @@ Still open:
 - add any missing bounded support required for those rules
 - add a first-class CSS-Module semantic layer before native CSS-Module rule
   cutover
-- port or re-home the remaining external stylesheet/provider handling so
-  provider-backed and declared-global external CSS can participate in
-  new-engine-native reachability and rule execution
+- port or re-home the remaining provider-backed external CSS rule behavior so
+  declared providers and external CSS summaries can participate in
+  new-engine-native rule execution
 - distinguish "needed for parity-first replacement" from "nice follow-on engine
   expansion"
 
@@ -313,17 +315,17 @@ Why it blocks close-out:
 
 - the shipped CSS-Module rules depend on semantics that the current new engine
   does not yet publish as a first-class layer
-- the shipped external CSS rules still depend on provider and declared-global
-  external stylesheet logic that has not yet been ported into a durable
-  new-engine-native reachability and rule path, even though direct imported
-  external CSS now reaches native reachability
+- the shipped external CSS rules still depend on provider-backed rule behavior
+  that has not yet been ported into a durable new-engine-native rule path, even
+  though direct imported external CSS, fetch-remote project-wide stylesheets,
+  and active declared providers now have native engine surfaces
 
 Required close-out action:
 
 - add the missing CSS-Module semantic layer needed for native rule migration
-- port or explicitly wrap the remaining external stylesheet/provider logic so
-  the first replacement release has a deliberate external CSS story beyond
-  directly imported external stylesheets
+- port or explicitly wrap the remaining provider-backed external CSS rule logic
+  so the first replacement release has a deliberate external CSS story on top
+  of the native summary and reachability surfaces
 
 ### Blocker 6: cutover mechanics are still undefined
 

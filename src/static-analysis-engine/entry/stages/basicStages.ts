@@ -2,6 +2,7 @@ import ts from "typescript";
 
 import { collectClassExpressionSummaries } from "../../pipeline/abstract-values/index.js";
 import { analyzeCssSources } from "../../pipeline/css-analysis/index.js";
+import { buildExternalCssSummary } from "../../pipeline/external-css/index.js";
 import {
   buildModuleGraphFromSource,
   buildModuleGraphFromSources,
@@ -30,6 +31,7 @@ import type { EngineModuleId, EngineSymbolId } from "../../types/core.js";
 import type {
   AbstractValueStageResult,
   CssAnalysisStageResult,
+  ExternalCssStageResult,
   ModuleGraphStageResult,
   ParseStageResult,
   ProjectBindingResolutionStageResult,
@@ -185,11 +187,20 @@ export function runCssAnalysisStage(input: {
   };
 }
 
+export function runExternalCssStage(input: {
+  externalCss?: import("../../pipeline/external-css/index.js").ExternalCssAnalysisInput;
+}): ExternalCssStageResult {
+  return {
+    externalCssSummary: buildExternalCssSummary(input.externalCss),
+  };
+}
+
 export function runReachabilityStage(input: {
   moduleGraph: ModuleGraph;
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];
   selectorCssSources: SelectorSourceInput[];
+  externalCssSummary: import("../../pipeline/external-css/index.js").ExternalCssSummary;
 }): ReachabilityStageResult {
   return {
     reachabilitySummary: buildReachabilitySummary({
@@ -197,6 +208,7 @@ export function runReachabilityStage(input: {
       renderGraph: input.renderGraph,
       renderSubtrees: input.renderSubtrees,
       cssSources: input.selectorCssSources,
+      externalCssSummary: input.externalCssSummary,
     }),
   };
 }
