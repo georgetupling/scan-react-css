@@ -17,23 +17,38 @@ import type {
   ScanDiagnostic,
   ScanProjectInput,
   ScanProjectResult,
+  ScanProgressCallback,
   ScanSummary,
 } from "./types.js";
 
 export async function scanProject(input: ScanProjectInput = {}): Promise<ScanProjectResult> {
-  const discovered = await discoverProjectFiles(input);
+  const progress = createScanProgressReporter(input.onProgress);
+  const discovered = await runScanStage(
+    progress,
+    "discover-files",
+    "Discovering project files",
+    () => discoverProjectFiles(input),
+  );
   const diagnostics: ScanDiagnostic[] = [...discovered.diagnostics];
-  const config = await loadScannerConfig({
-    rootDir: discovered.rootDir,
-    configBaseDir: input.configBaseDir,
-    configPath: input.configPath,
-    diagnostics,
-  });
-  const [sourceFiles, cssFiles, htmlFiles] = await Promise.all([
-    readSourceFiles(discovered.sourceFiles, diagnostics),
-    readCssFiles(discovered.cssFiles, diagnostics),
-    readHtmlFiles(discovered.htmlFiles, diagnostics),
-  ]);
+  const config = await runScanStage(progress, "load-config", "Loading config", () =>
+    loadScannerConfig({
+      rootDir: discovered.rootDir,
+      configBaseDir: input.configBaseDir,
+      configPath: input.configPath,
+      diagnostics,
+    }),
+  );
+  const [sourceFiles, cssFiles, htmlFiles] = await runScanStage(
+    progress,
+    "load-files",
+    "Loading project files",
+    () =>
+      Promise.all([
+        readSourceFiles(discovered.sourceFiles, diagnostics),
+        readCssFiles(discovered.cssFiles, diagnostics),
+        readHtmlFiles(discovered.htmlFiles, diagnostics),
+      ]),
+  );
   const htmlStylesheetLinks = htmlFiles.flatMap((htmlFile) =>
     extractHtmlStylesheetLinks({
       filePath: htmlFile.filePath,
@@ -45,26 +60,40 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
     htmlStylesheetLinks,
     diagnostics,
   });
-  const linkedCssFiles = await readCssFiles(
-    collectLinkedCssFiles({
-      rootDir: discovered.rootDir,
-      cssFiles: discovered.cssFiles,
-      htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
-    }),
-    diagnostics,
-  );
-  const packageCssImports = await loadPackageCssImports({
-    rootDir: discovered.rootDir,
-    sourceFiles,
-    cssSources: [...cssFiles, ...linkedCssFiles],
-    diagnostics,
-  });
-  const remoteCssSources = config.externalCss.fetchRemote
-    ? await fetchRemoteCssSources({
-        htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
-        remoteTimeoutMs: config.externalCss.remoteTimeoutMs,
+  const linkedCssFiles = await runScanStage(
+    progress,
+    "load-html-css",
+    "Loading HTML-linked CSS",
+    () =>
+      readCssFiles(
+        collectLinkedCssFiles({
+          rootDir: discovered.rootDir,
+          cssFiles: discovered.cssFiles,
+          htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
+        }),
         diagnostics,
-      })
+      ),
+  );
+  const packageCssImports = await runScanStage(
+    progress,
+    "load-package-css",
+    "Loading package CSS imports",
+    () =>
+      loadPackageCssImports({
+        rootDir: discovered.rootDir,
+        sourceFiles,
+        cssSources: [...cssFiles, ...linkedCssFiles],
+        diagnostics,
+      }),
+  );
+  const remoteCssSources = config.externalCss.fetchRemote
+    ? await runScanStage(progress, "fetch-remote-css", "Fetching remote CSS", () =>
+        fetchRemoteCssSources({
+          htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
+          remoteTimeoutMs: config.externalCss.remoteTimeoutMs,
+          diagnostics,
+        }),
+      )
     : [];
   const selectorCssSources = mergeCssSources([
     ...cssFiles,
@@ -83,11 +112,14 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
       htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
       packageCssImports: packageCssImports.imports,
     },
+    onProgress: input.onProgress,
   });
-  const ruleResult = runRules({
-    analysis: engineResult.projectAnalysis,
-    config,
-  });
+  const ruleResult = await runScanStage(progress, "run-rules", "Running rules", () =>
+    runRules({
+      analysis: engineResult.projectAnalysis,
+      config,
+    }),
+  );
   const failed =
     diagnostics.some((diagnostic) => diagnostic.severity === "error") ||
     ruleResult.findings.some((finding) =>
@@ -117,6 +149,28 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
       htmlFiles: discovered.htmlFiles,
     },
   };
+}
+
+function createScanProgressReporter(onProgress?: ScanProgressCallback) {
+  return (stage: string, status: "started" | "completed", message: string): void => {
+    onProgress?.({
+      stage,
+      status,
+      message,
+    });
+  };
+}
+
+async function runScanStage<T>(
+  progress: ReturnType<typeof createScanProgressReporter>,
+  stage: string,
+  message: string,
+  run: () => T | Promise<T>,
+): Promise<T> {
+  progress(stage, "started", message);
+  const result = await run();
+  progress(stage, "completed", message);
+  return result;
 }
 
 async function readSourceFiles(

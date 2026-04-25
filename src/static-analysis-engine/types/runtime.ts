@@ -3,3 +3,13 @@ import type { ProjectAnalysis } from "../pipeline/project-analysis/types.js";
 export type StaticAnalysisEngineResult = {
   projectAnalysis: ProjectAnalysis;
 };
+
+export type AnalysisProgressStatus = "started" | "completed";
+
+export type AnalysisProgressEvent = {
+  stage: string;
+  status: AnalysisProgressStatus;
+  message: string;
+};
+
+export type AnalysisProgressCallback = (event: AnalysisProgressEvent) => void;

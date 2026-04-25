@@ -45,7 +45,12 @@ export type {
   AnalysisTraceCategory,
 } from "./types/analysis.js";
 export { deriveAnalysisConfidence } from "./types/analysis.js";
-export type { StaticAnalysisEngineResult } from "./types/runtime.js";
+export type {
+  AnalysisProgressCallback,
+  AnalysisProgressEvent,
+  AnalysisProgressStatus,
+  StaticAnalysisEngineResult,
+} from "./types/runtime.js";
 export type { ExperimentalCssFileAnalysis } from "./pipeline/css-analysis/index.js";
 export type {
   CssModuleAnalysis,

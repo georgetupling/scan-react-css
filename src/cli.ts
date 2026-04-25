@@ -5,7 +5,7 @@ import path from "node:path";
 import { scanProject } from "./project/index.js";
 import type { AnalysisTrace } from "./static-analysis-engine/index.js";
 import type { Finding, RuleSeverity } from "./rules/index.js";
-import type { ScanDiagnostic, ScanProjectResult } from "./project/index.js";
+import type { ScanDiagnostic, ScanProgressEvent, ScanProjectResult } from "./project/index.js";
 import { severityMeetsThreshold } from "./rules/severity.js";
 
 type CliArgs = {
@@ -50,11 +50,23 @@ if (args.help) {
   process.exit(0);
 }
 
-const result = await scanProject({
-  rootDir: args.rootDir,
-  configBaseDir: process.cwd(),
-  configPath: args.configPath,
+const progressRenderer = createCliProgressRenderer({
+  enabled: shouldShowProgress(args),
+  stream: process.stderr,
+  useColor: shouldUseColor(process.stderr),
 });
+
+let result: ScanProjectResult;
+try {
+  result = await scanProject({
+    rootDir: args.rootDir,
+    configBaseDir: process.cwd(),
+    configPath: args.configPath,
+    onProgress: progressRenderer.onProgress,
+  });
+} finally {
+  progressRenderer.stop();
+}
 const focusedResult = applyFocusFilter(result, args.focusPaths);
 
 if (args.json) {
@@ -414,6 +426,79 @@ function colorSeverity(
 
 function shouldUseColor(stream: NodeJS.WriteStream): boolean {
   return Boolean(stream.isTTY && !process.env.NO_COLOR);
+}
+
+type CliProgressRenderer = {
+  onProgress?: (event: ScanProgressEvent) => void;
+  stop: () => void;
+};
+
+function shouldShowProgress(args: CliArgs): boolean {
+  return Boolean(!args.json && process.stderr.isTTY);
+}
+
+function createCliProgressRenderer(input: {
+  enabled: boolean;
+  stream: NodeJS.WriteStream;
+  useColor: boolean;
+}): CliProgressRenderer {
+  if (!input.enabled) {
+    return {
+      stop() {},
+    };
+  }
+
+  const frames = ["-", "\\", "|", "/"];
+  let frameIndex = 0;
+  let activeMessage: string | undefined;
+  let timer: NodeJS.Timeout | undefined;
+
+  const clearLine = () => {
+    input.stream.write("\r\u001b[2K");
+  };
+  const render = () => {
+    if (!activeMessage) {
+      return;
+    }
+
+    const frame = frames[frameIndex % frames.length];
+    frameIndex += 1;
+    const marker = input.useColor ? `\u001b[36m${frame}\u001b[0m` : frame;
+    clearLine();
+    input.stream.write(`${marker} ${activeMessage}`);
+  };
+  const startTimer = () => {
+    if (timer) {
+      return;
+    }
+
+    timer = setInterval(render, 120);
+    timer.unref();
+  };
+
+  return {
+    onProgress(event) {
+      if (event.status === "completed") {
+        if (activeMessage === event.message) {
+          activeMessage = undefined;
+          clearLine();
+        }
+        return;
+      }
+
+      activeMessage = event.message;
+      render();
+      startTimer();
+    },
+    stop() {
+      if (timer) {
+        clearInterval(timer);
+        timer = undefined;
+      }
+      activeMessage = undefined;
+      clearLine();
+    },
+  };
 }
 
 function groupBy<T>(

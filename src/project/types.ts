@@ -9,7 +9,18 @@ export type ScanProjectInput = {
   htmlFilePaths?: string[];
   configPath?: string;
   configBaseDir?: string;
+  onProgress?: ScanProgressCallback;
 };
+
+export type ScanProgressStatus = "started" | "completed";
+
+export type ScanProgressEvent = {
+  stage: string;
+  status: ScanProgressStatus;
+  message: string;
+};
+
+export type ScanProgressCallback = (event: ScanProgressEvent) => void;
 
 export type ScanDiagnosticSeverity = "debug" | "info" | "warning" | "error";
 

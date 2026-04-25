@@ -13,6 +13,46 @@ test("root package export exposes the stable product contract", () => {
   assert.equal("runRules" in publicApi, false);
 });
 
+test("scanProject reports scan progress events", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      'import "./App.css";\nexport function App() { return <main className="shell">Hello</main>; }\n',
+    )
+    .withCssFile("src/App.css", ".shell { display: block; }\n")
+    .build();
+  const events = [];
+
+  try {
+    await scanProject({
+      rootDir: project.rootDir,
+      onProgress(event) {
+        events.push(event);
+      },
+    });
+
+    assert.ok(
+      events.some(
+        (event) =>
+          event.stage === "discover-files" &&
+          event.status === "started" &&
+          event.message === "Discovering project files",
+      ),
+    );
+    assert.ok(
+      events.some(
+        (event) =>
+          event.stage === "reachability" &&
+          event.status === "started" &&
+          event.message === "Building reachability graph",
+      ),
+    );
+    assert.ok(events.some((event) => event.stage === "run-rules" && event.status === "completed"));
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("discoverProjectFiles scans source and CSS under a root directory", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile("src/components/Card.tsx", "export function Card() { return <div />; }\n")

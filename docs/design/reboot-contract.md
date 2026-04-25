@@ -80,8 +80,10 @@ type ScanProjectInput = {
   rootDir?: string;
   sourceFilePaths?: string[];
   cssFilePaths?: string[];
+  htmlFilePaths?: string[];
   configPath?: string;
   configBaseDir?: string;
+  onProgress?: (event: ScanProgressEvent) => void;
 };
 
 async function scanProject(input?: ScanProjectInput): Promise<ScanProjectResult>;
@@ -101,6 +103,9 @@ programmatic scans deterministic while preserving a simple project-scan default.
 discovery for the Node API. If omitted, it defaults to `rootDir`. The CLI passes the command
 directory as `configBaseDir`, so users can scan nested roots while keeping config in the directory
 where they invoked `scan-react-css`.
+
+`onProgress` receives stage lifecycle events with `{ stage, status, message }`. These events are
+advisory user feedback only; they must not affect scan results or JSON report determinism.
 
 The root package export should not expose `analyzeProject`, discovery helpers, rule runners, config
 loaders, or raw analysis types as part of the stable product API.
@@ -574,6 +579,7 @@ Output path behavior:
 - `--overwrite-output` replaces the selected output path and requires `--json`
 - stdout contains only a short human-readable confirmation and final failure status
 - the CLI exit code still follows the scan failure state after the report is written
+- JSON mode does not print progress updates
 
 The JSON object written to disk should contain:
 
@@ -604,6 +610,7 @@ Text output should:
 - put the summary at the end
 - color severity labels in interactive terminals
 - suppress color when stdout is not a TTY or `NO_COLOR` is set
+- print active scan progress to `stderr` for interactive terminals
 - omit trace details from CLI output
 
 ## Rebuild Scope Around The Core

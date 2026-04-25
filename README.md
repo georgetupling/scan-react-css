@@ -107,6 +107,10 @@ These historical flags are recognized but not supported in this build yet:
 
 `--output-file` and `--overwrite-output` require `--json`.
 
+Interactive text-mode scans print the active scan stage to `stderr` while analysis is running, for
+example `Building reachability graph`. JSON mode keeps progress output disabled so automation sees
+only the report confirmation on stdout.
+
 ### JSON Reports
 
 `--json` writes a deterministic JSON report to a file and prints a short confirmation to stdout.
@@ -241,8 +245,12 @@ type ScanProjectInput = {
   cssFilePaths?: string[];
   configPath?: string;
   configBaseDir?: string;
+  onProgress?: (event: ScanProgressEvent) => void;
 };
 ```
+
+`onProgress` receives `{ stage, status, message }` events while project loading, engine analysis,
+and rule execution run. It is optional and does not change scan results.
 
 The result contains:
 

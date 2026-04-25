@@ -1,7 +1,7 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
 import type { CssModuleAnalysisOptions } from "../pipeline/css-modules/index.js";
-import type { StaticAnalysisEngineResult } from "../types/runtime.js";
+import type { AnalysisProgressCallback, StaticAnalysisEngineResult } from "../types/runtime.js";
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
 import { runCssModuleAnalysisStage } from "./stages/cssModuleAnalysisStage.js";
 import { runExternalCssStage } from "./stages/externalCssStage.js";
@@ -20,6 +20,7 @@ export function analyzeSourceText(input: {
   selectorCssSources?: SelectorSourceInput[];
   externalCss?: ExternalCssAnalysisInput;
   cssModules?: CssModuleAnalysisOptions;
+  onProgress?: AnalysisProgressCallback;
 }): StaticAnalysisEngineResult {
   return analyzeProjectSourceTexts({
     sourceFiles: [
@@ -32,6 +33,7 @@ export function analyzeSourceText(input: {
     selectorCssSources: input.selectorCssSources,
     externalCss: input.externalCss,
     cssModules: input.cssModules,
+    onProgress: input.onProgress,
   });
 }
 
@@ -44,57 +46,125 @@ export function analyzeProjectSourceTexts(input: {
   selectorCssSources?: SelectorSourceInput[];
   externalCss?: ExternalCssAnalysisInput;
   cssModules?: CssModuleAnalysisOptions;
+  onProgress?: AnalysisProgressCallback;
 }): StaticAnalysisEngineResult {
-  const parseStage = runParseStage(input.sourceFiles);
-  const moduleGraphStage = runModuleGraphStage({
-    parsedFiles: parseStage.parsedFiles,
-  });
-  const symbolResolutionStage = runSymbolResolutionStage({
-    parsedFiles: parseStage.parsedFiles,
-    moduleGraph: moduleGraphStage.moduleGraph,
-  });
-  const renderModelStage = runRenderModelStage({
-    parsedFiles: parseStage.parsedFiles,
-    symbolResolution: symbolResolutionStage,
-  });
-  const cssAnalysisStage = runCssAnalysisStage({
-    selectorCssSources: input.selectorCssSources ?? [],
-  });
-  const cssModuleAnalysisStage = runCssModuleAnalysisStage({
-    parsedFiles: parseStage.parsedFiles,
-    moduleGraph: moduleGraphStage.moduleGraph,
-    cssFiles: cssAnalysisStage.cssFiles,
-    options: input.cssModules,
-  });
-  const externalCssStage = runExternalCssStage({
-    externalCss: input.externalCss,
-  });
-  const reachabilityStage = runReachabilityStage({
-    moduleGraph: moduleGraphStage.moduleGraph,
-    renderGraph: renderModelStage.renderGraph,
-    renderSubtrees: renderModelStage.renderSubtrees,
-    selectorCssSources: input.selectorCssSources ?? [],
-    externalCssSummary: externalCssStage.externalCssSummary,
-  });
-  const selectorAnalysisStage = runSelectorAnalysisStage({
-    selectorQueries: input.selectorQueries ?? [],
-    selectorCssSources: input.selectorCssSources ?? [],
-    renderSubtrees: renderModelStage.renderSubtrees,
-    reachabilitySummary: reachabilityStage.reachabilitySummary,
-  });
-  const projectAnalysisStage = runProjectAnalysisStage({
-    moduleGraph: moduleGraphStage.moduleGraph,
-    cssFiles: cssAnalysisStage.cssFiles,
-    cssModules: cssModuleAnalysisStage.cssModules,
-    externalCssSummary: externalCssStage.externalCssSummary,
-    reachabilitySummary: reachabilityStage.reachabilitySummary,
-    renderGraph: renderModelStage.renderGraph,
-    renderSubtrees: renderModelStage.renderSubtrees,
-    unsupportedClassReferences: renderModelStage.unsupportedClassReferences,
-    selectorQueryResults: selectorAnalysisStage.selectorQueryResults,
-  });
+  const progress = createAnalysisProgressReporter(input.onProgress);
+  const parseStage = runAnalysisStage(progress, "parse", "Parsing source files", () =>
+    runParseStage(input.sourceFiles),
+  );
+  const moduleGraphStage = runAnalysisStage(progress, "module-graph", "Building module graph", () =>
+    runModuleGraphStage({
+      parsedFiles: parseStage.parsedFiles,
+    }),
+  );
+  const symbolResolutionStage = runAnalysisStage(
+    progress,
+    "symbol-resolution",
+    "Resolving symbols",
+    () =>
+      runSymbolResolutionStage({
+        parsedFiles: parseStage.parsedFiles,
+        moduleGraph: moduleGraphStage.moduleGraph,
+      }),
+  );
+  const renderModelStage = runAnalysisStage(progress, "render-model", "Building render model", () =>
+    runRenderModelStage({
+      parsedFiles: parseStage.parsedFiles,
+      symbolResolution: symbolResolutionStage,
+    }),
+  );
+  const cssAnalysisStage = runAnalysisStage(progress, "css-analysis", "Analyzing CSS", () =>
+    runCssAnalysisStage({
+      selectorCssSources: input.selectorCssSources ?? [],
+    }),
+  );
+  const cssModuleAnalysisStage = runAnalysisStage(
+    progress,
+    "css-modules",
+    "Analyzing CSS Modules",
+    () =>
+      runCssModuleAnalysisStage({
+        parsedFiles: parseStage.parsedFiles,
+        moduleGraph: moduleGraphStage.moduleGraph,
+        cssFiles: cssAnalysisStage.cssFiles,
+        options: input.cssModules,
+      }),
+  );
+  const externalCssStage = runAnalysisStage(
+    progress,
+    "external-css",
+    "Analyzing external CSS",
+    () =>
+      runExternalCssStage({
+        externalCss: input.externalCss,
+      }),
+  );
+  const reachabilityStage = runAnalysisStage(
+    progress,
+    "reachability",
+    "Building reachability graph",
+    () =>
+      runReachabilityStage({
+        moduleGraph: moduleGraphStage.moduleGraph,
+        renderGraph: renderModelStage.renderGraph,
+        renderSubtrees: renderModelStage.renderSubtrees,
+        selectorCssSources: input.selectorCssSources ?? [],
+        externalCssSummary: externalCssStage.externalCssSummary,
+      }),
+  );
+  const selectorAnalysisStage = runAnalysisStage(
+    progress,
+    "selector-analysis",
+    "Analyzing selector reachability",
+    () =>
+      runSelectorAnalysisStage({
+        selectorQueries: input.selectorQueries ?? [],
+        selectorCssSources: input.selectorCssSources ?? [],
+        renderSubtrees: renderModelStage.renderSubtrees,
+        reachabilitySummary: reachabilityStage.reachabilitySummary,
+      }),
+  );
+  const projectAnalysisStage = runAnalysisStage(
+    progress,
+    "project-analysis",
+    "Building project analysis",
+    () =>
+      runProjectAnalysisStage({
+        moduleGraph: moduleGraphStage.moduleGraph,
+        cssFiles: cssAnalysisStage.cssFiles,
+        cssModules: cssModuleAnalysisStage.cssModules,
+        externalCssSummary: externalCssStage.externalCssSummary,
+        reachabilitySummary: reachabilityStage.reachabilitySummary,
+        renderGraph: renderModelStage.renderGraph,
+        renderSubtrees: renderModelStage.renderSubtrees,
+        unsupportedClassReferences: renderModelStage.unsupportedClassReferences,
+        selectorQueryResults: selectorAnalysisStage.selectorQueryResults,
+      }),
+  );
 
   return {
     projectAnalysis: projectAnalysisStage.projectAnalysis,
   };
+}
+
+function createAnalysisProgressReporter(onProgress?: AnalysisProgressCallback) {
+  return (stage: string, status: "started" | "completed", message: string): void => {
+    onProgress?.({
+      stage,
+      status,
+      message,
+    });
+  };
+}
+
+function runAnalysisStage<T>(
+  progress: ReturnType<typeof createAnalysisProgressReporter>,
+  stage: string,
+  message: string,
+  run: () => T,
+): T {
+  progress(stage, "started", message);
+  const result = run();
+  progress(stage, "completed", message);
+  return result;
 }
