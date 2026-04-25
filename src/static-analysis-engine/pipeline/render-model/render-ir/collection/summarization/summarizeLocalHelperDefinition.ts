@@ -48,9 +48,20 @@ export function summarizeLocalHelperDefinition(input: {
   body: ts.ConciseBody;
 }): LocalHelperDefinition | undefined {
   const parameterNames: string[] = [];
-  for (const parameter of input.parameters) {
+  let restParameterName: string | undefined;
+  for (let index = 0; index < input.parameters.length; index += 1) {
+    const parameter = input.parameters[index];
     if (!ts.isIdentifier(parameter.name)) {
       return undefined;
+    }
+
+    if (parameter.dotDotDotToken) {
+      if (index !== input.parameters.length - 1 || restParameterName) {
+        return undefined;
+      }
+
+      restParameterName = parameter.name.text;
+      continue;
     }
 
     parameterNames.push(parameter.name.text);
@@ -66,6 +77,7 @@ export function summarizeLocalHelperDefinition(input: {
     filePath: input.filePath,
     parsedSourceFile: input.parsedSourceFile,
     parameterNames,
+    restParameterName,
     returnExpression: bodySummary.returnExpression,
     localExpressionBindings: bodySummary.localExpressionBindings,
   };

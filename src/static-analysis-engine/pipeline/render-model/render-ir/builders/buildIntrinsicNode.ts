@@ -3,6 +3,7 @@ import ts from "typescript";
 import type { ClassExpressionSummary } from "../../abstract-values/types.js";
 import {
   buildClassExpressionTraces,
+  mergeClassNameValues,
   summarizeClassNameExpression,
   toAbstractClassSet,
 } from "../../abstract-values/classExpressions.js";
@@ -159,6 +160,13 @@ function summarizeBoundClassNameExpression(
     return summarizeBoundClassNameExpression(foundExpression, context);
   }
 
+  const joinedClassArraySummary = ts.isCallExpression(expression)
+    ? summarizeJoinedClassArrayExpression(expression, context)
+    : undefined;
+  if (joinedClassArraySummary) {
+    return joinedClassArraySummary;
+  }
+
   const helperResolution = ts.isCallExpression(expression)
     ? resolveHelperCallContext(expression, context)
     : undefined;
@@ -214,6 +222,37 @@ function summarizeBoundClassNameExpression(
 
   return {
     value: summarizeClassNameExpression(expression),
+    sourceExpression: expression,
+  };
+}
+
+function summarizeJoinedClassArrayExpression(
+  expression: ts.CallExpression,
+  context: BuildContext,
+):
+  | {
+      value: ReturnType<typeof summarizeClassNameExpression>;
+      sourceExpression: ts.Expression;
+    }
+  | undefined {
+  if (
+    !ts.isPropertyAccessExpression(expression.expression) ||
+    expression.expression.name.text !== "join" ||
+    expression.arguments.length > 1
+  ) {
+    return undefined;
+  }
+
+  const sourceElements = resolveExactClassArrayElements(expression.expression.expression, context);
+  if (!sourceElements) {
+    return undefined;
+  }
+
+  return {
+    value: mergeClassNameValues(
+      sourceElements.map((element) => summarizeBoundClassNameExpression(element, context).value),
+      "class array join",
+    ),
     sourceExpression: expression,
   };
 }
@@ -311,6 +350,36 @@ function resolveExactClassArrayElements(
     }
 
     return elements;
+  }
+
+  if (
+    ts.isCallExpression(expression) &&
+    ts.isPropertyAccessExpression(expression.expression) &&
+    expression.expression.name.text === "filter" &&
+    expression.arguments.length === 1
+  ) {
+    const callback = unwrapExpression(expression.arguments[0]);
+    if (ts.isIdentifier(callback) && callback.text === "Boolean") {
+      const sourceElements = resolveExactClassArrayElements(
+        expression.expression.expression,
+        context,
+      );
+      if (!sourceElements) {
+        return undefined;
+      }
+
+      const filteredElements: ts.Expression[] = [];
+      for (const element of sourceElements) {
+        const isTruthy = resolveExactTruthyExpression(element, context);
+        if (isTruthy === false) {
+          continue;
+        }
+
+        filteredElements.push(element);
+      }
+
+      return filteredElements;
+    }
   }
 
   if (

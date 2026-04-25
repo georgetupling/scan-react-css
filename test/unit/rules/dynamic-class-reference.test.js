@@ -142,6 +142,148 @@ test("dynamic-class-reference does not report bounded array joins, concatenation
   }
 });
 
+test("dynamic-class-reference does not report common local and imported class helper patterns", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/classHelpers.ts",
+      [
+        "export function importedCn(...classes) {",
+        "  return classes.filter(Boolean).join(' ');",
+        "}",
+        "export function importedVariantClass(name) {",
+        "  const classes = { secondary: 'variant-secondary' };",
+        "  return classes[name];",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        "import classnames from 'classnames';",
+        "import { importedCn, importedVariantClass } from './classHelpers';",
+        "",
+        "function joinClasses(...classes) {",
+        "  return classes.filter(Boolean).join(' ');",
+        "}",
+        "",
+        "const localCn = (...args) => joinClasses('local-wrapper', ...args);",
+        "",
+        "function localVariantClass(variant) {",
+        "  switch (variant) {",
+        "    case 'danger':",
+        "      return 'tone-danger';",
+        "    default:",
+        "      return 'tone-safe';",
+        "  }",
+        "}",
+        "",
+        "function localMapClass(name) {",
+        "  const classes = { mapped: 'mapped-class' };",
+        "  return classes[name];",
+        "}",
+        "",
+        "export function App(props) {",
+        "  const arrayClass = ['array-class', props.ready && 'array-ready'].filter(Boolean).join(' ');",
+        "  const tone = props.danger ? 'danger' : 'safe';",
+        "  return (",
+        "    <main",
+        "      className={localCn(",
+        "        'root',",
+        "        arrayClass,",
+        "        classnames('classnames-root', { selected: props.selected }),",
+        "        `button--${props.primary ? 'primary' : 'ghost'}`,",
+        "        props.disabled ? 'disabled' : 'enabled',",
+        "        props.active && 'active',",
+        "        'icon-' + (props.small ? 'sm' : 'lg'),",
+        "        ['nested-array', props.open && 'open'],",
+        "        localVariantClass(tone),",
+        "        localMapClass('mapped'),",
+        "        importedCn('imported', importedVariantClass('secondary'))",
+        "      )}",
+        "    >Hello</main>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/App.css",
+      [
+        ".active { color: green; }",
+        ".array-class { display: block; }",
+        ".array-ready { display: block; }",
+        ".button--ghost { display: block; }",
+        ".button--primary { display: block; }",
+        ".classnames-root { display: block; }",
+        ".disabled { opacity: .5; }",
+        ".enabled { opacity: 1; }",
+        ".icon-lg { width: 2rem; }",
+        ".icon-sm { width: 1rem; }",
+        ".imported { display: block; }",
+        ".local-wrapper { display: block; }",
+        ".mapped-class { display: block; }",
+        ".nested-array { display: block; }",
+        ".open { display: block; }",
+        ".root { display: block; }",
+        ".selected { display: block; }",
+        ".tone-danger { display: block; }",
+        ".tone-safe { display: block; }",
+        ".variant-secondary { display: block; }",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx", "src/classHelpers.ts"],
+      cssFilePaths: ["src/App.css"],
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "dynamic-class-reference"),
+      [],
+    );
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "missing-css-class"),
+      [],
+    );
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "unused-css-class"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("dynamic-class-reference still reports helper calls that cannot be bounded", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      "export function App(props) { return <main className={joinUnknown('root', props.className)}>Hello</main>; }\n",
+    )
+    .withCssFile("src/App.css", ".root { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx"],
+      cssFilePaths: ["src/App.css"],
+    });
+
+    const finding = result.findings.find(
+      (candidate) => candidate.ruleId === "dynamic-class-reference",
+    );
+    assert.equal(finding?.data?.rawExpressionText, "joinUnknown('root', props.className)");
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("dynamic-class-reference can be disabled from config", async () => {
   const project = await new TestProjectBuilder()
     .withConfig({

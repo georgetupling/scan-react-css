@@ -1,7 +1,10 @@
 import ts from "typescript";
 
 import { collectExportedComponentDefinitions } from "./collection/discovery/collectExportedComponentDefinitions.js";
-import { collectExportedHelperDefinitions } from "./collection/discovery/collectExportedHelperDefinitions.js";
+import {
+  collectExportedHelperDefinitions,
+  collectTopLevelHelperDefinitions,
+} from "./collection/discovery/collectExportedHelperDefinitions.js";
 import { collectSameFileComponents } from "./collection/discovery/collectSameFileComponents.js";
 import type {
   LocalHelperDefinition,
@@ -12,6 +15,7 @@ export type ProjectRenderDefinitions = {
   componentDefinitionsByFilePath: Map<string, SameFileComponentDefinition[]>;
   exportedComponentsByFilePath: Map<string, Map<string, SameFileComponentDefinition>>;
   exportedHelperDefinitionsByFilePath: Map<string, Map<string, LocalHelperDefinition>>;
+  topLevelHelperDefinitionsByFilePath: Map<string, Map<string, LocalHelperDefinition>>;
 };
 
 export function buildProjectRenderDefinitions(input: {
@@ -45,6 +49,15 @@ export function buildProjectRenderDefinitions(input: {
       input.parsedFiles.map((parsedFile) => [
         parsedFile.filePath,
         collectExportedHelperDefinitions({
+          filePath: parsedFile.filePath,
+          parsedSourceFile: parsedFile.parsedSourceFile,
+        }),
+      ]),
+    ),
+    topLevelHelperDefinitionsByFilePath: new Map(
+      input.parsedFiles.map((parsedFile) => [
+        parsedFile.filePath,
+        collectTopLevelHelperDefinitions({
           filePath: parsedFile.filePath,
           parsedSourceFile: parsedFile.parsedSourceFile,
         }),

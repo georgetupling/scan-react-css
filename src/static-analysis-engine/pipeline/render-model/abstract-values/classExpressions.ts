@@ -169,6 +169,10 @@ export function buildClassExpressionTraces(input: {
   ];
 }
 
+export function mergeClassNameValues(values: AbstractValue[], reason: string): AbstractValue {
+  return mergeClassSets(values, reason);
+}
+
 function getClassExpressionTraceSummary(value: AbstractValue): string {
   if (value.kind === "string-exact") {
     return "className expression evaluated to an exact string";

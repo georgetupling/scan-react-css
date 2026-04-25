@@ -112,10 +112,7 @@ export function getHelperCallResolutionFailureReason(
     return buildHelperExpansionReason(expansionScope, "budgetExceeded");
   }
 
-  if (
-    expression.arguments.length !== helperDefinition.parameterNames.length ||
-    expression.arguments.some((argument) => ts.isSpreadElement(argument))
-  ) {
+  if (!canBindHelperArguments(expression, helperDefinition, context)) {
     return buildHelperExpansionReason(expansionScope, "unsupportedArguments");
   }
 
@@ -149,20 +146,11 @@ export function resolveHelperCallContext(
     return undefined;
   }
 
-  if (
-    expression.arguments.length !== helperDefinition.parameterNames.length ||
-    expression.arguments.some((argument) => ts.isSpreadElement(argument))
-  ) {
+  if (!canBindHelperArguments(expression, helperDefinition, context)) {
     return undefined;
   }
 
-  const helperExpressionBindings = new Map<string, ts.Expression>();
-  for (let index = 0; index < helperDefinition.parameterNames.length; index += 1) {
-    helperExpressionBindings.set(
-      helperDefinition.parameterNames[index],
-      expression.arguments[index],
-    );
-  }
+  const helperExpressionBindings = bindHelperArguments(expression, helperDefinition, context);
 
   const inheritedExpressionBindings = mergeExpressionBindings(
     context.expressionBindings,
@@ -187,6 +175,74 @@ export function resolveHelperCallContext(
     expression: helperDefinition.returnExpression,
     context: helperContext,
   };
+}
+
+function canBindHelperArguments(
+  expression: ts.CallExpression,
+  helperDefinition: LocalHelperDefinition,
+  context: BuildContext,
+): boolean {
+  const expandedArguments = expandHelperArguments(expression.arguments, context);
+  if (!expandedArguments) {
+    return false;
+  }
+
+  if (helperDefinition.restParameterName) {
+    return expandedArguments.length >= helperDefinition.parameterNames.length;
+  }
+
+  return expandedArguments.length === helperDefinition.parameterNames.length;
+}
+
+function bindHelperArguments(
+  expression: ts.CallExpression,
+  helperDefinition: LocalHelperDefinition,
+  context: BuildContext,
+): Map<string, ts.Expression> {
+  const helperExpressionBindings = new Map<string, ts.Expression>();
+  const expandedArguments = expandHelperArguments(expression.arguments, context) ?? [];
+  for (let index = 0; index < helperDefinition.parameterNames.length; index += 1) {
+    helperExpressionBindings.set(helperDefinition.parameterNames[index], expandedArguments[index]);
+  }
+
+  if (helperDefinition.restParameterName) {
+    const restArguments = expandedArguments.slice(helperDefinition.parameterNames.length);
+    helperExpressionBindings.set(
+      helperDefinition.restParameterName,
+      ts.factory.createArrayLiteralExpression(restArguments, false),
+    );
+  }
+
+  return helperExpressionBindings;
+}
+
+function expandHelperArguments(
+  argumentsList: ts.NodeArray<ts.Expression>,
+  context: BuildContext,
+): ts.Expression[] | undefined {
+  const expandedArguments: ts.Expression[] = [];
+  for (const argument of argumentsList) {
+    if (!ts.isSpreadElement(argument)) {
+      expandedArguments.push(argument);
+      continue;
+    }
+
+    const spreadExpression =
+      resolveBoundExpression(argument.expression, context) ?? argument.expression;
+    if (!ts.isArrayLiteralExpression(spreadExpression)) {
+      return undefined;
+    }
+
+    for (const element of spreadExpression.elements) {
+      if (ts.isOmittedExpression(element) || ts.isSpreadElement(element)) {
+        return undefined;
+      }
+
+      expandedArguments.push(element);
+    }
+  }
+
+  return expandedArguments;
 }
 
 export function mergeExpressionBindings(

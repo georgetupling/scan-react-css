@@ -53,6 +53,7 @@ export function buildRenderModel(input: RenderModelBuildInput): RenderModel {
   });
   const renderSubtrees = buildRenderSubtrees({
     componentDefinitionsByFilePath: renderDefinitions.componentDefinitionsByFilePath,
+    topLevelHelperDefinitionsByFilePath: renderDefinitions.topLevelHelperDefinitionsByFilePath,
     componentsByFilePath: componentAvailability.componentsByFilePath,
     importedExpressionBindingsByFilePath:
       input.symbolResolution.importedExpressionBindingsByFilePath,
@@ -81,6 +82,7 @@ export function buildRenderModel(input: RenderModelBuildInput): RenderModel {
 
 function buildRenderSubtrees(input: {
   componentDefinitionsByFilePath: Map<string, SameFileComponentDefinition[]>;
+  topLevelHelperDefinitionsByFilePath: Map<string, Map<string, LocalHelperDefinition>>;
   componentsByFilePath: Map<string, Map<string, SameFileComponentDefinition>>;
   importedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
   importedHelperDefinitionsByFilePath: Map<string, Map<string, LocalHelperDefinition>>;
@@ -110,6 +112,8 @@ function buildRenderSubtrees(input: {
           input.importedExpressionBindingsByFilePath.get(filePath) ?? new Map(),
         importedHelperDefinitions:
           input.importedHelperDefinitionsByFilePath.get(filePath) ?? new Map(),
+        topLevelHelperDefinitions:
+          input.topLevelHelperDefinitionsByFilePath.get(filePath) ?? new Map(),
         importedNamespaceExpressionBindings:
           input.importedNamespaceExpressionBindingsByFilePath.get(filePath) ?? new Map(),
         importedNamespaceHelperDefinitions:

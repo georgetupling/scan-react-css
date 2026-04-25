@@ -36,6 +36,10 @@ export function buildSameFileRenderSubtrees(input: {
     string,
     import("./collection/shared/types.js").LocalHelperDefinition
   >;
+  topLevelHelperDefinitions?: Map<
+    string,
+    import("./collection/shared/types.js").LocalHelperDefinition
+  >;
   importedNamespaceExpressionBindings?: Map<string, Map<string, ts.Expression>>;
   importedNamespaceHelperDefinitions?: Map<
     string,
@@ -67,6 +71,7 @@ export function buildSameFileRenderSubtrees(input: {
       ]),
       helperDefinitions: new Map([
         ...(input.importedHelperDefinitions?.entries() ?? []),
+        ...(input.topLevelHelperDefinitions?.entries() ?? []),
         ...definition.localHelperDefinitions.entries(),
       ]),
       namespaceExpressionBindings: new Map(

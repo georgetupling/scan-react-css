@@ -86,6 +86,81 @@ test("CLI hides debug findings unless debug output is requested", async () => {
   }
 });
 
+test("CLI rejects unknown options before scanning", async () => {
+  const error = await captureRejectedCliRun(["--definitely-unknown", "--json"]);
+
+  assert.equal(error.code, 2);
+  assert.match(error.stderr, /Unknown option: --definitely-unknown/);
+  assert.match(error.stderr, /Usage: scan-react-css/);
+  assert.equal(error.stdout, "");
+});
+
+test("CLI rejects historical options that are recognized but not yet restored", async () => {
+  const historicalOptions = [
+    ["--focus", "src/components"],
+    ["--output-file", "report.json"],
+    ["--overwrite-output"],
+    ["--print-config", "on"],
+    ["--verbosity", "high"],
+    ["--output-min-severity", "warn"],
+  ];
+
+  for (const args of historicalOptions) {
+    const error = await captureRejectedCliRun([".", ...args, "--json"]);
+
+    assert.equal(error.code, 2);
+    assert.match(
+      error.stderr,
+      new RegExp(
+        `${escapeRegExp(args[0])} is recognized, but is not supported in this build yet\\.`,
+      ),
+    );
+    assert.equal(error.stdout, "");
+  }
+});
+
+test("CLI rejects missing option values before scanning", async () => {
+  const error = await captureRejectedCliRun(["--config", "--json"]);
+
+  assert.equal(error.code, 2);
+  assert.match(error.stderr, /--config requires a path value\./);
+  assert.equal(error.stdout, "");
+});
+
+test("CLI reports file roots cleanly in JSON mode", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const error = await captureRejectedCliRun([project.filePath("src/App.tsx"), "--json"]);
+    const output = JSON.parse(error.stdout);
+
+    assert.equal(error.code, 1);
+    assert.equal(error.stderr, "");
+    assert.equal(output.failed, true);
+    assert.equal(output.diagnostics[0].code, "discovery.root-not-directory");
+    assert.match(output.diagnostics[0].message, /scan root must be a directory/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI reports missing roots cleanly in JSON mode", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const error = await captureRejectedCliRun([project.filePath("missing-root"), "--json"]);
+    const output = JSON.parse(error.stdout);
+
+    assert.equal(error.code, 1);
+    assert.equal(error.stderr, "");
+    assert.equal(output.failed, true);
+    assert.equal(output.diagnostics[0].code, "discovery.root-not-found");
+    assert.match(output.diagnostics[0].message, /scan root does not exist or cannot be accessed/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 function runCli(args) {
   return execFileAsync(process.execPath, [CLI_PATH, ...args], {
     windowsHide: true,
@@ -100,4 +175,8 @@ async function captureRejectedCliRun(args) {
   }
 
   assert.fail("expected CLI command to fail");
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

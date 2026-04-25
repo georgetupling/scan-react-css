@@ -1,4 +1,4 @@
-import { readdir } from "node:fs/promises";
+import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import type { ProjectDiscoveryResult, ProjectFileRecord, ScanDiagnostic } from "./types.js";
 import { normalizeProjectPath, resolveProjectFile, resolveRootDir } from "./pathUtils.js";
@@ -14,6 +14,16 @@ export async function discoverProjectFiles(input: {
 }): Promise<ProjectDiscoveryResult> {
   const rootDir = resolveRootDir(input.rootDir);
   const diagnostics: ScanDiagnostic[] = [];
+  const rootValidationDiagnostic = await validateRootDir(rootDir);
+  if (rootValidationDiagnostic) {
+    diagnostics.push(rootValidationDiagnostic);
+    return {
+      rootDir,
+      sourceFiles: [],
+      cssFiles: [],
+      diagnostics,
+    };
+  }
 
   const sourceFiles = input.sourceFilePaths
     ? normalizeExplicitFiles(rootDir, input.sourceFilePaths)
@@ -37,6 +47,32 @@ export async function discoverProjectFiles(input: {
     cssFiles,
     diagnostics,
   };
+}
+
+async function validateRootDir(rootDir: string): Promise<ScanDiagnostic | undefined> {
+  try {
+    const rootStats = await stat(rootDir);
+    if (!rootStats.isDirectory()) {
+      return {
+        code: "discovery.root-not-directory",
+        severity: "error",
+        phase: "discovery",
+        filePath: ".",
+        message: `scan root must be a directory: ${rootDir}`,
+      };
+    }
+
+    return undefined;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return {
+      code: "discovery.root-not-found",
+      severity: "error",
+      phase: "discovery",
+      filePath: ".",
+      message: `scan root does not exist or cannot be accessed: ${rootDir} (${message})`,
+    };
+  }
 }
 
 async function discoverFilesByPredicate(

@@ -12,7 +12,35 @@ type CliArgs = {
   help: boolean;
 };
 
-const args = parseArgs(process.argv.slice(2));
+class CliUsageError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CliUsageError";
+  }
+}
+
+const PLANNED_BUT_UNSUPPORTED_FLAGS = new Set([
+  "--focus",
+  "--output-file",
+  "--overwrite-output",
+  "--print-config",
+  "--verbosity",
+  "--output-min-severity",
+]);
+
+let args: CliArgs;
+try {
+  args = parseArgs(process.argv.slice(2));
+} catch (error) {
+  if (error instanceof CliUsageError) {
+    console.error(error.message);
+    console.error("");
+    printHelp(process.stderr);
+    process.exit(2);
+  }
+
+  throw error;
+}
 
 if (args.help) {
   printHelp();
@@ -76,7 +104,12 @@ function parseArgs(rawArgs: string[]): CliArgs {
     }
 
     if (arg === "--config") {
-      args.configPath = rawArgs[index + 1];
+      const value = rawArgs[index + 1];
+      if (!value || value.startsWith("-")) {
+        throw new CliUsageError("--config requires a path value.");
+      }
+
+      args.configPath = value;
       index += 1;
       continue;
     }
@@ -91,16 +124,27 @@ function parseArgs(rawArgs: string[]): CliArgs {
       continue;
     }
 
+    if (PLANNED_BUT_UNSUPPORTED_FLAGS.has(arg)) {
+      throw new CliUsageError(`${arg} is recognized, but is not supported in this build yet.`);
+    }
+
+    if (arg.startsWith("-")) {
+      throw new CliUsageError(`Unknown option: ${arg}`);
+    }
+
     if (!args.rootDir) {
       args.rootDir = arg;
+      continue;
     }
+
+    throw new CliUsageError(`Unexpected positional argument: ${arg}`);
   }
 
   return args;
 }
 
-function printHelp(): void {
-  console.log(`Usage: scan-react-css [rootDir] [--config path] [--json] [--trace]`);
+function printHelp(stream: NodeJS.WriteStream = process.stdout): void {
+  stream.write(`Usage: scan-react-css [rootDir] [--config path] [--json] [--trace]\n`);
 }
 
 function formatJsonResult(result: ScanProjectResult, includeDebug: boolean): object {

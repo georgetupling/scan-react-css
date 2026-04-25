@@ -65,6 +65,47 @@ test("explicit file paths override default discovery for that file kind", async 
   }
 });
 
+test("discoverProjectFiles reports file roots without traversing them", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const discovered = await discoverProjectFiles({
+      rootDir: project.filePath("src/App.tsx"),
+    });
+
+    assert.deepEqual(discovered.sourceFiles, []);
+    assert.deepEqual(discovered.cssFiles, []);
+    assert.equal(discovered.diagnostics.length, 1);
+    assert.equal(discovered.diagnostics[0].code, "discovery.root-not-directory");
+    assert.equal(discovered.diagnostics[0].severity, "error");
+    assert.match(discovered.diagnostics[0].message, /scan root must be a directory/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject reports missing roots as deterministic diagnostics", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.filePath("missing-root"),
+    });
+
+    assert.equal(result.failed, true);
+    assert.equal(result.diagnostics.length, 1);
+    assert.equal(result.diagnostics[0].code, "discovery.root-not-found");
+    assert.equal(result.diagnostics[0].severity, "error");
+    assert.deepEqual(result.files.sourceFiles, []);
+    assert.deepEqual(result.files.cssFiles, []);
+    assert.equal(result.summary.sourceFileCount, 0);
+    assert.equal(result.summary.cssFileCount, 0);
+    assert.equal(result.summary.diagnosticsBySeverity.error, 1);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("scanProject returns deterministic public summary from discovered files", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

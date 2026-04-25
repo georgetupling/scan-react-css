@@ -1,7 +1,5 @@
 import ts from "typescript";
 
-import { isRenderableExpression } from "../shared/renderableExpressionGuards.js";
-
 export function summarizeSwitchStatementAsExpression(
   statement: ts.SwitchStatement,
 ): ts.Expression | undefined {
@@ -102,7 +100,7 @@ export function summarizeStatementAsReturnExpression(
   }
 
   if (ts.isReturnStatement(statement) && statement.expression) {
-    return isRenderableExpression(statement.expression) ? statement.expression : undefined;
+    return statement.expression;
   }
 
   if (ts.isSwitchStatement(statement)) {
@@ -150,7 +148,7 @@ function summarizeSwitchClauseReturnExpression(
 ): ts.Expression | undefined {
   for (const statement of statements) {
     if (ts.isReturnStatement(statement) && statement.expression) {
-      return isRenderableExpression(statement.expression) ? statement.expression : undefined;
+      return statement.expression;
     }
 
     if (ts.isBreakStatement(statement) || ts.isEmptyStatement(statement)) {

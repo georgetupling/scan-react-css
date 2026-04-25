@@ -30,6 +30,7 @@ export type LocalHelperDefinition = {
   filePath: string;
   parsedSourceFile: ts.SourceFile;
   parameterNames: string[];
+  restParameterName?: string;
   returnExpression: ts.Expression;
   localExpressionBindings: Map<string, ts.Expression>;
 };
