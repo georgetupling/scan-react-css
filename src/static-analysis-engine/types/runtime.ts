@@ -10,6 +10,7 @@ export type AnalysisProgressEvent = {
   stage: string;
   status: AnalysisProgressStatus;
   message: string;
+  durationMs?: number;
 };
 
 export type AnalysisProgressCallback = (event: AnalysisProgressEvent) => void;

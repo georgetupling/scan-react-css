@@ -15,6 +15,8 @@ import { fetchRemoteCssSources } from "./remoteCss.js";
 import type {
   ProjectFileRecord,
   ScanDiagnostic,
+  ScanPerformance,
+  ScanPerformanceStage,
   ScanProjectInput,
   ScanProjectResult,
   ScanProgressCallback,
@@ -22,7 +24,12 @@ import type {
 } from "./types.js";
 
 export async function scanProject(input: ScanProjectInput = {}): Promise<ScanProjectResult> {
-  const progress = createScanProgressReporter(input.onProgress);
+  const totalStartedAt = performance.now();
+  const performanceStages: ScanPerformanceStage[] = [];
+  const progress = createScanProgressReporter({
+    onProgress: input.onProgress,
+    performanceStages: input.collectPerformance ? performanceStages : undefined,
+  });
   const discovered = await runScanStage(
     progress,
     "discover-files",
@@ -112,7 +119,7 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
       htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
       packageCssImports: packageCssImports.imports,
     },
-    onProgress: input.onProgress,
+    onProgress: (event) => progress(event.stage, event.status, event.message, event.durationMs),
   });
   const ruleResult = await runScanStage(progress, "run-rules", "Running rules", () =>
     runRules({
@@ -142,6 +149,14 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
     findings: ruleResult.findings,
     diagnostics,
     summary,
+    ...(input.collectPerformance
+      ? {
+          performance: buildScanPerformance({
+            totalMs: performance.now() - totalStartedAt,
+            stages: performanceStages,
+          }),
+        }
+      : {}),
     failed,
     files: {
       sourceFiles: discovered.sourceFiles,
@@ -151,12 +166,29 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
   };
 }
 
-function createScanProgressReporter(onProgress?: ScanProgressCallback) {
-  return (stage: string, status: "started" | "completed", message: string): void => {
-    onProgress?.({
+function createScanProgressReporter(input: {
+  onProgress?: ScanProgressCallback;
+  performanceStages?: ScanPerformanceStage[];
+}) {
+  return (
+    stage: string,
+    status: "started" | "completed",
+    message: string,
+    durationMs?: number,
+  ): void => {
+    if (status === "completed" && durationMs !== undefined) {
+      input.performanceStages?.push({
+        stage,
+        message,
+        durationMs: roundDuration(durationMs),
+      });
+    }
+
+    input.onProgress?.({
       stage,
       status,
       message,
+      ...(durationMs === undefined ? {} : { durationMs: roundDuration(durationMs) }),
     });
   };
 }
@@ -167,10 +199,25 @@ async function runScanStage<T>(
   message: string,
   run: () => T | Promise<T>,
 ): Promise<T> {
+  const startedAt = performance.now();
   progress(stage, "started", message);
   const result = await run();
-  progress(stage, "completed", message);
+  progress(stage, "completed", message, performance.now() - startedAt);
   return result;
+}
+
+function buildScanPerformance(input: {
+  totalMs: number;
+  stages: ScanPerformanceStage[];
+}): ScanPerformance {
+  return {
+    totalMs: roundDuration(input.totalMs),
+    stages: input.stages,
+  };
+}
+
+function roundDuration(durationMs: number): number {
+  return Math.round(durationMs * 10) / 10;
 }
 
 async function readSourceFiles(

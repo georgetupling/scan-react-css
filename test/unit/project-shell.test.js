@@ -48,6 +48,30 @@ test("scanProject reports scan progress events", async () => {
       ),
     );
     assert.ok(events.some((event) => event.stage === "run-rules" && event.status === "completed"));
+    assert.ok(
+      events.some((event) => event.stage === "run-rules" && typeof event.durationMs === "number"),
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject can collect performance timings", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      collectPerformance: true,
+    });
+
+    assert.equal(typeof result.performance?.totalMs, "number");
+    assert.ok(result.performance.totalMs >= 0);
+    assert.ok(
+      result.performance.stages.some(
+        (stage) => stage.stage === "reachability" && stage.durationMs >= 0,
+      ),
+    );
   } finally {
     await project.cleanup();
   }

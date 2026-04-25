@@ -10,6 +10,7 @@ export type ScanProjectInput = {
   configPath?: string;
   configBaseDir?: string;
   onProgress?: ScanProgressCallback;
+  collectPerformance?: boolean;
 };
 
 export type ScanProgressStatus = "started" | "completed";
@@ -18,6 +19,7 @@ export type ScanProgressEvent = {
   stage: string;
   status: ScanProgressStatus;
   message: string;
+  durationMs?: number;
 };
 
 export type ScanProgressCallback = (event: ScanProgressEvent) => void;
@@ -63,12 +65,24 @@ export type ScanSummary = {
   failed: boolean;
 };
 
+export type ScanPerformanceStage = {
+  stage: string;
+  message: string;
+  durationMs: number;
+};
+
+export type ScanPerformance = {
+  totalMs: number;
+  stages: ScanPerformanceStage[];
+};
+
 export type ScanProjectResult = {
   rootDir: string;
   config: ResolvedScannerConfig;
   findings: Finding[];
   diagnostics: ScanDiagnostic[];
   summary: ScanSummary;
+  performance?: ScanPerformance;
   failed: boolean;
   files: {
     sourceFiles: ProjectFileRecord[];

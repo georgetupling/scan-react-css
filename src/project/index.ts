@@ -7,6 +7,8 @@ export type {
   ScanDiagnostic,
   ScanDiagnosticPhase,
   ScanDiagnosticSeverity,
+  ScanPerformance,
+  ScanPerformanceStage,
   ScanProgressCallback,
   ScanProgressEvent,
   ScanProgressStatus,

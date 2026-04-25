@@ -15,6 +15,7 @@ type CliArgs = {
   outputFile?: string;
   overwriteOutput: boolean;
   json: boolean;
+  timings: boolean;
   help: boolean;
 };
 
@@ -63,6 +64,7 @@ try {
     configBaseDir: process.cwd(),
     configPath: args.configPath,
     onProgress: progressRenderer.onProgress,
+    collectPerformance: args.timings,
   });
 } finally {
   progressRenderer.stop();
@@ -92,6 +94,7 @@ if (args.json) {
       diagnostics: visibleDiagnostics,
       findings: visibleFindings,
       focusPaths: args.focusPaths,
+      includeTimings: args.timings,
       useColor: shouldUseColor(process.stdout),
     }),
   );
@@ -104,6 +107,7 @@ function parseArgs(rawArgs: string[]): CliArgs {
     focusPaths: [],
     overwriteOutput: false,
     json: false,
+    timings: false,
     help: false,
   };
 
@@ -112,6 +116,11 @@ function parseArgs(rawArgs: string[]): CliArgs {
 
     if (arg === "--json") {
       args.json = true;
+      continue;
+    }
+
+    if (arg === "--timings") {
+      args.timings = true;
       continue;
     }
 
@@ -183,7 +192,7 @@ function parseArgs(rawArgs: string[]): CliArgs {
 
 function printHelp(stream: NodeJS.WriteStream = process.stdout): void {
   stream.write(
-    `Usage: scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output]\n`,
+    `Usage: scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output] [--timings]\n`,
   );
 }
 
@@ -261,12 +270,14 @@ function formatTextReport(input: {
   diagnostics: ScanDiagnostic[];
   findings: Finding[];
   focusPaths: string[];
+  includeTimings: boolean;
   useColor: boolean;
 }): string {
   const sections = [
     formatTextHeader(input.result, input.focusPaths),
     ...formatDiagnosticSections(input.diagnostics, input.useColor),
     ...formatFindingSections(input.findings, input.useColor),
+    ...(input.includeTimings ? formatTimingSections(input.result) : []),
     formatTextSummary(input.result, input.findings.length),
   ];
 
@@ -280,6 +291,26 @@ function formatTextHeader(result: ScanProjectResult, focusPaths: string[]): stri
   }
 
   return lines.join("\n");
+}
+
+function formatTimingSections(result: ScanProjectResult): string[] {
+  if (!result.performance) {
+    return [];
+  }
+
+  return [
+    [
+      "Timings",
+      ...result.performance.stages.map(
+        (stage) => `  ${stage.stage}: ${formatDuration(stage.durationMs)} (${stage.message})`,
+      ),
+      `  total: ${formatDuration(result.performance.totalMs)}`,
+    ].join("\n"),
+  ];
+}
+
+function formatDuration(durationMs: number): string {
+  return `${durationMs.toFixed(1)}ms`;
 }
 
 function formatDiagnosticSections(diagnostics: ScanDiagnostic[], useColor: boolean): string[] {
@@ -550,6 +581,7 @@ function formatJsonResult(result: ScanProjectResult): object {
     diagnostics,
     findings: findings.map(withoutFindingTraces),
     summary: withoutDebugCounts(result.summary),
+    ...(result.performance ? { performance: result.performance } : {}),
     failed: result.failed,
   };
 }

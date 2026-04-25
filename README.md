@@ -61,7 +61,7 @@ By default this creates a timestamped report such as
 ## CLI Usage
 
 ```bash
-scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output]
+scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output] [--timings]
 ```
 
 Supported flags:
@@ -71,6 +71,7 @@ Supported flags:
 - `--json`
 - `--output-file path/to/report.json`
 - `--overwrite-output`
+- `--timings`
 - `--help`
 
 `rootDir` must be a directory. File paths and missing paths fail with a clear diagnostic.
@@ -110,6 +111,8 @@ These historical flags are recognized but not supported in this build yet:
 Interactive text-mode scans print the active scan stage to `stderr` while analysis is running, for
 example `Building reachability graph`. JSON mode keeps progress output disabled so automation sees
 only the report confirmation on stdout.
+
+Use `--timings` to include stage duration data in text output or in the JSON report.
 
 ### JSON Reports
 
@@ -246,11 +249,13 @@ type ScanProjectInput = {
   configPath?: string;
   configBaseDir?: string;
   onProgress?: (event: ScanProgressEvent) => void;
+  collectPerformance?: boolean;
 };
 ```
 
-`onProgress` receives `{ stage, status, message }` events while project loading, engine analysis,
-and rule execution run. It is optional and does not change scan results.
+`onProgress` receives `{ stage, status, message, durationMs? }` events while project loading,
+engine analysis, and rule execution run. It is optional and does not change scan results.
+`collectPerformance` adds an optional `performance` block with total and per-stage timings.
 
 The result contains:
 
@@ -259,6 +264,7 @@ The result contains:
 - `diagnostics`
 - `findings`
 - `summary`
+- optional `performance`
 - `failed`
 - discovered `files`
 

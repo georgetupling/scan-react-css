@@ -82,6 +82,46 @@ test("CLI writes JSON output to a custom output file", async () => {
   }
 });
 
+test("CLI includes performance timings when requested in JSON output", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const outputPath = project.filePath("report.json");
+    await runCli([project.rootDir, "--json", "--timings", "--output-file", outputPath]);
+    const output = await readJsonFile(outputPath);
+
+    assert.equal(typeof output.performance.totalMs, "number");
+    assert.ok(output.performance.totalMs >= 0);
+    assert.ok(
+      output.performance.stages.some(
+        (stage) => stage.stage === "reachability" && typeof stage.durationMs === "number",
+      ),
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI includes performance timings when requested in text output", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      'import "./App.css";\nexport function App() { return <main className="shell">Hello</main>; }\n',
+    )
+    .withCssFile("src/App.css", ".shell { display: block; }\n")
+    .build();
+
+  try {
+    const { stdout } = await runCli([project.rootDir, "--timings"]);
+
+    assert.match(stdout, /Timings\n/);
+    assert.match(stdout, /reachability: \d+(?:\.\d)?ms \(Building reachability graph\)/);
+    assert.match(stdout, /total: \d+(?:\.\d)?ms/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("CLI overwrites JSON output when requested", async () => {
   const project = await new TestProjectBuilder().build();
 

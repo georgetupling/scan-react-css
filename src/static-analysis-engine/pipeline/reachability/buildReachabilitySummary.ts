@@ -42,6 +42,15 @@ export function buildReachabilitySummary(input: {
       ]),
   );
   const analyzedSourceFilePaths = collectAnalyzedSourceFilePaths(input.moduleGraph);
+  const directCssImportersByStylesheetPath = collectDirectCssImportersByStylesheetPath({
+    moduleGraph: input.moduleGraph,
+    knownCssFilePaths,
+    packageCssImportBySpecifier,
+  });
+  const reachabilityGraphContext = buildReachabilityGraphContext({
+    renderGraph: input.renderGraph,
+    renderSubtrees: input.renderSubtrees,
+  });
 
   const stylesheets = input.cssSources.map((cssSource) =>
     buildStylesheetReachabilityRecord({
@@ -52,6 +61,8 @@ export function buildReachabilitySummary(input: {
       knownCssFilePaths,
       projectWideExternalStylesheetFilePaths,
       packageCssImportBySpecifier,
+      directCssImportersByStylesheetPath,
+      reachabilityGraphContext,
       analyzedSourceFilePaths,
     }),
   );
@@ -72,6 +83,8 @@ function buildStylesheetReachabilityRecord(input: {
   knownCssFilePaths: Set<string>;
   projectWideExternalStylesheetFilePaths: Set<string>;
   packageCssImportBySpecifier: Map<string, string>;
+  directCssImportersByStylesheetPath: Map<string, string[]>;
+  reachabilityGraphContext: ReachabilityGraphContext;
   analyzedSourceFilePaths: string[];
 }): StylesheetReachabilityRecord {
   const cssFilePath = normalizeProjectPath(input.cssSource.filePath);
@@ -87,51 +100,16 @@ function buildStylesheetReachabilityRecord(input: {
     });
   }
 
-  const directlyImportingSourceFilePaths: string[] = [];
-  for (const moduleNode of input.moduleGraph.modulesById.values()) {
-    if (moduleNode.kind !== "source") {
-      continue;
-    }
-
-    const importsCssSource = moduleNode.imports.some((importRecord) => {
-      if (importRecord.importKind === "css") {
-        return (
-          resolveCssImportPath({
-            fromFilePath: moduleNode.filePath,
-            specifier: importRecord.specifier,
-            knownCssFilePaths: input.knownCssFilePaths,
-          }) === cssFilePath
-        );
-      }
-
-      if (importRecord.importKind === "external-css") {
-        return (
-          (input.packageCssImportBySpecifier.get(
-            createPackageCssImportKey(moduleNode.filePath, importRecord.specifier),
-          ) ??
-            normalizeProjectPath(importRecord.specifier) ??
-            importRecord.specifier) === cssFilePath
-        );
-      }
-
-      return false;
-    });
-
-    if (importsCssSource) {
-      directlyImportingSourceFilePaths.push(moduleNode.filePath.replace(/\\/g, "/"));
-    }
-  }
-
   const contextRecordsByKey = new Map<string, StylesheetReachabilityContextRecord>();
-  const sortedImportingSourceFilePaths = directlyImportingSourceFilePaths.sort((left, right) =>
-    left.localeCompare(right),
-  );
+  const sortedImportingSourceFilePaths =
+    input.directCssImportersByStylesheetPath.get(cssFilePath) ?? [];
 
   if (sortedImportingSourceFilePaths.length > 0) {
     for (const contextRecord of buildContextRecords({
       importingSourceFilePaths: sortedImportingSourceFilePaths,
       renderGraph: input.renderGraph,
       renderSubtrees: input.renderSubtrees,
+      reachabilityGraphContext: input.reachabilityGraphContext,
     })) {
       contextRecordsByKey.set(serializeContextKey(contextRecord), contextRecord);
     }
@@ -210,6 +188,53 @@ function collectAnalyzedSourceFilePaths(moduleGraph: ModuleGraph): string[] {
     .filter((moduleNode) => moduleNode.kind === "source")
     .map((moduleNode) => normalizeProjectPath(moduleNode.filePath) ?? moduleNode.filePath)
     .sort((left, right) => left.localeCompare(right));
+}
+
+function collectDirectCssImportersByStylesheetPath(input: {
+  moduleGraph: ModuleGraph;
+  knownCssFilePaths: Set<string>;
+  packageCssImportBySpecifier: Map<string, string>;
+}): Map<string, string[]> {
+  const importersByStylesheetPath = new Map<string, Set<string>>();
+
+  for (const moduleNode of input.moduleGraph.modulesById.values()) {
+    if (moduleNode.kind !== "source") {
+      continue;
+    }
+
+    const sourceFilePath = normalizeProjectPath(moduleNode.filePath) ?? moduleNode.filePath;
+    for (const importRecord of moduleNode.imports) {
+      const stylesheetPath =
+        importRecord.importKind === "css"
+          ? resolveCssImportPath({
+              fromFilePath: moduleNode.filePath,
+              specifier: importRecord.specifier,
+              knownCssFilePaths: input.knownCssFilePaths,
+            })
+          : importRecord.importKind === "external-css"
+            ? (input.packageCssImportBySpecifier.get(
+                createPackageCssImportKey(moduleNode.filePath, importRecord.specifier),
+              ) ??
+              normalizeProjectPath(importRecord.specifier) ??
+              importRecord.specifier)
+            : undefined;
+
+      if (!stylesheetPath) {
+        continue;
+      }
+
+      const importers = importersByStylesheetPath.get(stylesheetPath) ?? new Set<string>();
+      importers.add(sourceFilePath);
+      importersByStylesheetPath.set(stylesheetPath, importers);
+    }
+  }
+
+  return new Map(
+    [...importersByStylesheetPath.entries()].map(([stylesheetPath, importers]) => [
+      stylesheetPath,
+      [...importers].sort((left, right) => left.localeCompare(right)),
+    ]),
+  );
 }
 
 function applyStylesheetPackageImportReachability(input: {
@@ -297,13 +322,29 @@ function applyStylesheetPackageImportReachability(input: {
   );
 }
 
-function buildContextRecords(input: {
-  importingSourceFilePaths: string[];
+type ReachabilityGraphContext = {
+  renderRegionsByComponentKey: Map<string, RenderRegion[]>;
+  renderSubtreesByComponentKey: Map<string, RenderSubtree>;
+  unknownBarriersByComponentKey: Map<string, UnknownReachabilityBarrier[]>;
+  renderGraphNodesByKey: Map<
+    string,
+    import("../render-model/render-graph/types.js").RenderGraphNode
+  >;
+  outgoingEdgesByComponentKey: Map<
+    string,
+    import("../render-model/render-graph/types.js").RenderGraphEdge[]
+  >;
+  incomingEdgesByComponentKey: Map<
+    string,
+    import("../render-model/render-graph/types.js").RenderGraphEdge[]
+  >;
+  componentKeysByFilePath: Map<string, string[]>;
+};
+
+function buildReachabilityGraphContext(input: {
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];
-}): StylesheetReachabilityContextRecord[] {
-  const contextRecordsByKey = new Map<string, StylesheetReachabilityContextRecord>();
-  const renderRegions = collectRenderRegionsFromSubtrees(input.renderSubtrees);
+}): ReachabilityGraphContext {
   const renderRegionsByComponentKey = new Map<string, RenderRegion[]>();
   const renderSubtreesByComponentKey = new Map<string, RenderSubtree>();
   const unknownBarriersByComponentKey = new Map<string, UnknownReachabilityBarrier[]>();
@@ -313,18 +354,25 @@ function buildContextRecords(input: {
       node,
     ]),
   );
-  const directImportingSourceFilePathSet = new Set(input.importingSourceFilePaths);
+  const outgoingEdgesByComponentKey = new Map<
+    string,
+    import("../render-model/render-graph/types.js").RenderGraphEdge[]
+  >();
+  const incomingEdgesByComponentKey = new Map<
+    string,
+    import("../render-model/render-graph/types.js").RenderGraphEdge[]
+  >();
+  const componentKeysByFilePath = new Map<string, string[]>();
 
-  for (const renderRegion of renderRegions) {
+  for (const renderRegion of collectRenderRegionsFromSubtrees(input.renderSubtrees)) {
     if (!renderRegion.componentName) {
       continue;
     }
 
     const componentKey = createComponentKey(renderRegion.filePath, renderRegion.componentName);
-    renderRegionsByComponentKey.set(componentKey, [
-      ...(renderRegionsByComponentKey.get(componentKey) ?? []),
-      renderRegion,
-    ]);
+    const renderRegions = renderRegionsByComponentKey.get(componentKey) ?? [];
+    renderRegions.push(renderRegion);
+    renderRegionsByComponentKey.set(componentKey, renderRegions);
   }
 
   for (const renderSubtree of input.renderSubtrees) {
@@ -332,17 +380,68 @@ function buildContextRecords(input: {
       continue;
     }
 
-    const componentKey = createComponentKey(
+    const filePath =
       normalizeProjectPath(renderSubtree.sourceAnchor.filePath) ??
-        renderSubtree.sourceAnchor.filePath,
-      renderSubtree.componentName,
-    );
+      renderSubtree.sourceAnchor.filePath;
+    const componentKey = createComponentKey(filePath, renderSubtree.componentName);
     renderSubtreesByComponentKey.set(componentKey, renderSubtree);
     unknownBarriersByComponentKey.set(
       componentKey,
       collectUnknownReachabilityBarriersFromSubtree(renderSubtree),
     );
   }
+
+  for (const edge of input.renderGraph.edges) {
+    if (edge.resolution !== "resolved" || !edge.toFilePath) {
+      continue;
+    }
+
+    const fromKey = createComponentKey(edge.fromFilePath, edge.fromComponentName);
+    const toKey = createComponentKey(edge.toFilePath, edge.toComponentName);
+    const outgoingEdges = outgoingEdgesByComponentKey.get(fromKey) ?? [];
+    outgoingEdges.push(edge);
+    outgoingEdgesByComponentKey.set(fromKey, outgoingEdges);
+    const incomingEdges = incomingEdgesByComponentKey.get(toKey) ?? [];
+    incomingEdges.push(edge);
+    incomingEdgesByComponentKey.set(toKey, incomingEdges);
+  }
+
+  for (const [componentKey, node] of renderGraphNodesByKey.entries()) {
+    const filePath = normalizeProjectPath(node.filePath) ?? node.filePath;
+    const componentKeys = componentKeysByFilePath.get(filePath) ?? [];
+    componentKeys.push(componentKey);
+    componentKeysByFilePath.set(filePath, componentKeys);
+  }
+
+  for (const edges of outgoingEdgesByComponentKey.values()) {
+    edges.sort(compareEdges);
+  }
+  for (const edges of incomingEdgesByComponentKey.values()) {
+    edges.sort(compareEdges);
+  }
+  for (const componentKeys of componentKeysByFilePath.values()) {
+    componentKeys.sort((left, right) => left.localeCompare(right));
+  }
+
+  return {
+    renderRegionsByComponentKey,
+    renderSubtreesByComponentKey,
+    unknownBarriersByComponentKey,
+    renderGraphNodesByKey,
+    outgoingEdgesByComponentKey,
+    incomingEdgesByComponentKey,
+    componentKeysByFilePath,
+  };
+}
+
+function buildContextRecords(input: {
+  importingSourceFilePaths: string[];
+  renderGraph: RenderGraph;
+  renderSubtrees: RenderSubtree[];
+  reachabilityGraphContext: ReachabilityGraphContext;
+}): StylesheetReachabilityContextRecord[] {
+  const contextRecordsByKey = new Map<string, StylesheetReachabilityContextRecord>();
+  const directImportingSourceFilePathSet = new Set(input.importingSourceFilePaths);
 
   for (const filePath of input.importingSourceFilePaths) {
     addContextRecord(contextRecordsByKey, {
@@ -356,40 +455,23 @@ function buildContextRecords(input: {
     });
   }
 
-  const outgoingEdgesByComponentKey = new Map<string, typeof input.renderGraph.edges>();
-  const incomingEdgesByComponentKey = new Map<string, typeof input.renderGraph.edges>();
-  for (const edge of input.renderGraph.edges) {
-    if (edge.resolution !== "resolved" || !edge.toFilePath) {
-      continue;
-    }
-
-    const fromKey = createComponentKey(edge.fromFilePath, edge.fromComponentName);
-    const toKey = createComponentKey(edge.toFilePath, edge.toComponentName);
-    outgoingEdgesByComponentKey.set(fromKey, [
-      ...(outgoingEdgesByComponentKey.get(fromKey) ?? []),
-      edge,
-    ]);
-    incomingEdgesByComponentKey.set(toKey, [
-      ...(incomingEdgesByComponentKey.get(toKey) ?? []),
-      edge,
-    ]);
-  }
-
   const componentAvailabilityByKey = computeComponentAvailability({
-    renderGraphNodesByKey,
-    incomingEdgesByComponentKey,
+    renderGraphNodesByKey: input.reachabilityGraphContext.renderGraphNodesByKey,
+    incomingEdgesByComponentKey: input.reachabilityGraphContext.incomingEdgesByComponentKey,
     directImportingSourceFilePathSet,
   });
 
-  const importingComponentKeys = input.renderGraph.nodes
-    .filter((node) =>
-      input.importingSourceFilePaths.includes(normalizeProjectPath(node.filePath) ?? node.filePath),
-    )
-    .map((node) => createComponentKey(node.filePath, node.componentName))
-    .sort((left, right) => left.localeCompare(right));
+  const importingComponentKeySet = new Set(
+    input.importingSourceFilePaths.flatMap(
+      (filePath) => input.reachabilityGraphContext.componentKeysByFilePath.get(filePath) ?? [],
+    ),
+  );
+  const importingComponentKeys = [...importingComponentKeySet].sort((left, right) =>
+    left.localeCompare(right),
+  );
 
   for (const componentKey of importingComponentKeys) {
-    const node = renderGraphNodesByKey.get(componentKey);
+    const node = input.reachabilityGraphContext.renderGraphNodesByKey.get(componentKey);
     if (!node) {
       continue;
     }
@@ -407,7 +489,7 @@ function buildContextRecords(input: {
   }
 
   for (const [componentKey, availabilityRecord] of componentAvailabilityByKey.entries()) {
-    const node = renderGraphNodesByKey.get(componentKey);
+    const node = input.reachabilityGraphContext.renderGraphNodesByKey.get(componentKey);
     if (!node) {
       continue;
     }
@@ -434,7 +516,9 @@ function buildContextRecords(input: {
     if (wholeComponentRegionAvailability) {
       addRenderSubtreeRootContexts({
         contextRecordsByKey,
-        renderSubtrees: input.renderSubtrees,
+        renderSubtrees: [
+          input.reachabilityGraphContext.renderSubtreesByComponentKey.get(componentKey),
+        ].filter((subtree): subtree is RenderSubtree => Boolean(subtree)),
         availability: wholeComponentRegionAvailability.availability,
         reason:
           wholeComponentRegionAvailability.reasons[0] ??
@@ -448,7 +532,8 @@ function buildContextRecords(input: {
       });
       addRenderRegionContexts({
         contextRecordsByKey,
-        renderRegions: renderRegionsByComponentKey.get(componentKey) ?? [],
+        renderRegions:
+          input.reachabilityGraphContext.renderRegionsByComponentKey.get(componentKey) ?? [],
         availability: wholeComponentRegionAvailability.availability,
         reasons: wholeComponentRegionAvailability.reasons,
         derivations: wholeComponentRegionAvailability.derivations,
@@ -459,18 +544,23 @@ function buildContextRecords(input: {
 
     addPlacedChildRenderRegionContexts({
       contextRecordsByKey,
-      renderSubtree: renderSubtreesByComponentKey.get(componentKey),
-      renderRegions: renderRegionsByComponentKey.get(componentKey) ?? [],
-      outgoingEdges: [...(outgoingEdgesByComponentKey.get(componentKey) ?? [])].sort(compareEdges),
+      renderSubtree: input.reachabilityGraphContext.renderSubtreesByComponentKey.get(componentKey),
+      renderRegions:
+        input.reachabilityGraphContext.renderRegionsByComponentKey.get(componentKey) ?? [],
+      outgoingEdges:
+        input.reachabilityGraphContext.outgoingEdgesByComponentKey.get(componentKey) ?? [],
       componentAvailabilityByKey,
     });
 
     if (availabilityRecord.availability === "unavailable") {
       addUnknownBarrierContexts({
         contextRecordsByKey,
-        renderSubtree: renderSubtreesByComponentKey.get(componentKey),
-        renderRegions: renderRegionsByComponentKey.get(componentKey) ?? [],
-        unknownBarriers: unknownBarriersByComponentKey.get(componentKey) ?? [],
+        renderSubtree:
+          input.reachabilityGraphContext.renderSubtreesByComponentKey.get(componentKey),
+        renderRegions:
+          input.reachabilityGraphContext.renderRegionsByComponentKey.get(componentKey) ?? [],
+        unknownBarriers:
+          input.reachabilityGraphContext.unknownBarriersByComponentKey.get(componentKey) ?? [],
       });
     }
   }

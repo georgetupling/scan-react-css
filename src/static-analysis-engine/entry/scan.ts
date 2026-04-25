@@ -148,11 +148,17 @@ export function analyzeProjectSourceTexts(input: {
 }
 
 function createAnalysisProgressReporter(onProgress?: AnalysisProgressCallback) {
-  return (stage: string, status: "started" | "completed", message: string): void => {
+  return (
+    stage: string,
+    status: "started" | "completed",
+    message: string,
+    durationMs?: number,
+  ): void => {
     onProgress?.({
       stage,
       status,
       message,
+      ...(durationMs === undefined ? {} : { durationMs }),
     });
   };
 }
@@ -163,8 +169,9 @@ function runAnalysisStage<T>(
   message: string,
   run: () => T,
 ): T {
+  const startedAt = performance.now();
   progress(stage, "started", message);
   const result = run();
-  progress(stage, "completed", message);
+  progress(stage, "completed", message, performance.now() - startedAt);
   return result;
 }
