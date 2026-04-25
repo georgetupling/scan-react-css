@@ -294,7 +294,7 @@ test("missing-css-class accepts Font Awesome classes when HTML links a matching 
   }
 });
 
-test("missing-css-class accepts classes from fetched remote CSS when fetch-remote is enabled", async () => {
+test("missing-css-class accepts classes from fetched remote CSS when fetchRemote is enabled", async () => {
   const originalFetch = globalThis.fetch;
   const fetchCalls = [];
   globalThis.fetch = async (url) => {
@@ -304,7 +304,7 @@ test("missing-css-class accepts classes from fetched remote CSS when fetch-remot
   const project = await new TestProjectBuilder()
     .withConfig({
       externalCss: {
-        modes: ["fetch-remote"],
+        fetchRemote: true,
       },
     })
     .withFile("index.html", '<link rel="stylesheet" href="https://cdn.example/app.css">\n')
@@ -341,7 +341,7 @@ test("missing-css-class emits diagnostics for remote CSS fetch failures", async 
   const project = await new TestProjectBuilder()
     .withConfig({
       externalCss: {
-        modes: ["fetch-remote"],
+        fetchRemote: true,
       },
     })
     .withFile("index.html", '<link rel="stylesheet" href="https://cdn.example/missing.css">\n')
@@ -375,7 +375,7 @@ test("missing-css-class emits diagnostics for remote CSS fetch failures", async 
   }
 });
 
-test("missing-css-class does not fetch remote CSS in default modes", async () => {
+test("missing-css-class does not fetch remote CSS by default", async () => {
   const originalFetch = globalThis.fetch;
   let fetchCount = 0;
   globalThis.fetch = async () => {
@@ -498,7 +498,6 @@ test("missing-css-class reports configured provider classes without matching sty
   const project = await new TestProjectBuilder()
     .withConfig({
       externalCss: {
-        modes: ["declared-globals"],
         globals: [
           {
             provider: "custom-icons",
@@ -537,7 +536,6 @@ test("missing-css-class accepts configured provider classes when an HTML link ma
   const project = await new TestProjectBuilder()
     .withConfig({
       externalCss: {
-        modes: ["declared-globals", "html-links"],
         globals: [
           {
             provider: "custom-icons",
@@ -576,7 +574,7 @@ test("missing-css-class accepts configured provider classes when an HTML link ma
   }
 });
 
-test("missing-css-class reports provider classes when external CSS is disabled", async () => {
+test("missing-css-class rejects legacy externalCss enabled config", async () => {
   const project = await new TestProjectBuilder()
     .withConfig({
       externalCss: {
@@ -593,12 +591,9 @@ test("missing-css-class reports provider classes when external CSS is disabled",
       cssFilePaths: [],
     });
 
-    const finding = result.findings.find(
-      (candidate) =>
-        candidate.ruleId === "missing-css-class" && candidate.data?.className === "fa-solid",
-    );
-
-    assert.ok(finding);
+    assert.equal(result.failed, true);
+    assert.equal(result.diagnostics[0].code, "config.unknown-external-css-key");
+    assert.match(result.diagnostics[0].message, /unknown externalCss key "enabled"/);
   } finally {
     await project.cleanup();
   }

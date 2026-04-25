@@ -40,38 +40,26 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
       htmlText: htmlFile.htmlText,
     }),
   );
-  const htmlLinksEnabled =
-    config.externalCss.enabled && config.externalCss.modes.includes("html-links");
-  const resolvedHtmlStylesheetLinks = htmlLinksEnabled
-    ? resolveLocalHtmlStylesheetLinks({
-        rootDir: discovered.rootDir,
-        htmlStylesheetLinks,
-        diagnostics,
-      })
-    : htmlStylesheetLinks;
-  const linkedCssFiles = htmlLinksEnabled
-    ? await readCssFiles(
-        collectLinkedCssFiles({
-          rootDir: discovered.rootDir,
-          cssFiles: discovered.cssFiles,
-          htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
-        }),
-        diagnostics,
-      )
-    : [];
-  const packageCssImportsEnabled =
-    config.externalCss.enabled && config.externalCss.modes.includes("imported-packages");
-  const packageCssImports = packageCssImportsEnabled
-    ? await loadPackageCssImports({
-        rootDir: discovered.rootDir,
-        sourceFiles,
-        cssSources: [...cssFiles, ...linkedCssFiles],
-        diagnostics,
-      })
-    : { cssSources: [], imports: [] };
-  const remoteCssFetchEnabled =
-    config.externalCss.enabled && config.externalCss.modes.includes("fetch-remote");
-  const remoteCssSources = remoteCssFetchEnabled
+  const resolvedHtmlStylesheetLinks = resolveLocalHtmlStylesheetLinks({
+    rootDir: discovered.rootDir,
+    htmlStylesheetLinks,
+    diagnostics,
+  });
+  const linkedCssFiles = await readCssFiles(
+    collectLinkedCssFiles({
+      rootDir: discovered.rootDir,
+      cssFiles: discovered.cssFiles,
+      htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
+    }),
+    diagnostics,
+  );
+  const packageCssImports = await loadPackageCssImports({
+    rootDir: discovered.rootDir,
+    sourceFiles,
+    cssSources: [...cssFiles, ...linkedCssFiles],
+    diagnostics,
+  });
+  const remoteCssSources = config.externalCss.fetchRemote
     ? await fetchRemoteCssSources({
         htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
         remoteTimeoutMs: config.externalCss.remoteTimeoutMs,
@@ -90,8 +78,7 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
     selectorCssSources,
     cssModules: config.cssModules,
     externalCss: {
-      enabled: config.externalCss.enabled,
-      modes: config.externalCss.modes,
+      fetchRemote: config.externalCss.fetchRemote,
       globalProviders: config.externalCss.globals,
       htmlStylesheetLinks: resolvedHtmlStylesheetLinks,
       packageCssImports: packageCssImports.imports,

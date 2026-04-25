@@ -166,8 +166,7 @@ Current config shape:
     "localsConvention": "camelCase"
   },
   "externalCss": {
-    "enabled": true,
-    "modes": ["declared-globals", "imported-packages", "html-links"],
+    "fetchRemote": false,
     "remoteTimeoutMs": 5000,
     "globals": [
       {
@@ -191,21 +190,21 @@ CSS Module `localsConvention` accepts:
 - `camelCase`
 - `camelCaseOnly`
 
-External CSS config is accepted as the first slice of rebuilt provider support. Built-in defaults
-currently include Font Awesome, Material Design Icons, Bootstrap Icons, Animate.css, UIkit, and
-Pure.css provider declarations; custom `externalCss.globals` entries are appended to those defaults.
-Static HTML/CDN stylesheet links activate matching declared providers, so a Font Awesome CDN link
-can satisfy `fa-*` references without an HTTP fetch. Local HTML-linked `.css` files are loaded,
-parsed, and treated as project-wide reachable. JavaScript and TypeScript package CSS imports such as
+External CSS config controls provider declarations and optional remote fetching. Built-in defaults
+include Font Awesome, Material Design Icons, Bootstrap Icons, Animate.css, UIkit, and Pure.css
+provider declarations; custom `externalCss.globals` entries are appended to those defaults. Static
+HTML/CDN stylesheet links activate matching declared providers, so a Font Awesome CDN link can
+satisfy `fa-*` references without an HTTP fetch. Local HTML-linked `.css` files are loaded, parsed,
+and treated as project-wide reachable. JavaScript and TypeScript package CSS imports such as
 `import "bootstrap-icons/font/bootstrap-icons.css"` are resolved under `node_modules`, loaded,
 parsed, and treated as external imports. Provider declarations are only activated by configured
 external stylesheet evidence such as HTML/CDN links, not by package CSS imports. Package CSS loaded
 through CSS `@import` is also resolved under `node_modules`, parsed, and treated as reachable through
 the importing stylesheet. Package CSS resolution searches upward from the scan root for the nearest
 usable `node_modules` directory, so subdirectory scans can still resolve workspace-level packages.
-Remote stylesheet links are fetched only when `fetch-remote` is present in `externalCss.modes`;
-fetched CSS is parsed into concrete classes, uses `remoteTimeoutMs`, and fetch failures are reported
-as warning diagnostics.
+Remote stylesheet links are fetched only when `externalCss.fetchRemote` is `true`; fetched CSS is
+parsed into concrete classes, uses `remoteTimeoutMs`, and fetch failures are reported as warning
+diagnostics. Default scans perform no network requests.
 
 ## Rules
 

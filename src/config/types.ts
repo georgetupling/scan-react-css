@@ -8,12 +8,6 @@ export type CssModulesConfig = {
   localsConvention: CssModuleLocalsConvention;
 };
 
-export type ExternalCssSourceMode =
-  | "declared-globals"
-  | "imported-packages"
-  | "html-links"
-  | "fetch-remote";
-
 export type ExternalCssGlobalProviderConfig = {
   provider: string;
   match: string[];
@@ -22,8 +16,7 @@ export type ExternalCssGlobalProviderConfig = {
 };
 
 export type ExternalCssConfig = {
-  enabled: boolean;
-  modes: ExternalCssSourceMode[];
+  fetchRemote: boolean;
   globals: ExternalCssGlobalProviderConfig[];
   remoteTimeoutMs: number;
 };

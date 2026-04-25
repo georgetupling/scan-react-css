@@ -155,12 +155,7 @@ test("scanProject returns deterministic public summary from discovered files", a
     assert.equal(result.config.rules["unused-css-module-class"], "warn");
     assert.equal(result.config.rules["dynamic-class-reference"], "info");
     assert.equal(result.config.rules["unsupported-syntax-affecting-analysis"], "debug");
-    assert.equal(result.config.externalCss.enabled, true);
-    assert.deepEqual(result.config.externalCss.modes, [
-      "declared-globals",
-      "imported-packages",
-      "html-links",
-    ]);
+    assert.equal(result.config.externalCss.fetchRemote, false);
     assert.equal(result.config.externalCss.remoteTimeoutMs, 5000);
     assert.ok(
       result.config.externalCss.globals.some((provider) => provider.provider === "font-awesome"),
@@ -427,8 +422,7 @@ test("scanProject accepts external CSS provider config and appends built-ins", a
   const project = await new TestProjectBuilder()
     .withConfig({
       externalCss: {
-        enabled: true,
-        modes: ["declared-globals", "fetch-remote"],
+        fetchRemote: true,
         remoteTimeoutMs: 2500,
         globals: [
           {
@@ -449,8 +443,7 @@ test("scanProject accepts external CSS provider config and appends built-ins", a
     });
 
     assert.equal(result.failed, false);
-    assert.equal(result.config.externalCss.enabled, true);
-    assert.deepEqual(result.config.externalCss.modes, ["declared-globals", "fetch-remote"]);
+    assert.equal(result.config.externalCss.fetchRemote, true);
     assert.equal(result.config.externalCss.remoteTimeoutMs, 2500);
     assert.ok(
       result.config.externalCss.globals.some((provider) => provider.provider === "font-awesome"),
@@ -486,11 +479,11 @@ test("scanProject fails on unknown externalCss config keys", async () => {
   }
 });
 
-test("scanProject rejects singular externalCss mode config", async () => {
+test("scanProject rejects legacy externalCss mode config", async () => {
   const project = await new TestProjectBuilder()
     .withConfig({
       externalCss: {
-        mode: "declared-globals",
+        modes: ["fetch-remote"],
       },
     })
     .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
@@ -503,7 +496,7 @@ test("scanProject rejects singular externalCss mode config", async () => {
 
     assert.equal(result.failed, true);
     assert.equal(result.diagnostics[0].code, "config.unknown-external-css-key");
-    assert.match(result.diagnostics[0].message, /unknown externalCss key "mode"/);
+    assert.match(result.diagnostics[0].message, /unknown externalCss key "modes"/);
   } finally {
     await project.cleanup();
   }

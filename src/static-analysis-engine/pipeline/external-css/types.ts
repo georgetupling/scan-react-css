@@ -1,9 +1,3 @@
-export type ExternalCssSourceMode =
-  | "declared-globals"
-  | "imported-packages"
-  | "html-links"
-  | "fetch-remote";
-
 export type ExternalCssGlobalProviderConfig = {
   provider: string;
   match: string[];
@@ -26,8 +20,7 @@ export type PackageCssImportInput = {
 };
 
 export type ExternalCssAnalysisInput = {
-  enabled?: boolean;
-  modes?: ExternalCssSourceMode[];
+  fetchRemote?: boolean;
   globalProviders?: ExternalCssGlobalProviderConfig[];
   htmlStylesheetLinks?: HtmlStylesheetLinkInput[];
   packageCssImports?: PackageCssImportInput[];
@@ -43,7 +36,7 @@ export type ActiveExternalCssProvider = {
 
 export type ExternalCssSummary = {
   enabled: boolean;
-  modes: ExternalCssSourceMode[];
+  fetchRemote: boolean;
   activeProviders: ActiveExternalCssProvider[];
   packageCssImports: PackageCssImportInput[];
   projectWideStylesheetFilePaths: string[];

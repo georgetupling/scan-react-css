@@ -509,8 +509,7 @@ type ScanConfig = {
     localsConvention?: "asIs" | "camelCase" | "camelCaseOnly";
   };
   externalCss?: {
-    enabled?: boolean;
-    modes?: Array<"declared-globals" | "imported-packages" | "html-links" | "fetch-remote">;
+    fetchRemote?: boolean;
     globals?: Array<{
       provider: string;
       match: string[];
@@ -529,10 +528,11 @@ Design rules:
 - CLI config discovery checks the command directory before env and PATH fallbacks
 - API config discovery uses `configBaseDir`, defaulting to `rootDir`
 - CSS Module `localsConvention` defaults to `camelCase`
-- `externalCss` defaults to enabled with `declared-globals`, `imported-packages`, and `html-links`
-  modes, plus built-in provider declarations for Font Awesome, Material Design Icons, Bootstrap
-  Icons, Animate.css, UIkit, and Pure.css
-- `fetch-remote` is an opt-in `externalCss.modes` entry
+- local package CSS imports and local HTML-linked stylesheets are loaded by default because they are
+  deterministic project inputs
+- `externalCss` defaults to `fetchRemote: false`, plus built-in provider declarations for Font
+  Awesome, Material Design Icons, Bootstrap Icons, Animate.css, UIkit, and Pure.css
+- `externalCss.fetchRemote` is the only option that permits network requests
 - user-supplied `externalCss.globals` entries append to built-in providers
 - declared-provider matching and static HTML stylesheet-link ingestion are active; matching
   HTML/CDN links can satisfy configured provider classes without an HTTP fetch
@@ -547,7 +547,7 @@ Design rules:
   fetching externally linked stylesheets such as CDNs, not a substitute for parsed package CSS
 - CSS `@import` package entries are resolved under `node_modules`, loaded, parsed, classified as
   external imports, and treated as reachable through the importing stylesheet
-- remote HTML stylesheet links are fetched only when `fetch-remote` is present; fetched CSS is
+- remote HTML stylesheet links are fetched only when `externalCss.fetchRemote` is `true`; fetched CSS is
   parsed into concrete class definitions, uses `remoteTimeoutMs`, is treated as project-wide
   external CSS, and fetch failures emit warning diagnostics
 - default rule severities come from `docs/design/rules-catalogue.md` and the rule catalogue code

@@ -4,7 +4,6 @@ import type { RuleSeverity } from "../rules/types.js";
 import type {
   CssModuleLocalsConvention,
   ExternalCssGlobalProviderConfig,
-  ExternalCssSourceMode,
   RuleConfigSeverity,
   ScannerConfig,
 } from "./types.js";
@@ -16,15 +15,9 @@ const CSS_MODULE_LOCALS_CONVENTIONS = new Set<CssModuleLocalsConvention>([
   "camelCase",
   "camelCaseOnly",
 ]);
-const EXTERNAL_CSS_SOURCE_MODES = new Set<ExternalCssSourceMode>([
-  "declared-globals",
-  "imported-packages",
-  "html-links",
-  "fetch-remote",
-]);
 const TOP_LEVEL_CONFIG_KEYS = new Set(["failOnSeverity", "rules", "cssModules", "externalCss"]);
 const CSS_MODULES_CONFIG_KEYS = new Set(["localsConvention"]);
-const EXTERNAL_CSS_CONFIG_KEYS = new Set(["enabled", "modes", "globals", "remoteTimeoutMs"]);
+const EXTERNAL_CSS_CONFIG_KEYS = new Set(["fetchRemote", "globals", "remoteTimeoutMs"]);
 const EXTERNAL_CSS_GLOBAL_CONFIG_KEYS = new Set([
   "provider",
   "match",
@@ -112,8 +105,7 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
     localsConvention: "camelCase",
   },
   externalCss: {
-    enabled: true,
-    modes: ["declared-globals", "imported-packages", "html-links"],
+    fetchRemote: false,
     globals: cloneExternalCssGlobals(DEFAULT_EXTERNAL_CSS_GLOBALS),
     remoteTimeoutMs: 5_000,
   },
@@ -334,15 +326,14 @@ function parseExternalCss(
   });
 
   return {
-    enabled: parseOptionalBoolean({
-      value: value.enabled,
-      fallback: DEFAULT_SCANNER_CONFIG.externalCss.enabled,
+    fetchRemote: parseOptionalBoolean({
+      value: value.fetchRemote,
+      fallback: DEFAULT_SCANNER_CONFIG.externalCss.fetchRemote,
       filePath,
       diagnostics,
-      code: "config.invalid-external-css-enabled",
-      message: "externalCss.enabled must be a boolean",
+      code: "config.invalid-external-css-fetch-remote",
+      message: "externalCss.fetchRemote must be a boolean",
     }),
-    modes: parseExternalCssModes(value.modes, filePath, diagnostics),
     globals: parseExternalCssGlobals(value.globals, filePath, diagnostics),
     remoteTimeoutMs: parseOptionalPositiveNumber({
       value: value.remoteTimeoutMs,
@@ -353,36 +344,6 @@ function parseExternalCss(
       message: "externalCss.remoteTimeoutMs must be a positive number",
     }),
   };
-}
-
-function parseExternalCssModes(
-  value: unknown,
-  filePath: string,
-  diagnostics: ScanDiagnostic[],
-): ExternalCssSourceMode[] {
-  if (value === undefined) {
-    return [...DEFAULT_SCANNER_CONFIG.externalCss.modes];
-  }
-
-  if (
-    Array.isArray(value) &&
-    value.every(
-      (entry) =>
-        typeof entry === "string" && EXTERNAL_CSS_SOURCE_MODES.has(entry as ExternalCssSourceMode),
-    )
-  ) {
-    return [...new Set(value as ExternalCssSourceMode[])];
-  }
-
-  diagnostics.push({
-    code: "config.invalid-external-css-modes",
-    severity: "error",
-    phase: "config",
-    filePath,
-    message:
-      'externalCss.modes must be an array containing "declared-globals", "imported-packages", "html-links", or "fetch-remote"',
-  });
-  return [...DEFAULT_SCANNER_CONFIG.externalCss.modes];
 }
 
 function parseExternalCssGlobals(
@@ -615,8 +576,7 @@ function cloneExternalCssConfig(
   config: ScannerConfig["externalCss"],
 ): ScannerConfig["externalCss"] {
   return {
-    enabled: config.enabled,
-    modes: [...config.modes],
+    fetchRemote: config.fetchRemote,
     globals: cloneExternalCssGlobals(config.globals),
     remoteTimeoutMs: config.remoteTimeoutMs,
   };

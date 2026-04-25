@@ -57,7 +57,6 @@ export type {
   ActiveExternalCssProvider,
   ExternalCssAnalysisInput,
   ExternalCssGlobalProviderConfig,
-  ExternalCssSourceMode,
   ExternalCssSummary,
   HtmlStylesheetLinkInput,
 } from "./pipeline/external-css/index.js";

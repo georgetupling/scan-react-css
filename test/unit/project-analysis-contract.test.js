@@ -59,8 +59,6 @@ test("ProjectAnalysis indexes declared-provider satisfaction edges by reference 
       },
     ],
     externalCss: {
-      enabled: true,
-      modes: ["declared-globals", "html-links"],
       htmlStylesheetLinks: [
         {
           filePath: "index.html",
