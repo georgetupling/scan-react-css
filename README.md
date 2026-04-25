@@ -2,33 +2,18 @@
 
 `scan-react-css` audits how React source code uses CSS.
 
-It scans source files, project CSS, CSS Modules, imported external CSS, and matching HTML-linked external stylesheets, then reports deterministic findings for local development and CI.
+It scans React source files, project CSS, and CSS Modules, then reports deterministic findings for local development and CI. The current package is the rebooted product shell around the static analysis engine in `src/static-analysis-engine`.
 
-## Reboot Status
+## Current Status
 
-The repository is currently being rebuilt around the static analysis engine that remains under `src/static-analysis-engine`.
-
-Current design and assessment docs:
+The active public contract is documented in:
 
 - [Reboot Contract](./docs/design/reboot-contract.md)
-- [Current Engine Assessment](./docs/design/current-engine-assessment.md)
+- [Rules Catalogue](./docs/design/rules-catalogue.md)
+- [CSS Modules Contract](./docs/design/css-modules-contract.md)
 - [Current Product Assessment](./docs/design/current-product-assessment.md)
 
-The detailed CLI, config, and API sections below describe the pre-reboot package surface and should be treated as historical reference until the new product shell is rebuilt.
-
-## What It Checks
-
-The current rules cover:
-
-- missing or unreachable class usage
-- unused CSS classes
-- CSS Module mistakes
-- ownership and organization issues
-- dynamic class usage with explicit confidence levels
-- imported external CSS validation
-- duplicate class-definition checks
-
-Findings always carry both severity and confidence.
+Some historical scanner features are being reintroduced deliberately. Unsupported historical flags fail fast instead of being ignored.
 
 ## Install
 
@@ -38,115 +23,94 @@ npm install --save-dev scan-react-css
 
 Node `20+` is required.
 
-For one-off runs without adding it to the project:
+For one-off runs:
 
 ```bash
 npx scan-react-css
 ```
-
-For a globally installed CLI:
-
-```bash
-npm install -g scan-react-css
-scan-react-css
-```
-
-For the current reboot docs, start with the [Reboot Contract](./docs/design/reboot-contract.md).
 
 ## Quick Start
 
-1. Install the package:
-
-```bash
-npm install --save-dev scan-react-css
-```
-
-2. Add a config file:
-
-```json
-{
-  "css": {
-    "global": ["src/styles/global.css"]
-  }
-}
-```
-
-3. Run the scanner:
+Scan the current directory:
 
 ```bash
 npx scan-react-css
 ```
 
-4. Use JSON output in CI or scripts:
-
-```bash
-npx scan-react-css --json --output-file ./reports/scan-react-css.json
-```
-
-## CLI Usage
-
-Scan the current project:
-
-```bash
-npx scan-react-css
-```
-
-Scan a specific path:
+Scan a specific project root:
 
 ```bash
 npx scan-react-css ./packages/web
 ```
 
-In most cases, prefer running from the project root and using `--focus` for a subdirectory instead of scanning a nested path directly. That keeps full-project imports, reachability, and external usages visible and helps avoid false reports.
-
-Focus emitted findings on a subdirectory while still indexing the full project:
+Focus reported findings on a subtree while still analyzing the full project context:
 
 ```bash
 npx scan-react-css ./packages/web --focus src/features/payments
 ```
 
-Emit JSON:
+Emit JSON to stdout:
 
 ```bash
 npx scan-react-css --json
 ```
 
-Write JSON to a file:
+Include debug findings and trace detail:
 
 ```bash
-npx scan-react-css --json --output-file ./reports/scan-react-css.json
+npx scan-react-css --json --debug
 ```
 
-Useful flags:
+## CLI Usage
+
+```bash
+scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--trace]
+```
+
+Supported flags:
 
 - `--config path/to/scan-react-css.json`
-- `--focus path/to/subdirectory`
+- `--focus path-or-glob`
 - `--json`
-- `--output-file path/to/report.json`
-- `--overwrite-output`
-- `--print-config on|off`
-- `--verbosity low|medium|high`
-- `--output-min-severity debug|info|warning|error`
+- `--trace`
+- `--debug` alias for `--trace`
+- `--help`
 
-`--output-min-severity` affects both human-readable and JSON output.
-`--print-config on` includes the full resolved config in either output mode.
+`rootDir` must be a directory. File paths and missing paths fail with a clear diagnostic.
 
-If the package is installed globally, npm creates the `scan-react-css` command for you from the package `bin` entry. You do not need to manually add `dist/` to your `PATH`.
+### Focused Output
 
-## Node API
+`--focus` is an output filter, not a smaller analysis root. The scanner still loads and analyzes the full project root so imports, global CSS, render relationships, and reachability context remain available.
 
-```ts
-import { scanReactCss } from "scan-react-css";
+Details:
 
-const result = await scanReactCss({
-  targetPath: process.cwd(),
-});
+- `--focus` can be provided more than once.
+- A focus value can contain comma-separated paths.
+- Non-glob values match an exact file or directory subtree.
+- Glob values use project-relative `/` paths and support `*`, `?`, and `**`.
+- Source, CSS, class-reference, class-definition, and selector-query counts describe the full project context.
+- Finding counts and the CLI exit code are based on the focused findings.
+- Error diagnostics are not hidden by focus.
 
-console.log(result.summary);
-console.log(result.findings);
+Examples:
+
+```bash
+npx scan-react-css --focus src/components
+npx scan-react-css --focus src/components,src/pages
+npx scan-react-css --focus "src/features/**/components"
 ```
 
-The package also exports `scan` as an alias.
+### Current Unsupported Flags
+
+These historical flags are recognized but not supported in this build yet:
+
+- `--output-file`
+- `--overwrite-output`
+- `--print-config`
+- `--verbosity`
+- `--output-min-severity`
+
+Today, `--json` prints the JSON payload to stdout. Planned compatibility work will restore file output behavior.
 
 ## Config
 
@@ -157,39 +121,104 @@ Discovery order:
 1. explicit `--config` or API `configPath`
 2. project-root `scan-react-css.json`
 3. `SCAN_REACT_CSS_CONFIG_DIR/scan-react-css.json`
-4. the first `scan-react-css.json` found on the OS `PATH`
+4. first `scan-react-css.json` found on the OS `PATH`
 5. built-in defaults
 
 Only one config source is loaded. There is no config merging.
 
-Built-in defaults auto-discover React source roots by looking for React-bearing `package.json` files and common source directories such as `src`, `app`, and `client/src`, enable CSS Modules by convention, understand `classnames` and `clsx`, recognize common HTML-linked external providers such as Font Awesome, Bootstrap Icons, Material Design Icons, Animate.css, UIkit, and Pure.css, and fail on `error` findings by default.
-
-Example:
+Current config shape:
 
 ```json
 {
-  "rootDir": ".",
-  "css": {
-    "global": ["src/styles/global.css"]
+  "failOnSeverity": "error",
+  "rules": {
+    "unused-css-class": "warn",
+    "dynamic-class-reference": "info",
+    "unsupported-syntax-affecting-analysis": "off"
   },
-  "ownership": {
-    "pagePatterns": ["src/pages/**/*", "src/routes/**/*"]
-  },
-  "policy": {
-    "failOnSeverity": "warning"
+  "cssModules": {
+    "localsConvention": "camelCase"
   }
 }
 ```
 
-For the current config direction, see the [Reboot Contract](./docs/design/reboot-contract.md) and [Current Product Assessment](./docs/design/current-product-assessment.md).
+`failOnSeverity` accepts `debug`, `info`, `warn`, or `error`.
+
+Rule values accept `off`, `debug`, `info`, `warn`, or `error`.
+
+CSS Module `localsConvention` accepts:
+
+- `asIs`
+- `camelCase`
+- `camelCaseOnly`
+
+## Rules
+
+Default rules:
+
+- `missing-css-class` defaults to `error`
+- `css-class-unreachable` defaults to `error`
+- `unused-css-class` defaults to `warn`
+- `missing-css-module-class` defaults to `error`
+- `unused-css-module-class` defaults to `warn`
+- `unsatisfiable-selector` defaults to `warn`
+- `compound-selector-never-matched` defaults to `warn`
+- `unused-compound-selector-branch` defaults to `warn`
+- `single-component-style-not-colocated` defaults to `info`
+- `style-used-outside-owner` defaults to `warn`
+- `style-shared-without-shared-owner` defaults to `info`
+- `dynamic-class-reference` defaults to `info`
+- `unsupported-syntax-affecting-analysis` defaults to `debug`
+
+Findings carry both severity and confidence. Debug findings are hidden from normal CLI output unless `--debug` or `--trace` is used.
+
+## Node API
+
+```ts
+import { scanProject } from "scan-react-css";
+
+const result = await scanProject({
+  rootDir: process.cwd(),
+  configPath: "scan-react-css.json",
+});
+
+console.log(result.summary);
+console.log(result.findings);
+```
+
+`scanProject()` accepts:
+
+```ts
+type ScanProjectInput = {
+  rootDir?: string;
+  sourceFilePaths?: string[];
+  cssFilePaths?: string[];
+  configPath?: string;
+};
+```
+
+The result contains:
+
+- `rootDir`
+- `config`
+- `diagnostics`
+- `findings`
+- `summary`
+- `failed`
+- discovered `files`
+
+Raw engine internals are not exposed through the public API result.
 
 ## Output And CI
 
-The CLI returns a non-zero exit code when findings meet the configured `policy.failOnSeverity` threshold.
+The CLI exits non-zero when:
+
+- an error diagnostic is produced, or
+- a finding meets `failOnSeverity`
 
 Default policy:
 
 - `error` findings fail the scan
-- `warning` and `info` do not
+- `warn`, `info`, and `debug` findings do not
 
-Human-readable output is stable and terminal-friendly. JSON output is deterministic and intended for tooling and CI.
+Human-readable output is intended for local use. JSON output is deterministic and intended for tooling and CI.
