@@ -1,5 +1,6 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
+import type { CssModuleAnalysisOptions } from "../pipeline/css-modules/index.js";
 import type { StaticAnalysisEngineResult } from "../types/runtime.js";
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
 import { runCssModuleAnalysisStage } from "./stages/cssModuleAnalysisStage.js";
@@ -18,6 +19,7 @@ export function analyzeSourceText(input: {
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
   externalCss?: ExternalCssAnalysisInput;
+  cssModules?: CssModuleAnalysisOptions;
 }): StaticAnalysisEngineResult {
   return analyzeProjectSourceTexts({
     sourceFiles: [
@@ -29,6 +31,7 @@ export function analyzeSourceText(input: {
     selectorQueries: input.selectorQueries,
     selectorCssSources: input.selectorCssSources,
     externalCss: input.externalCss,
+    cssModules: input.cssModules,
   });
 }
 
@@ -40,6 +43,7 @@ export function analyzeProjectSourceTexts(input: {
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
   externalCss?: ExternalCssAnalysisInput;
+  cssModules?: CssModuleAnalysisOptions;
 }): StaticAnalysisEngineResult {
   const parseStage = runParseStage(input.sourceFiles);
   const moduleGraphStage = runModuleGraphStage({
@@ -60,6 +64,7 @@ export function analyzeProjectSourceTexts(input: {
     parsedFiles: parseStage.parsedFiles,
     moduleGraph: moduleGraphStage.moduleGraph,
     cssFiles: cssAnalysisStage.cssFiles,
+    options: input.cssModules,
   });
   const externalCssStage = runExternalCssStage({
     externalCss: input.externalCss,

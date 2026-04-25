@@ -82,11 +82,11 @@ Implemented:
 - CSS Module import records
 - `styles.foo` and `styles["foo"]` member reference records
 - module member-to-class-definition match relations
+- `localsConvention` transformations for `asIs`, `camelCase`, and `camelCaseOnly`
 - computed member access diagnostics
 
 Still missing:
 
-- `localsConvention` transformations
 - `composes` target analysis
 - destructured or re-exported CSS Module member patterns
 - full integration between CSS Module member access and generic class-expression diagnostics

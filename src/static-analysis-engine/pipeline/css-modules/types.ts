@@ -1,6 +1,12 @@
 import type { AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
 
+export type CssModuleLocalsConvention = "asIs" | "camelCase" | "camelCaseOnly";
+
+export type CssModuleAnalysisOptions = {
+  localsConvention?: CssModuleLocalsConvention;
+};
+
 export type CssModuleImportRecord = {
   sourceFilePath: string;
   stylesheetFilePath: string;
@@ -31,6 +37,7 @@ export type CssModuleReferenceDiagnosticRecord = {
 };
 
 export type CssModuleAnalysis = {
+  options: Required<CssModuleAnalysisOptions>;
   imports: CssModuleImportRecord[];
   memberReferences: CssModuleMemberReferenceRecord[];
   diagnostics: CssModuleReferenceDiagnosticRecord[];

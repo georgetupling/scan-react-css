@@ -91,6 +91,7 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
   const cssModuleMemberMatches = buildCssModuleMemberMatches({
     references: cssModuleMemberReferences,
     indexes,
+    localsConvention: input.cssModules.options.localsConvention,
   });
   const classOwnership = buildClassOwnership({
     input,
@@ -1292,6 +1293,7 @@ function buildClassOwnershipTraces(input: {
 function buildCssModuleMemberMatches(input: {
   references: CssModuleMemberReferenceAnalysis[];
   indexes: ProjectAnalysisIndexes;
+  localsConvention: ProjectAnalysisBuildInput["cssModules"]["options"]["localsConvention"];
 }): CssModuleMemberMatchRelation[] {
   const matches: CssModuleMemberMatchRelation[] = [];
 
@@ -1299,19 +1301,29 @@ function buildCssModuleMemberMatches(input: {
     const definitionIds = input.indexes.definitionsByStylesheetId.get(reference.stylesheetId) ?? [];
     const definitionId = definitionIds.find((candidateId) => {
       const definition = input.indexes.classDefinitionsById.get(candidateId);
-      return definition?.className === reference.memberName;
+      return (
+        definition &&
+        getCssModuleExportNames(definition.className, input.localsConvention).includes(
+          reference.memberName,
+        )
+      );
     });
 
     if (definitionId) {
+      const definition = input.indexes.classDefinitionsById.get(definitionId);
+      const originalClassName = definition?.className ?? reference.memberName;
       matches.push({
         id: `css-module-member-match:${reference.id}:${definitionId}`,
         referenceId: reference.id,
         importId: reference.importId,
         stylesheetId: reference.stylesheetId,
         definitionId,
-        className: reference.memberName,
+        className: originalClassName,
+        exportName: reference.memberName,
         status: "matched",
-        reasons: [`CSS Module member "${reference.memberName}" matched an exported class`],
+        reasons: [
+          `CSS Module member "${reference.memberName}" matched exported class "${originalClassName}"`,
+        ],
         traces: mergeTraces(reference.traces),
       });
       continue;
@@ -1323,6 +1335,7 @@ function buildCssModuleMemberMatches(input: {
       importId: reference.importId,
       stylesheetId: reference.stylesheetId,
       className: reference.memberName,
+      exportName: reference.memberName,
       status: "missing",
       reasons: [`CSS Module member "${reference.memberName}" has no exported class`],
       traces: mergeTraces(reference.traces),
@@ -1330,6 +1343,26 @@ function buildCssModuleMemberMatches(input: {
   }
 
   return matches.sort(compareById);
+}
+
+function getCssModuleExportNames(
+  className: string,
+  localsConvention: ProjectAnalysisBuildInput["cssModules"]["options"]["localsConvention"],
+): string[] {
+  const exportNames =
+    localsConvention === "asIs"
+      ? [className]
+      : localsConvention === "camelCaseOnly"
+        ? [toCamelCaseClassName(className)]
+        : [className, toCamelCaseClassName(className)];
+
+  return uniqueSorted(exportNames);
+}
+
+function toCamelCaseClassName(className: string): string {
+  return className.replace(/[-_]+([a-zA-Z0-9])/g, (_match, character: string) =>
+    character.toUpperCase(),
+  );
 }
 
 function indexRelations(input: {

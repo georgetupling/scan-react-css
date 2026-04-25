@@ -114,7 +114,7 @@ Meaning:
 Config:
 
 - may need CSS Module filename patterns
-- may need `localsConvention` support if class export names are transformed
+- uses configured `cssModules.localsConvention` when class export names are transformed
 
 #### `unused-css-module-class`
 
@@ -130,7 +130,7 @@ Meaning:
 Config:
 
 - may need CSS Module filename patterns
-- may need `localsConvention` support
+- uses configured `cssModules.localsConvention`
 - may support ignore patterns for classes consumed by tests, stories, or generated code
 
 #### `missing-external-css-class`

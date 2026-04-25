@@ -3,18 +3,31 @@ import path from "node:path";
 import type { ScanDiagnostic } from "../project/types.js";
 import type { RuleSeverity } from "../rules/types.js";
 import { DEFAULT_RULE_SEVERITIES } from "../rules/catalogue.js";
-import type { ResolvedScannerConfig, RuleConfigSeverity, ScannerConfig } from "./types.js";
+import type {
+  CssModuleLocalsConvention,
+  ResolvedScannerConfig,
+  RuleConfigSeverity,
+  ScannerConfig,
+} from "./types.js";
 
 const CONFIG_FILE_NAME = "scan-react-css.json";
 const CONFIG_DIR_ENV_VAR = "SCAN_REACT_CSS_CONFIG_DIR";
 
 const RULE_SEVERITIES = new Set<RuleSeverity>(["debug", "info", "warn", "error"]);
 const RULE_CONFIG_VALUES = new Set<RuleConfigSeverity>(["off", "debug", "info", "warn", "error"]);
+const CSS_MODULE_LOCALS_CONVENTIONS = new Set<CssModuleLocalsConvention>([
+  "asIs",
+  "camelCase",
+  "camelCaseOnly",
+]);
 
 export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
   failOnSeverity: "error",
   rules: {
     ...DEFAULT_RULE_SEVERITIES,
+  },
+  cssModules: {
+    localsConvention: "camelCase",
   },
 };
 
@@ -148,6 +161,7 @@ function parseConfig(
       ...DEFAULT_RULE_SEVERITIES,
       ...parseRules(parsed.rules, filePath, diagnostics),
     },
+    cssModules: parseCssModules(parsed.cssModules, filePath, diagnostics),
   };
 }
 
@@ -211,6 +225,50 @@ function parseRules(
   }
 
   return rules;
+}
+
+function parseCssModules(
+  value: unknown,
+  filePath: string,
+  diagnostics: ScanDiagnostic[],
+): ScannerConfig["cssModules"] {
+  if (value === undefined) {
+    return DEFAULT_SCANNER_CONFIG.cssModules;
+  }
+
+  if (!isRecord(value)) {
+    diagnostics.push({
+      code: "config.invalid-css-modules",
+      severity: "error",
+      phase: "config",
+      filePath,
+      message: "cssModules must be an object",
+    });
+    return DEFAULT_SCANNER_CONFIG.cssModules;
+  }
+
+  const localsConvention = value.localsConvention;
+  if (
+    localsConvention === undefined ||
+    (typeof localsConvention === "string" &&
+      CSS_MODULE_LOCALS_CONVENTIONS.has(localsConvention as CssModuleLocalsConvention))
+  ) {
+    return {
+      localsConvention:
+        localsConvention === undefined
+          ? DEFAULT_SCANNER_CONFIG.cssModules.localsConvention
+          : (localsConvention as CssModuleLocalsConvention),
+    };
+  }
+
+  diagnostics.push({
+    code: "config.invalid-css-modules-locals-convention",
+    severity: "error",
+    phase: "config",
+    filePath,
+    message: 'cssModules.localsConvention must be "asIs", "camelCase", or "camelCaseOnly"',
+  });
+  return DEFAULT_SCANNER_CONFIG.cssModules;
 }
 
 async function fileExists(filePath: string): Promise<boolean> {

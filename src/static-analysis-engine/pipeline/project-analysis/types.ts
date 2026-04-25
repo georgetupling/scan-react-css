@@ -345,6 +345,7 @@ export type CssModuleMemberMatchRelation = {
   stylesheetId: ProjectAnalysisId;
   definitionId?: ProjectAnalysisId;
   className: string;
+  exportName: string;
   status: "matched" | "missing";
   reasons: string[];
   traces: AnalysisTrace[];

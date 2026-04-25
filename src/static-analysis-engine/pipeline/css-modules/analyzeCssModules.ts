@@ -6,6 +6,7 @@ import type { ExperimentalCssFileAnalysis } from "../css-analysis/types.js";
 import type { ModuleGraph } from "../module-graph/types.js";
 import type {
   CssModuleAnalysis,
+  CssModuleAnalysisOptions,
   CssModuleImportRecord,
   CssModuleMemberReferenceRecord,
   CssModuleReferenceDiagnosticRecord,
@@ -15,7 +16,9 @@ export function analyzeCssModules(input: {
   parsedFiles: ParsedProjectFile[];
   moduleGraph: ModuleGraph;
   cssFiles: ExperimentalCssFileAnalysis[];
+  options?: CssModuleAnalysisOptions;
 }): CssModuleAnalysis {
+  const options = normalizeCssModuleAnalysisOptions(input.options);
   const imports = buildCssModuleImports(input);
   const { memberReferences, diagnostics } = buildCssModuleMemberReferences({
     parsedFiles: input.parsedFiles,
@@ -23,9 +26,18 @@ export function analyzeCssModules(input: {
   });
 
   return {
+    options,
     imports,
     memberReferences,
     diagnostics,
+  };
+}
+
+function normalizeCssModuleAnalysisOptions(
+  options: CssModuleAnalysisOptions | undefined,
+): Required<CssModuleAnalysisOptions> {
+  return {
+    localsConvention: options?.localsConvention ?? "camelCase",
   };
 }
 

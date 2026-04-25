@@ -122,3 +122,74 @@ test("CSS Module rules support string-literal element access", async () => {
     await project.cleanup();
   }
 });
+
+test("CSS Module rules respect camelCase locals convention", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import styles from "./Button.module.css";',
+        "export function Button() { return <button className={styles.fooBar}>Button</button>; }",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/components/Button.module.css", ".foo-bar { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/components/Button.tsx"],
+      cssFilePaths: ["src/components/Button.module.css"],
+    });
+
+    assert.deepEqual(
+      result.findings.filter(
+        (finding) =>
+          finding.ruleId === "missing-css-module-class" ||
+          finding.ruleId === "unused-css-module-class",
+      ),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CSS Module locals convention can require exact export names", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import styles from "./Button.module.css";',
+        "export function Button() { return <button className={styles.fooBar}>Button</button>; }",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/components/Button.module.css", ".foo-bar { display: block; }\n")
+    .withConfig({
+      cssModules: {
+        localsConvention: "asIs",
+      },
+    })
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/components/Button.tsx"],
+      cssFilePaths: ["src/components/Button.module.css"],
+    });
+
+    assert.equal(
+      result.findings.some((finding) => finding.ruleId === "missing-css-module-class"),
+      true,
+    );
+    assert.equal(
+      result.findings.some((finding) => finding.ruleId === "unused-css-module-class"),
+      true,
+    );
+  } finally {
+    await project.cleanup();
+  }
+});

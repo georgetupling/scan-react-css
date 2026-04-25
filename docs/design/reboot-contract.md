@@ -133,11 +133,12 @@ This first slice intentionally covers the rule-facing contract that current stag
 
 It does not yet claim full CSS Module binding semantics, fixed ownership classification, or a complete external CSS ingestion contract.
 
-The current CSS Module slice supports relative CSS Module imports, static member reads such as
-`styles.root` and `styles["root"]`, member-to-class-definition match relations, missing module
-member findings, unused module class findings, and computed member diagnostics. It does not yet
-claim `localsConvention`, `composes`, destructured member patterns, or re-exported CSS Module
-semantics.
+The current CSS Module contract is defined in `docs/design/css-modules-contract.md`. In brief, the
+current slice supports relative CSS Module imports, static member reads such as `styles.root` and
+`styles["root"]`, member-to-class-definition match relations, missing module member findings,
+unused module class findings, computed member diagnostics, and `localsConvention` matching for
+`asIs`, `camelCase`, and `camelCaseOnly`. It does not yet claim `composes`, destructured member
+patterns, generic class-reference projection, or re-exported CSS Module semantics.
 
 Rule execution now lives outside the static-analysis engine in `src/rules`.
 The engine entry points return analysis only; rule runners should be invoked as a layer above
@@ -470,6 +471,9 @@ The first stable reboot config should stay intentionally small.
 type ScanConfig = {
   failOnSeverity?: "debug" | "info" | "warn" | "error";
   rules?: Record<RuleId, RuleSeverity | "off">;
+  cssModules?: {
+    localsConvention?: "asIs" | "camelCase" | "camelCaseOnly";
+  };
 };
 ```
 
@@ -477,13 +481,14 @@ Design rules:
 
 - config format is JSON
 - no config merging
+- CSS Module `localsConvention` defaults to `camelCase`
 - default rule severities come from `docs/design/rules-catalogue.md` and the rule catalogue code
 - rule ids follow the reboot catalogue; old scanner rule ids are not part of the clean contract
 - missing config should resolve to built-in defaults
 - unsupported or unknown config keys should produce diagnostics rather than silently changing behavior
 
-Additional include/exclude behavior, external provider declarations, CSS Module conventions, and
-ownership conventions can be added once the public result shape and CLI output are stable.
+Additional include/exclude behavior, external provider declarations, and ownership conventions can
+be added once the public result shape and CLI output are stable.
 
 ## CLI JSON Contract
 

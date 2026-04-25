@@ -28,6 +28,7 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
   const engineResult = analyzeProjectSourceTexts({
     sourceFiles,
     selectorCssSources: cssFiles,
+    cssModules: config.cssModules,
   });
   const ruleResult = runRules({
     analysis: engineResult.projectAnalysis,
