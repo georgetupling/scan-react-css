@@ -62,6 +62,7 @@ export type ProjectAnalysisEntities = {
   renderSubtrees: RenderSubtreeAnalysis[];
   unsupportedClassReferences: UnsupportedClassReferenceAnalysis[];
   cssModuleImports: CssModuleImportAnalysis[];
+  cssModuleNamedImportBindings: CssModuleNamedImportBindingAnalysis[];
   cssModuleAliases: CssModuleAliasAnalysis[];
   cssModuleDestructuredBindings: CssModuleDestructuredBindingAnalysis[];
   cssModuleMemberReferences: CssModuleMemberReferenceAnalysis[];
@@ -241,6 +242,7 @@ export type CssModuleImportAnalysis = {
   sourceFilePath: string;
   stylesheetFilePath: string;
   specifier: string;
+  importedName: string;
   localName: string;
   importKind: "default" | "namespace" | "named";
 };
@@ -252,7 +254,20 @@ export type CssModuleMemberReferenceAnalysis = {
   stylesheetId: ProjectAnalysisId;
   localName: string;
   memberName: string;
-  accessKind: "property" | "string-literal-element" | "destructured-binding";
+  accessKind: "property" | "string-literal-element" | "destructured-binding" | "named-import";
+  location: SourceAnchor;
+  rawExpressionText: string;
+  traces: AnalysisTrace[];
+};
+
+export type CssModuleNamedImportBindingAnalysis = {
+  id: ProjectAnalysisId;
+  importId: ProjectAnalysisId;
+  sourceFileId: ProjectAnalysisId;
+  stylesheetId: ProjectAnalysisId;
+  specifier: string;
+  importedName: string;
+  localName: string;
   location: SourceAnchor;
   rawExpressionText: string;
   traces: AnalysisTrace[];
@@ -389,6 +404,7 @@ export type ProjectAnalysisIndexes = {
   componentsById: Map<ProjectAnalysisId, ComponentAnalysis>;
   unsupportedClassReferencesById: Map<ProjectAnalysisId, UnsupportedClassReferenceAnalysis>;
   cssModuleImportsById: Map<ProjectAnalysisId, CssModuleImportAnalysis>;
+  cssModuleNamedImportBindingsById: Map<ProjectAnalysisId, CssModuleNamedImportBindingAnalysis>;
   cssModuleAliasesById: Map<ProjectAnalysisId, CssModuleAliasAnalysis>;
   cssModuleDestructuredBindingsById: Map<ProjectAnalysisId, CssModuleDestructuredBindingAnalysis>;
   cssModuleMemberReferencesById: Map<ProjectAnalysisId, CssModuleMemberReferenceAnalysis>;
@@ -421,6 +437,7 @@ export type ProjectAnalysisIndexes = {
   cssModuleMemberMatchesById: Map<ProjectAnalysisId, CssModuleMemberMatchRelation>;
   cssModuleImportsBySourceFileId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
   cssModuleImportsByStylesheetId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  cssModuleNamedImportBindingsByImportId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
   cssModuleAliasesByImportId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
   cssModuleDestructuredBindingsByImportId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
   cssModuleMemberReferencesByImportId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;

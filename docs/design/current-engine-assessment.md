@@ -81,6 +81,7 @@ Implemented:
 
 - CSS Module import records
 - `styles.foo` and `styles["foo"]` member reference records
+- named CSS Module import binding records
 - simple destructured CSS Module binding records
 - simple same-file CSS Module alias records
 - module member-to-class-definition match relations

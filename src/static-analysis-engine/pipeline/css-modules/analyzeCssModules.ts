@@ -11,6 +11,7 @@ import type {
   CssModuleDestructuredBindingRecord,
   CssModuleImportRecord,
   CssModuleMemberReferenceRecord,
+  CssModuleNamedImportBindingRecord,
   CssModuleReferenceDiagnosticRecord,
 } from "./types.js";
 
@@ -22,7 +23,7 @@ export function analyzeCssModules(input: {
 }): CssModuleAnalysis {
   const options = normalizeCssModuleAnalysisOptions(input.options);
   const imports = buildCssModuleImports(input);
-  const { aliases, destructuredBindings, memberReferences, diagnostics } =
+  const { namedImportBindings, aliases, destructuredBindings, memberReferences, diagnostics } =
     buildCssModuleMemberReferences({
       parsedFiles: input.parsedFiles,
       imports,
@@ -31,6 +32,7 @@ export function analyzeCssModules(input: {
   return {
     options,
     imports,
+    namedImportBindings,
     aliases,
     destructuredBindings,
     memberReferences,
@@ -85,6 +87,7 @@ function buildCssModuleImports(input: {
           sourceFilePath,
           stylesheetFilePath,
           specifier: importRecord.specifier,
+          importedName: importedName.importedName,
           localName: importedName.localName,
           importKind: getCssModuleImportKind(importedName.importedName),
         });
@@ -103,6 +106,7 @@ function buildCssModuleMemberReferences(input: {
   parsedFiles: ParsedProjectFile[];
   imports: CssModuleImportRecord[];
 }): {
+  namedImportBindings: CssModuleNamedImportBindingRecord[];
   aliases: CssModuleAliasRecord[];
   destructuredBindings: CssModuleDestructuredBindingRecord[];
   memberReferences: CssModuleMemberReferenceRecord[];
@@ -116,6 +120,7 @@ function buildCssModuleMemberReferences(input: {
     );
   }
 
+  const namedImportBindings: CssModuleNamedImportBindingRecord[] = [];
   const aliases: CssModuleAliasRecord[] = [];
   const destructuredBindings: CssModuleDestructuredBindingRecord[] = [];
   const memberReferences: CssModuleMemberReferenceRecord[] = [];
@@ -123,6 +128,14 @@ function buildCssModuleMemberReferences(input: {
 
   for (const parsedFile of input.parsedFiles) {
     const sourceFilePath = normalizeProjectPath(parsedFile.filePath);
+    const namedImportBindingAnalysis = buildCssModuleNamedImportBindings({
+      parsedSourceFile: parsedFile.parsedSourceFile,
+      sourceFilePath,
+      imports: input.imports,
+    });
+    namedImportBindings.push(...namedImportBindingAnalysis.bindings);
+    memberReferences.push(...namedImportBindingAnalysis.references);
+
     const aliasAnalysis = buildCssModuleAliases({
       parsedSourceFile: parsedFile.parsedSourceFile,
       sourceFilePath,
@@ -177,6 +190,9 @@ function buildCssModuleMemberReferences(input: {
   }
 
   return {
+    namedImportBindings: deduplicateByKey(namedImportBindings, createNamedImportBindingKey).sort(
+      compareNamedImportBindings,
+    ),
     aliases: deduplicateByKey(aliases, createAliasKey).sort(compareAliases),
     destructuredBindings: deduplicateByKey(destructuredBindings, createDestructuredBindingKey).sort(
       compareDestructuredBindings,
@@ -191,6 +207,107 @@ function buildCssModuleMemberReferences(input: {
 type CssModuleMemberAccess =
   | { kind: "reference"; reference: CssModuleMemberReferenceRecord }
   | { kind: "diagnostic"; diagnostic: CssModuleReferenceDiagnosticRecord };
+
+function buildCssModuleNamedImportBindings(input: {
+  parsedSourceFile: ts.SourceFile;
+  sourceFilePath: string;
+  imports: CssModuleImportRecord[];
+}): {
+  bindings: CssModuleNamedImportBindingRecord[];
+  references: CssModuleMemberReferenceRecord[];
+} {
+  const bindings: CssModuleNamedImportBindingRecord[] = [];
+  const references: CssModuleMemberReferenceRecord[] = [];
+  const namedImportsBySourceSpecifierLocalAndImportedName = new Map<
+    string,
+    CssModuleImportRecord
+  >();
+  for (const cssModuleImport of input.imports) {
+    if (
+      cssModuleImport.importKind !== "named" ||
+      cssModuleImport.sourceFilePath !== input.sourceFilePath
+    ) {
+      continue;
+    }
+
+    namedImportsBySourceSpecifierLocalAndImportedName.set(
+      createCssModuleNamedImportKey({
+        sourceFilePath: cssModuleImport.sourceFilePath,
+        specifier: cssModuleImport.specifier,
+        importedName: cssModuleImport.importedName,
+        localName: cssModuleImport.localName,
+      }),
+      cssModuleImport,
+    );
+  }
+
+  if (namedImportsBySourceSpecifierLocalAndImportedName.size === 0) {
+    return { bindings, references };
+  }
+
+  for (const statement of input.parsedSourceFile.statements) {
+    if (
+      !ts.isImportDeclaration(statement) ||
+      !ts.isStringLiteral(statement.moduleSpecifier) ||
+      !statement.importClause?.namedBindings ||
+      !ts.isNamedImports(statement.importClause.namedBindings)
+    ) {
+      continue;
+    }
+
+    for (const element of statement.importClause.namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      const localName = element.name.text;
+      const cssModuleImport = namedImportsBySourceSpecifierLocalAndImportedName.get(
+        createCssModuleNamedImportKey({
+          sourceFilePath: input.sourceFilePath,
+          specifier: statement.moduleSpecifier.text,
+          importedName,
+          localName,
+        }),
+      );
+      if (!cssModuleImport) {
+        continue;
+      }
+
+      const location = toSourceAnchor(element, input.parsedSourceFile, input.sourceFilePath);
+      const trace = createCssModuleTrace({
+        traceId: `css-module:named-import:${location.filePath}:${location.startLine}:${location.startColumn}`,
+        summary: `CSS Module member "${importedName}" was imported as "${localName}"`,
+        anchor: location,
+        metadata: {
+          stylesheetFilePath: cssModuleImport.stylesheetFilePath,
+          memberName: importedName,
+          bindingName: localName,
+        },
+      });
+      const rawExpressionText = element.getText(input.parsedSourceFile);
+
+      bindings.push({
+        sourceFilePath: input.sourceFilePath,
+        stylesheetFilePath: cssModuleImport.stylesheetFilePath,
+        specifier: cssModuleImport.specifier,
+        importedName,
+        localName,
+        location,
+        rawExpressionText,
+        traces: [trace],
+      });
+      references.push({
+        sourceFilePath: input.sourceFilePath,
+        stylesheetFilePath: cssModuleImport.stylesheetFilePath,
+        localName,
+        memberName: importedName,
+        accessKind: "named-import",
+        location,
+        rawExpressionText,
+        traces: [trace],
+      });
+    }
+  }
+
+  return { bindings, references };
+}
 
 function buildCssModuleAliases(input: {
   parsedSourceFile: ts.SourceFile;
@@ -632,6 +749,20 @@ function createCssModuleLocalKey(sourceFilePath: string, localName: string): str
   return `${normalizeProjectPath(sourceFilePath)}:${localName}`;
 }
 
+function createCssModuleNamedImportKey(input: {
+  sourceFilePath: string;
+  specifier: string;
+  importedName: string;
+  localName: string;
+}): string {
+  return [
+    normalizeProjectPath(input.sourceFilePath),
+    input.specifier,
+    input.importedName,
+    input.localName,
+  ].join(":");
+}
+
 function createMemberReferenceKey(reference: CssModuleMemberReferenceRecord): string {
   return [
     reference.sourceFilePath,
@@ -639,6 +770,17 @@ function createMemberReferenceKey(reference: CssModuleMemberReferenceRecord): st
     reference.memberName,
     reference.location.startLine,
     reference.location.startColumn,
+  ].join(":");
+}
+
+function createNamedImportBindingKey(binding: CssModuleNamedImportBindingRecord): string {
+  return [
+    binding.sourceFilePath,
+    binding.stylesheetFilePath,
+    binding.importedName,
+    binding.localName,
+    binding.location.startLine,
+    binding.location.startColumn,
   ].join(":");
 }
 
@@ -683,6 +825,13 @@ function compareMemberReferences(
   right: CssModuleMemberReferenceRecord,
 ): number {
   return createMemberReferenceKey(left).localeCompare(createMemberReferenceKey(right));
+}
+
+function compareNamedImportBindings(
+  left: CssModuleNamedImportBindingRecord,
+  right: CssModuleNamedImportBindingRecord,
+): number {
+  return createNamedImportBindingKey(left).localeCompare(createNamedImportBindingKey(right));
 }
 
 function compareAliases(left: CssModuleAliasRecord, right: CssModuleAliasRecord): number {

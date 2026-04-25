@@ -11,6 +11,7 @@ export type CssModuleImportRecord = {
   sourceFilePath: string;
   stylesheetFilePath: string;
   specifier: string;
+  importedName: string;
   localName: string;
   importKind: "default" | "namespace" | "named";
 };
@@ -20,7 +21,7 @@ export type CssModuleMemberReferenceRecord = {
   stylesheetFilePath: string;
   localName: string;
   memberName: string;
-  accessKind: "property" | "string-literal-element" | "destructured-binding";
+  accessKind: "property" | "string-literal-element" | "destructured-binding" | "named-import";
   location: SourceAnchor;
   rawExpressionText: string;
   traces: AnalysisTrace[];
@@ -47,6 +48,17 @@ export type CssModuleAliasRecord = {
   traces: AnalysisTrace[];
 };
 
+export type CssModuleNamedImportBindingRecord = {
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  specifier: string;
+  importedName: string;
+  localName: string;
+  location: SourceAnchor;
+  rawExpressionText: string;
+  traces: AnalysisTrace[];
+};
+
 export type CssModuleReferenceDiagnosticRecord = {
   sourceFilePath: string;
   stylesheetFilePath: string;
@@ -66,6 +78,7 @@ export type CssModuleReferenceDiagnosticRecord = {
 export type CssModuleAnalysis = {
   options: Required<CssModuleAnalysisOptions>;
   imports: CssModuleImportRecord[];
+  namedImportBindings: CssModuleNamedImportBindingRecord[];
   aliases: CssModuleAliasRecord[];
   destructuredBindings: CssModuleDestructuredBindingRecord[];
   memberReferences: CssModuleMemberReferenceRecord[];

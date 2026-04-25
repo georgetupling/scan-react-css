@@ -31,25 +31,40 @@ Supported and represented:
 ```ts
 import styles from "./Button.module.css";
 import * as styles from "./Button.module.css";
+import { root, button as buttonClass } from "./Button.module.css";
 ```
 
 These produce `CssModuleImportAnalysis` records with:
 
 - `importKind: "default"` for default imports
 - `importKind: "namespace"` for namespace imports
+- `importKind: "named"` for named imports
+- `importedName` set to `default`, `*`, or the requested named export
 - `localName` set to the local object name used in the source file
 
-Named imports are recorded when the module graph exposes them:
+Default and namespace imports are object imports. They support member reads, destructuring, and
+simple aliases:
 
 ```ts
-import { root } from "./Button.module.css";
+import styles from "./Button.module.css";
+styles.root;
+
+import * as moduleStyles from "./Button.module.css";
+moduleStyles.root;
 ```
 
-Current behavior is intentionally bounded:
+Named imports are direct member bindings:
 
-- a named import can appear as a `CssModuleImportAnalysis` record with `importKind: "named"`
-- direct use of the imported binding, such as `root`, is not yet represented as a member reference
-- named import semantics are not yet used by `missing-css-module-class` or `unused-css-module-class`
+```ts
+import { root, button as buttonClass } from "./Button.module.css";
+```
+
+These produce `CssModuleNamedImportBindingAnalysis` records and `CssModuleMemberReferenceAnalysis`
+records with `accessKind: "named-import"`. The exported member name is matched against CSS class
+definitions using the configured `localsConvention`; the local binding name is preserved for traces.
+
+Named import support is a static source contract. It means the analyzer understands the syntax when
+it appears in source; it does not imply every bundler supports named CSS Module imports at runtime.
 
 Unsupported for now:
 
@@ -69,6 +84,7 @@ styles["root"];
 const s = styles;
 s.root;
 const { root, button: buttonClass } = styles;
+import { root } from "./Button.module.css";
 ```
 
 These produce `CssModuleMemberReferenceAnalysis` records with:
@@ -76,6 +92,7 @@ These produce `CssModuleMemberReferenceAnalysis` records with:
 - `accessKind: "property"` for `styles.root`
 - `accessKind: "string-literal-element"` for `styles["root"]`
 - `accessKind: "destructured-binding"` for supported object binding elements
+- `accessKind: "named-import"` for supported named import bindings
 - `memberName` set to the requested export/member name
 - source location, raw expression text, and traces
 
@@ -224,7 +241,6 @@ Currently diagnosed:
 
 Not yet diagnosed consistently:
 
-- unsupported named import semantics
 - unresolved CSS Module import targets
 - re-exports
 - unsupported `composes` targets
@@ -237,6 +253,5 @@ subject of a dedicated diagnostic rule.
 
 - no `composes` analysis yet
 - no cross-file value-flow tracking for module objects
-- no direct named import usage semantics yet
 - no projection of CSS Module member reads into generic class references yet
 - no bundler-specific CSS Module type inference yet

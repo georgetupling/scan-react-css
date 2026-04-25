@@ -14,6 +14,7 @@ import type {
   CssModuleImportAnalysis,
   CssModuleMemberMatchRelation,
   CssModuleMemberReferenceAnalysis,
+  CssModuleNamedImportBindingAnalysis,
   CssModuleReferenceDiagnosticAnalysis,
   DeclarationForSignature,
   ModuleImportRelation,
@@ -57,6 +58,7 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
   const selectorBranches = buildSelectorBranches(selectorQueries);
   const cssModuleImports = buildCssModuleImports(input, indexes);
   const {
+    namedImportBindings: cssModuleNamedImportBindings,
     aliases: cssModuleAliases,
     destructuredBindings: cssModuleDestructuredBindings,
     memberReferences: cssModuleMemberReferences,
@@ -76,6 +78,7 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
     components,
     unsupportedClassReferences,
     cssModuleImports,
+    cssModuleNamedImportBindings,
     cssModuleAliases,
     cssModuleDestructuredBindings,
     cssModuleMemberReferences,
@@ -141,6 +144,7 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
       renderSubtrees,
       unsupportedClassReferences,
       cssModuleImports,
+      cssModuleNamedImportBindings,
       cssModuleAliases,
       cssModuleDestructuredBindings,
       cssModuleMemberReferences,
@@ -402,6 +406,7 @@ function buildCssModuleImports(
         sourceFilePath,
         stylesheetFilePath,
         specifier: cssModuleImport.specifier,
+        importedName: cssModuleImport.importedName,
         localName: cssModuleImport.localName,
         importKind: cssModuleImport.importKind,
       };
@@ -417,6 +422,7 @@ function buildCssModuleMemberReferences(input: {
   imports: CssModuleImportAnalysis[];
   indexes: ProjectAnalysisIndexes;
 }): {
+  namedImportBindings: CssModuleNamedImportBindingAnalysis[];
   aliases: CssModuleAliasAnalysis[];
   destructuredBindings: CssModuleDestructuredBindingAnalysis[];
   memberReferences: CssModuleMemberReferenceAnalysis[];
@@ -435,6 +441,35 @@ function buildCssModuleMemberReferences(input: {
   }
 
   return {
+    namedImportBindings: input.projectInput.cssModules.namedImportBindings
+      .map((binding) => {
+        const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
+          createCssModuleImportLookupKey(binding),
+        );
+        if (!cssModuleImport) {
+          return undefined;
+        }
+
+        return {
+          id: createCssModuleNamedImportBindingId(
+            binding.location,
+            cssModuleImport.id,
+            binding.importedName,
+            binding.localName,
+          ),
+          importId: cssModuleImport.id,
+          sourceFileId: cssModuleImport.sourceFileId,
+          stylesheetId: cssModuleImport.stylesheetId,
+          specifier: binding.specifier,
+          importedName: binding.importedName,
+          localName: binding.localName,
+          location: normalizeAnchor(binding.location),
+          rawExpressionText: binding.rawExpressionText,
+          traces: [...binding.traces],
+        };
+      })
+      .filter((binding): binding is CssModuleNamedImportBindingAnalysis => Boolean(binding))
+      .sort(compareById),
     aliases: input.projectInput.cssModules.aliases
       .map((alias) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
@@ -1492,6 +1527,7 @@ function indexEntities(input: {
   components: ComponentAnalysis[];
   unsupportedClassReferences: UnsupportedClassReferenceAnalysis[];
   cssModuleImports: CssModuleImportAnalysis[];
+  cssModuleNamedImportBindings: CssModuleNamedImportBindingAnalysis[];
   cssModuleAliases: CssModuleAliasAnalysis[];
   cssModuleDestructuredBindings: CssModuleDestructuredBindingAnalysis[];
   cssModuleMemberReferences: CssModuleMemberReferenceAnalysis[];
@@ -1552,6 +1588,14 @@ function indexEntities(input: {
       cssModuleImport.id,
     );
   }
+  for (const binding of input.cssModuleNamedImportBindings) {
+    input.indexes.cssModuleNamedImportBindingsById.set(binding.id, binding);
+    pushMapValue(
+      input.indexes.cssModuleNamedImportBindingsByImportId,
+      binding.importId,
+      binding.id,
+    );
+  }
   for (const alias of input.cssModuleAliases) {
     input.indexes.cssModuleAliasesById.set(alias.id, alias);
     pushMapValue(input.indexes.cssModuleAliasesByImportId, alias.importId, alias.id);
@@ -1591,6 +1635,7 @@ function indexEntities(input: {
   sortIndexValues(input.indexes.selectorBranchesByRuleKey);
   sortIndexValues(input.indexes.selectorBranchesByStylesheetId);
   sortIndexValues(input.indexes.cssModuleImportsByStylesheetId);
+  sortIndexValues(input.indexes.cssModuleNamedImportBindingsByImportId);
   sortIndexValues(input.indexes.cssModuleAliasesByImportId);
   sortIndexValues(input.indexes.cssModuleDestructuredBindingsByImportId);
   sortIndexValues(input.indexes.cssModuleMemberReferencesByImportId);
@@ -1930,6 +1975,7 @@ function createEmptyIndexes(): ProjectAnalysisIndexes {
     componentsById: new Map(),
     unsupportedClassReferencesById: new Map(),
     cssModuleImportsById: new Map(),
+    cssModuleNamedImportBindingsById: new Map(),
     cssModuleAliasesById: new Map(),
     cssModuleDestructuredBindingsById: new Map(),
     cssModuleMemberReferencesById: new Map(),
@@ -1962,6 +2008,7 @@ function createEmptyIndexes(): ProjectAnalysisIndexes {
     cssModuleMemberMatchesById: new Map(),
     cssModuleImportsBySourceFileId: new Map(),
     cssModuleImportsByStylesheetId: new Map(),
+    cssModuleNamedImportBindingsByImportId: new Map(),
     cssModuleAliasesByImportId: new Map(),
     cssModuleDestructuredBindingsByImportId: new Map(),
     cssModuleMemberReferencesByImportId: new Map(),
@@ -2087,6 +2134,22 @@ function createCssModuleMemberReferenceId(
     "css-module-member-reference",
     importId,
     memberName,
+    location.startLine,
+    location.startColumn,
+  ].join(":");
+}
+
+function createCssModuleNamedImportBindingId(
+  location: SourceAnchor,
+  importId: ProjectAnalysisId,
+  importedName: string,
+  localName: string,
+): ProjectAnalysisId {
+  return [
+    "css-module-named-import-binding",
+    importId,
+    importedName,
+    localName,
     location.startLine,
     location.startColumn,
   ].join(":");

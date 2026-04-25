@@ -63,6 +63,81 @@ test("ProjectAnalysis matches CSS Module members through camelCase locals conven
   assert.equal(match.definitionId, analysis.entities.classDefinitions[0].id);
 });
 
+test("ProjectAnalysis treats namespace CSS Module imports as object imports", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/Button.tsx",
+        sourceText:
+          'import * as styles from "./Button.module.css";\nexport function Button() { return <button className={styles.root}>Button</button>; }\n',
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/Button.module.css",
+        cssText: ".root { display: block; }\n",
+      },
+    ],
+  });
+
+  const analysis = result.projectAnalysis;
+  const cssModuleImport = analysis.entities.cssModuleImports[0];
+  const match = analysis.relations.cssModuleMemberMatches[0];
+
+  assert.equal(cssModuleImport.importKind, "namespace");
+  assert.equal(cssModuleImport.importedName, "*");
+  assert.equal(match.status, "matched");
+});
+
+test("ProjectAnalysis records named CSS Module imports as member references", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/Button.tsx",
+        sourceText:
+          'import { fooBar, button as buttonClass } from "./Button.module.css";\nexport function Button() { return <button className={buttonClass}>Button</button>; }\n',
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/Button.module.css",
+        cssText: ".foo-bar { display: block; }\n.button { color: red; }\n",
+      },
+    ],
+  });
+
+  const analysis = result.projectAnalysis;
+  const bindings = analysis.entities.cssModuleNamedImportBindings;
+  const references = analysis.entities.cssModuleMemberReferences;
+  const matches = analysis.relations.cssModuleMemberMatches;
+
+  assert.deepEqual(
+    bindings.map((binding) => [binding.importedName, binding.localName]),
+    [
+      ["button", "buttonClass"],
+      ["fooBar", "fooBar"],
+    ],
+  );
+  assert.deepEqual(
+    references.map((reference) => [reference.memberName, reference.accessKind]),
+    [
+      ["button", "named-import"],
+      ["fooBar", "named-import"],
+    ],
+  );
+  assert.deepEqual(
+    matches.map((match) => [match.className, match.exportName, match.status]),
+    [
+      ["button", "button", "matched"],
+      ["foo-bar", "fooBar", "matched"],
+    ],
+  );
+  assert.deepEqual(
+    analysis.indexes.cssModuleNamedImportBindingsByImportId.get(bindings[0].importId),
+    [bindings[0].id],
+  );
+});
+
 test("ProjectAnalysis can require exact CSS Module export names", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
