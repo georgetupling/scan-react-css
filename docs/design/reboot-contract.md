@@ -572,10 +572,11 @@ CLI JSON should be deterministic and readable by a person reviewing CI output.
 
 Output path behavior:
 
-- default path is `scan-react-css-reports/scan-react-css-output.json` in the current working directory
+- default path is a timestamped `scan-react-css-reports/report-YYYY-MM-DD-HH-mm-ss.json` file in
+  the current working directory
 - `--output-file <path>` selects a custom report path and requires `--json`
-- existing report files are preserved by writing the next suffixed path in the reports directory,
-  such as `scan-react-css-output-1.json`, unless `--overwrite-output` is supplied
+- existing report files are preserved by writing the next suffixed path, such as
+  `report-YYYY-MM-DD-HH-mm-ss-1.json`, unless `--overwrite-output` is supplied
 - `--overwrite-output` replaces the selected output path and requires `--json`
 - stdout contains only a short human-readable confirmation and final failure status
 - the CLI exit code still follows the scan failure state after the report is written

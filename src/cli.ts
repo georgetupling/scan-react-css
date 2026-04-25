@@ -192,9 +192,7 @@ async function writeJsonReport(input: {
   outputFile?: string;
   overwriteOutput: boolean;
 }): Promise<string> {
-  const requestedPath = path.resolve(
-    input.outputFile ?? path.join("scan-react-css-reports", "scan-react-css-output.json"),
-  );
+  const requestedPath = path.resolve(input.outputFile ?? getDefaultJsonReportPath());
   const outputPath = input.overwriteOutput
     ? requestedPath
     : await findAvailableOutputPath(requestedPath);
@@ -215,6 +213,24 @@ async function writeJsonReport(input: {
   }
 
   return outputPath;
+}
+
+function getDefaultJsonReportPath(date = new Date()): string {
+  return path.join("scan-react-css-reports", `report-${formatReportTimestamp(date)}.json`);
+}
+
+function formatReportTimestamp(date: Date): string {
+  const parts = [
+    date.getFullYear(),
+    date.getMonth() + 1,
+    date.getDate(),
+    date.getHours(),
+    date.getMinutes(),
+    date.getSeconds(),
+  ];
+
+  const [year, ...rest] = parts;
+  return [String(year), ...rest.map((part) => String(part).padStart(2, "0"))].join("-");
 }
 
 async function findAvailableOutputPath(requestedPath: string): Promise<string> {

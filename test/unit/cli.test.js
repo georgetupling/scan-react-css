@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
@@ -20,9 +20,8 @@ test("CLI writes JSON output to the default report file", async () => {
 
   try {
     const { stdout } = await runCli(["--json"], { cwd: project.rootDir });
-    const output = await readJsonFile(
-      project.filePath("scan-react-css-reports/scan-react-css-output.json"),
-    );
+    const reportPath = await findOnlyDefaultReport(project);
+    const output = await readJsonFile(reportPath);
 
     assert.equal(output.rootDir, project.rootDir);
     assert.equal(output.failed, false);
@@ -33,35 +32,36 @@ test("CLI writes JSON output to the default report file", async () => {
     assert.deepEqual(output.findings, []);
     assert.equal("analysis" in output, false);
     assert.match(stdout, /JSON report written to /);
+    assert.match(
+      stdout,
+      /scan-react-css-reports[\\/]+report-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json/,
+    );
     assert.doesNotMatch(stdout.trimStart(), /^\{/);
   } finally {
     await project.cleanup();
   }
 });
 
-test("CLI suffixes JSON output files instead of overwriting", async () => {
+test("CLI suffixes JSON output files instead of overwriting a custom report", async () => {
   const project = await new TestProjectBuilder().build();
 
   try {
-    await mkdir(project.filePath("scan-react-css-reports"), { recursive: true });
-    await writeFile(
-      project.filePath("scan-react-css-reports/scan-react-css-output.json"),
-      "existing\n",
-      "utf8",
-    );
+    const reportPath = project.filePath("scan-react-css-reports/report-existing.json");
+    await mkdir(path.dirname(reportPath), { recursive: true });
+    await writeFile(reportPath, "existing\n", "utf8");
 
-    const { stdout } = await runCli(["--json"], { cwd: project.rootDir });
-    const originalContent = await readFile(
-      project.filePath("scan-react-css-reports/scan-react-css-output.json"),
-      "utf8",
+    const { stdout } = await runCli(
+      ["--json", "--output-file", "scan-react-css-reports/report-existing.json"],
+      { cwd: project.rootDir },
     );
+    const originalContent = await readFile(reportPath, "utf8");
     const output = await readJsonFile(
-      project.filePath("scan-react-css-reports/scan-react-css-output-1.json"),
+      project.filePath("scan-react-css-reports/report-existing-1.json"),
     );
 
     assert.equal(originalContent, "existing\n");
     assert.equal(output.rootDir, project.rootDir);
-    assert.match(stdout, /scan-react-css-output-1\.json/);
+    assert.match(stdout, /report-existing-1\.json/);
   } finally {
     await project.cleanup();
   }
@@ -540,4 +540,14 @@ function escapeRegExp(value) {
 
 async function readJsonFile(filePath) {
   return JSON.parse(await readFile(filePath, "utf8"));
+}
+
+async function findOnlyDefaultReport(project) {
+  const reportDirectory = project.filePath("scan-react-css-reports");
+  const reportFiles = (await readdir(reportDirectory)).filter((entry) =>
+    /^report-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}-\d{2}\.json$/.test(entry),
+  );
+
+  assert.deepEqual(reportFiles.length, 1);
+  return path.join(reportDirectory, reportFiles[0]);
 }

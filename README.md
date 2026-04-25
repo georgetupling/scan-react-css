@@ -55,8 +55,8 @@ Write a JSON report file:
 npx scan-react-css --json
 ```
 
-By default this creates `scan-react-css-reports/scan-react-css-output.json`, or the next available
-suffixed path if that file already exists.
+By default this creates a timestamped report such as
+`scan-react-css-reports/report-2026-04-25-19-42-08.json`.
 
 ## CLI Usage
 
@@ -118,8 +118,8 @@ It does not dump the JSON payload to the terminal.
 
 Default behavior:
 
-- writes to `scan-react-css-reports/scan-react-css-output.json`
-- preserves existing reports by writing `scan-react-css-output-1.json`, then `-2`, in that reports directory
+- writes to a timestamped file like `scan-react-css-reports/report-2026-04-25-19-42-08.json`
+- preserves existing reports by adding a numeric suffix if a selected report path already exists
 - exits non-zero after writing the report if the scan failed
 
 Custom output:
