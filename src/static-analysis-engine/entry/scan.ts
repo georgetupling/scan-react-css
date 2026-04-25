@@ -1,24 +1,15 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
 import type { StaticAnalysisEngineResult } from "../types/runtime.js";
-import {
-  runAbstractValueStage,
-  runCssAnalysisStage,
-  runExternalCssStage,
-  runModuleGraphStage,
-  runParseStage,
-  runProjectAbstractValueStage,
-  runProjectModuleGraphStage,
-  runProjectParseStage,
-  runProjectSymbolResolutionStage,
-  runReachabilityStage,
-  runRuleExecutionStage,
-  runSelectorAnalysisStage,
-  runSymbolResolutionStage,
-} from "./stages/basicStages.js";
-import { runProjectRenderGraphStage, runRenderGraphStage } from "./stages/renderGraphStage.js";
-import { runProjectRenderIrStage, runRenderIrStage } from "./stages/renderIrStage.js";
-import { runProjectRenderSummaryStage } from "./stages/renderSummaryStage.js";
+import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
+import { runExternalCssStage } from "./stages/externalCssStage.js";
+import { runModuleGraphStage } from "./stages/moduleGraphStage.js";
+import { runParseStage } from "./stages/parseStage.js";
+import { runProjectAnalysisStage } from "./stages/projectAnalysisStage.js";
+import { runReachabilityStage } from "./stages/reachabilityStage.js";
+import { runRenderModelStage } from "./stages/renderModelStage.js";
+import { runSelectorAnalysisStage } from "./stages/selectorAnalysisStage.js";
+import { runSymbolResolutionStage } from "./stages/symbolResolutionStage.js";
 
 export function analyzeSourceText(input: {
   filePath: string;
@@ -27,67 +18,17 @@ export function analyzeSourceText(input: {
   selectorCssSources?: SelectorSourceInput[];
   externalCss?: ExternalCssAnalysisInput;
 }): StaticAnalysisEngineResult {
-  const parseStage = runParseStage(input);
-  const symbolResolutionStage = runSymbolResolutionStage({
-    filePath: input.filePath,
-    parsedSourceFile: parseStage.parsedSourceFile,
-  });
-  const moduleGraphStage = runModuleGraphStage({
-    filePath: input.filePath,
-    parsedSourceFile: parseStage.parsedSourceFile,
-  });
-  const abstractValueStage = runAbstractValueStage({
-    filePath: input.filePath,
-    parsedSourceFile: parseStage.parsedSourceFile,
-  });
-  const renderGraphStage = runRenderGraphStage({
-    filePath: input.filePath,
-    parsedSourceFile: parseStage.parsedSourceFile,
-  });
-  const renderIrStage = runRenderIrStage({
-    filePath: input.filePath,
-    parsedSourceFile: parseStage.parsedSourceFile,
-  });
-  const cssAnalysisStage = runCssAnalysisStage({
-    selectorCssSources: input.selectorCssSources ?? [],
-  });
-  const externalCssStage = runExternalCssStage({
+  return analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: input.filePath,
+        sourceText: input.sourceText,
+      },
+    ],
+    selectorQueries: input.selectorQueries,
+    selectorCssSources: input.selectorCssSources,
     externalCss: input.externalCss,
   });
-  const reachabilityStage = runReachabilityStage({
-    moduleGraph: moduleGraphStage.moduleGraph,
-    renderGraph: renderGraphStage.renderGraph,
-    renderSubtrees: renderIrStage.renderSubtrees,
-    selectorCssSources: input.selectorCssSources ?? [],
-    externalCssSummary: externalCssStage.externalCssSummary,
-  });
-  const selectorAnalysisStage = runSelectorAnalysisStage({
-    selectorQueries: input.selectorQueries ?? [],
-    selectorCssSources: input.selectorCssSources ?? [],
-    renderSubtrees: renderIrStage.renderSubtrees,
-    reachabilitySummary: reachabilityStage.reachabilitySummary,
-  });
-  const ruleExecutionStage = runRuleExecutionStage({
-    moduleGraph: moduleGraphStage.moduleGraph,
-    classExpressions: abstractValueStage.classExpressions,
-    cssFiles: cssAnalysisStage.cssFiles,
-    externalCssSummary: externalCssStage.externalCssSummary,
-    reachabilitySummary: reachabilityStage.reachabilitySummary,
-    selectorQueryResults: selectorAnalysisStage.selectorQueryResults,
-  });
-
-  return {
-    moduleGraph: moduleGraphStage.moduleGraph,
-    symbols: symbolResolutionStage.symbols,
-    classExpressions: abstractValueStage.classExpressions,
-    cssFiles: cssAnalysisStage.cssFiles,
-    externalCssSummary: externalCssStage.externalCssSummary,
-    reachabilitySummary: reachabilityStage.reachabilitySummary,
-    renderGraph: renderGraphStage.renderGraph,
-    renderSubtrees: renderIrStage.renderSubtrees,
-    selectorQueryResults: selectorAnalysisStage.selectorQueryResults,
-    experimentalRuleResults: ruleExecutionStage.experimentalRuleResults,
-  };
 }
 
 export function analyzeProjectSourceTexts(input: {
@@ -99,23 +40,18 @@ export function analyzeProjectSourceTexts(input: {
   selectorCssSources?: SelectorSourceInput[];
   externalCss?: ExternalCssAnalysisInput;
 }): StaticAnalysisEngineResult {
-  const parseStage = runProjectParseStage(input.sourceFiles);
-  const moduleGraphStage = runProjectModuleGraphStage({
+  const parseStage = runParseStage(input.sourceFiles);
+  const moduleGraphStage = runModuleGraphStage({
     parsedFiles: parseStage.parsedFiles,
   });
-  const symbolResolutionStage = runProjectSymbolResolutionStage({
+  const symbolResolutionStage = runSymbolResolutionStage({
     parsedFiles: parseStage.parsedFiles,
     moduleGraph: moduleGraphStage.moduleGraph,
   });
-  const abstractValueStage = runProjectAbstractValueStage({
-    parsedFiles: parseStage.parsedFiles,
-  });
-  const renderSummaryStage = runProjectRenderSummaryStage({
+  const renderModelStage = runRenderModelStage({
     parsedFiles: parseStage.parsedFiles,
     symbolResolution: symbolResolutionStage,
   });
-  const renderGraphStage = runProjectRenderGraphStage(renderSummaryStage.renderGraphInput);
-  const renderIrStage = runProjectRenderIrStage(renderSummaryStage.renderIrInput);
   const cssAnalysisStage = runCssAnalysisStage({
     selectorCssSources: input.selectorCssSources ?? [],
   });
@@ -124,36 +60,29 @@ export function analyzeProjectSourceTexts(input: {
   });
   const reachabilityStage = runReachabilityStage({
     moduleGraph: moduleGraphStage.moduleGraph,
-    renderGraph: renderGraphStage.renderGraph,
-    renderSubtrees: renderIrStage.renderSubtrees,
+    renderGraph: renderModelStage.renderGraph,
+    renderSubtrees: renderModelStage.renderSubtrees,
     selectorCssSources: input.selectorCssSources ?? [],
     externalCssSummary: externalCssStage.externalCssSummary,
   });
   const selectorAnalysisStage = runSelectorAnalysisStage({
     selectorQueries: input.selectorQueries ?? [],
     selectorCssSources: input.selectorCssSources ?? [],
-    renderSubtrees: renderIrStage.renderSubtrees,
+    renderSubtrees: renderModelStage.renderSubtrees,
     reachabilitySummary: reachabilityStage.reachabilitySummary,
   });
-  const ruleExecutionStage = runRuleExecutionStage({
+  const projectAnalysisStage = runProjectAnalysisStage({
     moduleGraph: moduleGraphStage.moduleGraph,
-    classExpressions: abstractValueStage.classExpressions,
     cssFiles: cssAnalysisStage.cssFiles,
     externalCssSummary: externalCssStage.externalCssSummary,
     reachabilitySummary: reachabilityStage.reachabilitySummary,
+    renderGraph: renderModelStage.renderGraph,
+    renderSubtrees: renderModelStage.renderSubtrees,
+    unsupportedClassReferences: renderModelStage.unsupportedClassReferences,
     selectorQueryResults: selectorAnalysisStage.selectorQueryResults,
   });
 
   return {
-    moduleGraph: moduleGraphStage.moduleGraph,
-    symbols: symbolResolutionStage.symbols,
-    classExpressions: abstractValueStage.classExpressions,
-    cssFiles: cssAnalysisStage.cssFiles,
-    externalCssSummary: externalCssStage.externalCssSummary,
-    reachabilitySummary: reachabilityStage.reachabilitySummary,
-    renderGraph: renderGraphStage.renderGraph,
-    renderSubtrees: renderIrStage.renderSubtrees,
-    selectorQueryResults: selectorAnalysisStage.selectorQueryResults,
-    experimentalRuleResults: ruleExecutionStage.experimentalRuleResults,
+    projectAnalysis: projectAnalysisStage.projectAnalysis,
   };
 }

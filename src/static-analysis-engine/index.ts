@@ -1,40 +1,35 @@
 export { analyzeProjectSourceTexts, analyzeSourceText } from "./entry/scan.js";
 export { analyzeCssSources } from "./pipeline/css-analysis/index.js";
-export { parseSourceFile } from "./pipeline/source-file-parsing/index.js";
+export { parseSourceFile } from "./pipeline/parse/index.js";
 export {
   buildModuleGraphFromSource,
   buildModuleGraphFromSources,
   createModuleId,
 } from "./pipeline/module-graph/index.js";
 export { collectTopLevelSymbols, createSymbolId } from "./pipeline/symbol-resolution/index.js";
-export {
-  collectClassExpressionSummaries,
-  summarizeClassNameExpression,
-  toAbstractClassSet,
-} from "./pipeline/abstract-values/index.js";
+export { summarizeClassNameExpression, toAbstractClassSet } from "./pipeline/render-model/index.js";
 export { buildExternalCssSummary } from "./pipeline/external-css/index.js";
+export { collectUnsupportedClassReferences } from "./pipeline/render-model/index.js";
 export {
   buildSameFileRenderSubtrees,
   collectRenderRegionsFromSubtrees,
-} from "./pipeline/render-ir/index.js";
+} from "./pipeline/render-model/index.js";
 export {
   analyzeSelectorQueries,
   extractSelectorQueriesFromCssText,
 } from "./pipeline/selector-analysis/index.js";
 export { buildReachabilitySummary } from "./pipeline/reachability/index.js";
-export { buildRenderGraph } from "./pipeline/render-graph/index.js";
-export { runExperimentalRules } from "./pipeline/rule-execution/index.js";
-export {
-  compareExperimentalFindings,
-  compareExperimentalRuleResults,
-  formatExperimentalComparisonReport,
-  runExperimentalSelectorPilotAgainstCurrentScanner,
-  runExperimentalSelectorPilotForProject,
-  runExperimentalSelectorPilotForSource,
-  summarizeExperimentalComparison,
-  toExperimentalFindings,
-} from "./comparison/index.js";
+export { buildRenderGraph, buildRenderModel } from "./pipeline/render-model/index.js";
+export { buildProjectAnalysis } from "./pipeline/project-analysis/index.js";
 export type { EngineModuleId, EngineSymbolId, SourceAnchor } from "./types/core.js";
+export type {
+  CssAtRuleContextFact,
+  CssClassDefinitionFact,
+  CssDeclarationFact,
+  CssSelectorBranchFact,
+  CssSelectorMatchKind,
+  CssStyleRuleFact,
+} from "./types/css.js";
 export type {
   AnalysisCertainty,
   AnalysisConfidence,
@@ -60,7 +55,7 @@ export type {
   RenderGraph,
   RenderGraphEdge,
   RenderGraphNode,
-} from "./pipeline/render-graph/index.js";
+} from "./pipeline/render-model/render-graph/index.js";
 export type {
   ReachabilityAvailability,
   ReachabilitySummary,
@@ -83,8 +78,9 @@ export type {
   AbstractValue,
   ClassDerivationStep,
   ClassExpressionSummary,
-} from "./pipeline/abstract-values/index.js";
+} from "./pipeline/render-model/abstract-values/index.js";
 export type {
+  RenderComponentReferenceExpansion,
   RenderComponentReferenceNode,
   RenderConditionalNode,
   RenderElementNode,
@@ -97,20 +93,38 @@ export type {
   RenderRegionPathSegment,
   RenderSubtree,
   RenderUnknownNode,
-} from "./pipeline/render-ir/index.js";
+} from "./pipeline/render-model/render-ir/index.js";
 export type {
-  ExperimentalRuleId,
-  ExperimentalRuleResult,
-  ExperimentalRuleSeverity,
-} from "./pipeline/rule-execution/index.js";
+  ClassDefinitionAnalysis,
+  ClassDefinitionSelectorKind,
+  ClassReferenceAnalysis,
+  ClassReferenceExpressionKind,
+  ClassReferenceMatchRelation,
+  ClassReferenceOrigin,
+  ComponentAnalysis,
+  ComponentRenderRelation,
+  ModuleImportRelation,
+  ProjectAnalysis,
+  ProjectAnalysisEntities,
+  ProjectAnalysisId,
+  ProjectAnalysisIndexes,
+  ProjectAnalysisInputs,
+  ProjectAnalysisMeta,
+  ProjectAnalysisRelations,
+  ProviderClassSatisfactionRelation,
+  RenderSubtreeAnalysis,
+  SelectorMatchRelation,
+  SelectorQueryAnalysis,
+  SourceFileAnalysis,
+  StylesheetAnalysis,
+  StylesheetOrigin,
+  StylesheetReachabilityRelation,
+  UnsupportedClassReferenceAnalysis,
+} from "./pipeline/project-analysis/index.js";
 export type {
-  ExperimentalFindingComparison,
-  ExperimentalFindingComparisonSummary,
-  ExperimentalFindingLike,
-  ExperimentalRuleComparisonResult,
-  ExperimentalSelectorPilotArtifact,
-  ExperimentalSelectorPilotShadowArtifact,
-} from "./comparison/index.js";
+  UnsupportedClassReferenceDiagnostic,
+  UnsupportedClassReferenceReason,
+} from "./pipeline/render-model/class-reference-diagnostics/index.js";
 export type {
   ExtractedSelectorQuery,
   SelectorConstraint,

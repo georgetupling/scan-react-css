@@ -152,7 +152,7 @@ export type SelectorQueryResult = {
 };
 
 export type SelectorAnalysisTarget = {
-  renderSubtree: import("../render-ir/types.js").RenderSubtree;
+  renderSubtree: import("../render-model/render-ir/types.js").RenderSubtree;
   reachabilityAvailability: Extract<ReachabilityAvailability, "definite" | "possible">;
   reachabilityContexts: StylesheetReachabilityContextRecord[];
 };

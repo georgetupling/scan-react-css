@@ -1,0 +1,1173 @@
+import type {
+  ClassDefinitionAnalysis,
+  ClassDefinitionSelectorKind,
+  ClassReferenceAnalysis,
+  ClassReferenceExpressionKind,
+  ClassReferenceMatchRelation,
+  ComponentAnalysis,
+  ComponentRenderRelation,
+  DeclarationForSignature,
+  ModuleImportRelation,
+  ProjectAnalysis,
+  ProjectAnalysisBuildInput,
+  ProjectAnalysisId,
+  ProjectAnalysisIndexes,
+  ProviderClassSatisfactionRelation,
+  RenderSubtreeAnalysis,
+  SelectorMatchRelation,
+  SelectorQueryAnalysis,
+  SourceFileAnalysis,
+  StylesheetAnalysis,
+  StylesheetOrigin,
+  StylesheetReachabilityRelation,
+  UnsupportedClassReferenceAnalysis,
+} from "./types.js";
+import type { ClassExpressionSummary } from "../render-model/abstract-values/types.js";
+import type { ReachabilityAvailability } from "../reachability/types.js";
+import type { RenderGraphEdge, RenderGraphNode } from "../render-model/render-graph/types.js";
+import type {
+  RenderElementNode,
+  RenderNode,
+  RenderSubtree,
+} from "../render-model/render-ir/types.js";
+import type { SelectorQueryResult } from "../selector-analysis/types.js";
+import type { AnalysisTrace } from "../../types/analysis.js";
+import type { SourceAnchor } from "../../types/core.js";
+
+export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectAnalysis {
+  const indexes = createEmptyIndexes();
+  const sourceFiles = buildSourceFiles(input, indexes);
+  const components = buildComponents(input.renderGraph.nodes, indexes);
+  const renderSubtrees = buildRenderSubtrees(input.renderSubtrees, indexes);
+  const stylesheets = buildStylesheets(input, indexes);
+  const classDefinitions = buildClassDefinitions(input, stylesheets, indexes);
+  const classReferences = buildClassReferences(renderSubtrees, indexes);
+  const unsupportedClassReferences = buildUnsupportedClassReferences(input, indexes);
+  const selectorQueries = buildSelectorQueries(input.selectorQueryResults, stylesheets, indexes);
+  const stylesheetReachability = buildStylesheetReachability(input, indexes);
+  const referenceMatches = buildReferenceMatches({
+    references: classReferences,
+    definitions: classDefinitions,
+    reachability: stylesheetReachability,
+    indexes,
+  });
+  const providerClassSatisfactions = buildProviderClassSatisfactions({
+    references: classReferences,
+    input,
+  });
+  const selectorMatches = buildSelectorMatches(selectorQueries);
+
+  indexRelations({
+    referenceMatches,
+    providerClassSatisfactions,
+    selectorMatches,
+    indexes,
+  });
+
+  return {
+    meta: {
+      sourceFileCount: sourceFiles.length,
+      cssFileCount: stylesheets.length,
+      externalCssEnabled: input.externalCssSummary.enabled,
+    },
+    inputs: {
+      sourceFiles: sourceFiles.map(({ id, filePath }) => ({ id, filePath })),
+      cssFiles: stylesheets.map(({ id, filePath }) => ({ id, filePath })),
+      externalCss: input.externalCssSummary,
+    },
+    entities: {
+      sourceFiles,
+      stylesheets,
+      classReferences,
+      classDefinitions,
+      selectorQueries,
+      components,
+      renderSubtrees,
+      unsupportedClassReferences,
+    },
+    relations: {
+      moduleImports: buildModuleImports(input, indexes),
+      componentRenders: buildComponentRenders(input.renderGraph.edges, indexes),
+      stylesheetReachability,
+      referenceMatches,
+      selectorMatches,
+      providerClassSatisfactions,
+    },
+    indexes,
+  };
+}
+
+function buildSourceFiles(
+  input: ProjectAnalysisBuildInput,
+  indexes: ProjectAnalysisIndexes,
+): SourceFileAnalysis[] {
+  const sourceFiles: SourceFileAnalysis[] = [];
+  const sourcePaths = new Set<string>();
+
+  for (const moduleNode of input.moduleGraph.modulesById.values()) {
+    if (moduleNode.kind === "source") {
+      sourcePaths.add(normalizeProjectPath(moduleNode.filePath));
+    }
+  }
+
+  for (const renderSubtree of input.renderSubtrees) {
+    sourcePaths.add(normalizeProjectPath(renderSubtree.sourceAnchor.filePath));
+  }
+
+  for (const filePath of [...sourcePaths].sort((left, right) => left.localeCompare(right))) {
+    const id = createPathId("source", filePath);
+    indexes.sourceFileIdByPath.set(filePath, id);
+    sourceFiles.push({
+      id,
+      filePath,
+      moduleKind: "source",
+    });
+  }
+
+  return sourceFiles;
+}
+
+function buildComponents(
+  renderGraphNodes: RenderGraphNode[],
+  indexes: ProjectAnalysisIndexes,
+): ComponentAnalysis[] {
+  const components = renderGraphNodes.map((node) => {
+    const filePath = normalizeProjectPath(node.filePath);
+    const id = createComponentId(filePath, node.componentName);
+    indexes.componentIdByFilePathAndName.set(createComponentKey(filePath, node.componentName), id);
+
+    return {
+      id,
+      filePath,
+      componentName: node.componentName,
+      exported: node.exported,
+      location: normalizeAnchor(node.sourceAnchor),
+    };
+  });
+
+  return components.sort(compareById);
+}
+
+function buildRenderSubtrees(
+  renderSubtrees: RenderSubtree[],
+  indexes: ProjectAnalysisIndexes,
+): RenderSubtreeAnalysis[] {
+  return renderSubtrees
+    .map((renderSubtree, index) => {
+      const filePath = normalizeProjectPath(renderSubtree.sourceAnchor.filePath);
+      const componentId = renderSubtree.componentName
+        ? indexes.componentIdByFilePathAndName.get(
+            createComponentKey(filePath, renderSubtree.componentName),
+          )
+        : undefined;
+
+      return {
+        id: createAnchorId("render-subtree", renderSubtree.sourceAnchor, index),
+        componentId,
+        filePath,
+        componentName: renderSubtree.componentName,
+        exported: renderSubtree.exported,
+        location: normalizeAnchor(renderSubtree.sourceAnchor),
+        sourceSubtree: renderSubtree,
+      };
+    })
+    .sort(compareById);
+}
+
+function buildStylesheets(
+  input: ProjectAnalysisBuildInput,
+  indexes: ProjectAnalysisIndexes,
+): StylesheetAnalysis[] {
+  const stylesheets = input.cssFiles.map((cssFile, index) => {
+    const filePath = normalizeOptionalProjectPath(cssFile.filePath);
+    const id = filePath ? createPathId("stylesheet", filePath) : `stylesheet:anonymous:${index}`;
+    if (filePath) {
+      indexes.stylesheetIdByPath.set(filePath, id);
+    }
+
+    return {
+      id,
+      filePath,
+      origin: getStylesheetOrigin(filePath, input),
+      definitions: [],
+      selectors: [],
+    };
+  });
+
+  return stylesheets.sort(compareById);
+}
+
+function buildClassDefinitions(
+  input: ProjectAnalysisBuildInput,
+  stylesheets: StylesheetAnalysis[],
+  indexes: ProjectAnalysisIndexes,
+): ClassDefinitionAnalysis[] {
+  const stylesheetsByPath = new Map(
+    stylesheets.map((stylesheet) => [stylesheet.filePath ?? stylesheet.id, stylesheet]),
+  );
+  const definitions: ClassDefinitionAnalysis[] = [];
+
+  for (const cssFile of input.cssFiles) {
+    const stylesheet =
+      stylesheetsByPath.get(normalizeOptionalProjectPath(cssFile.filePath) ?? "") ??
+      stylesheets.find((candidate) => candidate.filePath === undefined);
+    if (!stylesheet) {
+      continue;
+    }
+
+    for (const definition of cssFile.classDefinitions) {
+      const id = createClassDefinitionId(stylesheet.id, definition);
+      const analysis: ClassDefinitionAnalysis = {
+        id,
+        stylesheetId: stylesheet.id,
+        className: definition.className,
+        selectorText: definition.selector,
+        selectorKind: getDefinitionSelectorKind(definition),
+        line: definition.line,
+        atRuleContext: [...definition.atRuleContext],
+        declarationProperties: [...definition.declarations],
+        declarationSignature: getDeclarationSignature(definition.declarationDetails),
+        isCssModule: isCssModuleStylesheet(stylesheet.filePath),
+        sourceDefinition: definition,
+      };
+
+      definitions.push(analysis);
+      stylesheet.definitions.push(id);
+      pushMapValue(indexes.definitionsByClassName, definition.className, id);
+      pushMapValue(indexes.definitionsByStylesheetId, stylesheet.id, id);
+    }
+  }
+
+  sortIndexValues(indexes.definitionsByClassName);
+  sortIndexValues(indexes.definitionsByStylesheetId);
+  return definitions.sort(compareById);
+}
+
+function buildClassReferences(
+  renderSubtrees: RenderSubtreeAnalysis[],
+  indexes: ProjectAnalysisIndexes,
+): ClassReferenceAnalysis[] {
+  const classExpressions = deduplicateRenderClassExpressions(
+    renderSubtrees.flatMap((renderSubtree) => collectRenderClassExpressions(renderSubtree)),
+  );
+
+  const references = classExpressions.map((entry, index) => {
+    const { classExpression, emittedElementLocation, placementLocation, renderSubtreeId } = entry;
+    const filePath = normalizeProjectPath(classExpression.sourceAnchor.filePath);
+    const sourceFileId =
+      indexes.sourceFileIdByPath.get(filePath) ?? createPathId("source", filePath);
+    const componentId = entry.componentId;
+    const id = createAnchorId("class-reference", classExpression.sourceAnchor, index);
+    const reference: ClassReferenceAnalysis = {
+      id,
+      sourceFileId,
+      componentId,
+      renderSubtreeId,
+      location: normalizeAnchor(classExpression.sourceAnchor),
+      emittedElementLocation,
+      placementLocation,
+      origin: "render-ir",
+      expressionKind: getReferenceExpressionKind(classExpression),
+      rawExpressionText: classExpression.sourceText,
+      definiteClassNames: [...classExpression.classes.definite],
+      possibleClassNames: [...classExpression.classes.possible],
+      unknownDynamic: classExpression.classes.unknownDynamic,
+      confidence: getReferenceConfidence(classExpression),
+      traces: buildClassReferenceTraces(entry),
+      sourceSummary: classExpression,
+    };
+
+    pushMapValue(indexes.referencesBySourceFileId, sourceFileId, id);
+    for (const className of collectReferenceClassNames(reference)) {
+      pushMapValue(indexes.referencesByClassName, className, id);
+    }
+
+    return reference;
+  });
+
+  sortIndexValues(indexes.referencesBySourceFileId);
+  sortIndexValues(indexes.referencesByClassName);
+  return references.sort(compareById);
+}
+
+function buildUnsupportedClassReferences(
+  input: ProjectAnalysisBuildInput,
+  indexes: ProjectAnalysisIndexes,
+): UnsupportedClassReferenceAnalysis[] {
+  return input.unsupportedClassReferences
+    .map((diagnostic, index) => {
+      const location = normalizeAnchor(diagnostic.sourceAnchor);
+      const sourceFileId =
+        indexes.sourceFileIdByPath.get(location.filePath) ??
+        createPathId("source", location.filePath);
+
+      return {
+        id: createAnchorId("unsupported-class-reference", location, index),
+        sourceFileId,
+        location,
+        rawExpressionText: diagnostic.rawExpressionText,
+        reason: diagnostic.reason,
+        traces: [...diagnostic.traces],
+        sourceDiagnostic: diagnostic,
+      };
+    })
+    .sort(compareById);
+}
+
+type RenderClassExpressionEntry = {
+  classExpression: ClassExpressionSummary;
+  componentId?: ProjectAnalysisId;
+  renderSubtreeId: ProjectAnalysisId;
+  emittedElementLocation: SourceAnchor;
+  placementLocation?: SourceAnchor;
+};
+
+function collectRenderClassExpressions(input: RenderSubtreeAnalysis): RenderClassExpressionEntry[] {
+  const entries: RenderClassExpressionEntry[] = [];
+
+  visitRenderNode(input.sourceSubtree.root, undefined, (node, inheritedPlacementLocation) => {
+    if (!node.className) {
+      return;
+    }
+
+    entries.push({
+      classExpression: node.className,
+      componentId: input.componentId,
+      renderSubtreeId: input.id,
+      emittedElementLocation: normalizeAnchor(node.sourceAnchor),
+      placementLocation: normalizeOptionalAnchor(
+        node.placementAnchor ?? inheritedPlacementLocation,
+      ),
+    });
+  });
+
+  return entries.sort((left, right) =>
+    `${left.classExpression.sourceAnchor.filePath}:${left.classExpression.sourceAnchor.startLine}:${left.classExpression.sourceAnchor.startColumn}`.localeCompare(
+      `${right.classExpression.sourceAnchor.filePath}:${right.classExpression.sourceAnchor.startLine}:${right.classExpression.sourceAnchor.startColumn}`,
+    ),
+  );
+}
+
+function deduplicateRenderClassExpressions(
+  entries: RenderClassExpressionEntry[],
+): RenderClassExpressionEntry[] {
+  const entriesByKey = new Map<string, RenderClassExpressionEntry>();
+
+  for (const entry of entries) {
+    const key = createRenderClassExpressionDedupeKey(entry);
+    const existing = entriesByKey.get(key);
+    if (!existing || compareRenderClassExpressionEntries(entry, existing) < 0) {
+      entriesByKey.set(key, entry);
+    }
+  }
+
+  return [...entriesByKey.values()].sort(compareRenderClassExpressionEntries);
+}
+
+function createRenderClassExpressionDedupeKey(entry: RenderClassExpressionEntry): string {
+  const classExpression = entry.classExpression;
+  return [
+    normalizeProjectPath(classExpression.sourceAnchor.filePath),
+    classExpression.sourceAnchor.startLine,
+    classExpression.sourceAnchor.startColumn,
+    classExpression.sourceAnchor.endLine ?? "",
+    classExpression.sourceAnchor.endColumn ?? "",
+    classExpression.classes.definite.join(" "),
+    classExpression.classes.possible.join(" "),
+    classExpression.classes.unknownDynamic ? "dynamic" : "static",
+  ].join(":");
+}
+
+function compareRenderClassExpressionEntries(
+  left: RenderClassExpressionEntry,
+  right: RenderClassExpressionEntry,
+): number {
+  return (
+    compareAnchors(left.classExpression.sourceAnchor, right.classExpression.sourceAnchor) ||
+    compareAnchors(left.emittedElementLocation, right.emittedElementLocation) ||
+    (left.placementLocation && right.placementLocation
+      ? compareAnchors(left.placementLocation, right.placementLocation)
+      : left.placementLocation
+        ? -1
+        : right.placementLocation
+          ? 1
+          : 0) ||
+    left.renderSubtreeId.localeCompare(right.renderSubtreeId)
+  );
+}
+
+function buildClassReferenceTraces(entry: RenderClassExpressionEntry): AnalysisTrace[] {
+  return [
+    {
+      traceId: `render-expansion:class-reference:${normalizeProjectPath(entry.classExpression.sourceAnchor.filePath)}:${entry.classExpression.sourceAnchor.startLine}:${entry.classExpression.sourceAnchor.startColumn}`,
+      category: "render-expansion",
+      summary: "class reference was collected from the render IR",
+      anchor: normalizeAnchor(entry.emittedElementLocation),
+      children: [...entry.classExpression.traces],
+      metadata: {
+        renderSubtreeId: entry.renderSubtreeId,
+        componentId: entry.componentId,
+        sourceFilePath: normalizeProjectPath(entry.classExpression.sourceAnchor.filePath),
+        emittedElementFilePath: normalizeProjectPath(entry.emittedElementLocation.filePath),
+        placementFilePath: entry.placementLocation
+          ? normalizeProjectPath(entry.placementLocation.filePath)
+          : undefined,
+      },
+    },
+  ];
+}
+
+function visitRenderNode(
+  node: RenderNode,
+  inheritedPlacementLocation: SourceAnchor | undefined,
+  visitElement: (
+    node: RenderElementNode,
+    inheritedPlacementLocation: SourceAnchor | undefined,
+  ) => void,
+): void {
+  const placementLocation = node.placementAnchor ?? inheritedPlacementLocation;
+
+  if (node.kind === "element") {
+    visitElement(node, inheritedPlacementLocation);
+    for (const child of node.children) {
+      visitRenderNode(child, placementLocation, visitElement);
+    }
+    return;
+  }
+
+  if (node.kind === "fragment") {
+    for (const child of node.children) {
+      visitRenderNode(child, placementLocation, visitElement);
+    }
+    return;
+  }
+
+  if (node.kind === "conditional") {
+    visitRenderNode(node.whenTrue, placementLocation, visitElement);
+    visitRenderNode(node.whenFalse, placementLocation, visitElement);
+    return;
+  }
+
+  if (node.kind === "repeated-region") {
+    visitRenderNode(node.template, placementLocation, visitElement);
+  }
+}
+
+function buildSelectorQueries(
+  selectorQueryResults: SelectorQueryResult[],
+  stylesheets: StylesheetAnalysis[],
+  indexes: ProjectAnalysisIndexes,
+): SelectorQueryAnalysis[] {
+  const stylesheetById = new Map(stylesheets.map((stylesheet) => [stylesheet.id, stylesheet]));
+
+  const selectorQueries = selectorQueryResults.map((selectorQueryResult, index) => {
+    const stylesheetId =
+      selectorQueryResult.source.kind === "css-source" &&
+      selectorQueryResult.reachability?.kind === "css-source"
+        ? indexes.stylesheetIdByPath.get(
+            normalizeProjectPath(selectorQueryResult.reachability.cssFilePath ?? ""),
+          )
+        : undefined;
+
+    const query: SelectorQueryAnalysis = {
+      id: createSelectorQueryId(selectorQueryResult, index),
+      stylesheetId,
+      selectorText: selectorQueryResult.selectorText,
+      location:
+        selectorQueryResult.source.kind === "css-source"
+          ? selectorQueryResult.source.selectorAnchor
+          : undefined,
+      constraint: simplifyConstraint(selectorQueryResult),
+      outcome: selectorQueryResult.outcome,
+      status: selectorQueryResult.status,
+      confidence: selectorQueryResult.confidence,
+      traces: [...selectorQueryResult.decision.traces],
+      sourceResult: selectorQueryResult,
+    };
+
+    if (stylesheetId) {
+      pushMapValue(indexes.selectorQueriesByStylesheetId, stylesheetId, query.id);
+      stylesheetById.get(stylesheetId)?.selectors.push(query.id);
+    }
+
+    return query;
+  });
+
+  sortIndexValues(indexes.selectorQueriesByStylesheetId);
+  return selectorQueries.sort(compareById);
+}
+
+function buildStylesheetReachability(
+  input: ProjectAnalysisBuildInput,
+  indexes: ProjectAnalysisIndexes,
+): StylesheetReachabilityRelation[] {
+  const relations: StylesheetReachabilityRelation[] = [];
+
+  for (const stylesheet of input.reachabilitySummary.stylesheets) {
+    const stylesheetId = indexes.stylesheetIdByPath.get(
+      normalizeProjectPath(stylesheet.cssFilePath ?? ""),
+    );
+    if (!stylesheetId) {
+      continue;
+    }
+
+    if (stylesheet.contexts.length === 0) {
+      relations.push({
+        stylesheetId,
+        availability: stylesheet.availability,
+        contexts: [],
+        reasons: [...stylesheet.reasons],
+        traces: [...stylesheet.traces],
+      });
+      continue;
+    }
+
+    for (const contextRecord of stylesheet.contexts) {
+      const sourceFileId = getSourceFileIdForContext(contextRecord, indexes);
+      const componentId = getComponentIdForContext(contextRecord, indexes);
+      const relation: StylesheetReachabilityRelation = {
+        stylesheetId,
+        sourceFileId,
+        componentId,
+        availability: contextRecord.availability,
+        contexts: [contextRecord],
+        reasons: [...contextRecord.reasons],
+        traces: [...contextRecord.traces],
+      };
+
+      relations.push(relation);
+
+      if (contextRecord.availability !== "unavailable") {
+        if (sourceFileId) {
+          pushUniqueMapValue(
+            indexes.reachableStylesheetsBySourceFileId,
+            sourceFileId,
+            stylesheetId,
+          );
+        }
+        if (componentId) {
+          pushUniqueMapValue(indexes.reachableStylesheetsByComponentId, componentId, stylesheetId);
+        }
+      }
+    }
+  }
+
+  sortIndexValues(indexes.reachableStylesheetsBySourceFileId);
+  sortIndexValues(indexes.reachableStylesheetsByComponentId);
+  return relations.sort(compareReachabilityRelations);
+}
+
+function buildReferenceMatches(input: {
+  references: ClassReferenceAnalysis[];
+  definitions: ClassDefinitionAnalysis[];
+  reachability: StylesheetReachabilityRelation[];
+  indexes: ProjectAnalysisIndexes;
+}): ClassReferenceMatchRelation[] {
+  const reachabilityByStylesheetAndSource = new Map<string, StylesheetReachabilityRelation[]>();
+  const reachabilityByStylesheet = new Map<ProjectAnalysisId, StylesheetReachabilityRelation[]>();
+  for (const relation of input.reachability) {
+    pushMapValue(reachabilityByStylesheet, relation.stylesheetId, relation);
+
+    if (!relation.sourceFileId && !relation.componentId) {
+      continue;
+    }
+
+    const keys = [
+      relation.sourceFileId
+        ? createReachabilityContextKey(relation.stylesheetId, "source", relation.sourceFileId)
+        : undefined,
+      relation.componentId
+        ? createReachabilityContextKey(relation.stylesheetId, "component", relation.componentId)
+        : undefined,
+    ].filter((key): key is string => Boolean(key));
+
+    for (const key of keys) {
+      pushMapValue(reachabilityByStylesheetAndSource, key, relation);
+    }
+  }
+
+  const matches: ClassReferenceMatchRelation[] = [];
+
+  for (const reference of input.references) {
+    for (const className of collectReferenceClassNames(reference)) {
+      const candidateDefinitionIds = input.indexes.definitionsByClassName.get(className) ?? [];
+      for (const definitionId of candidateDefinitionIds) {
+        const definition = input.definitions.find((candidate) => candidate.id === definitionId);
+        if (!definition) {
+          continue;
+        }
+
+        const reachability = getBestReachabilityForReference({
+          reference,
+          stylesheetId: definition.stylesheetId,
+          reachabilityByStylesheetAndSource,
+          reachabilityByStylesheet,
+        });
+
+        matches.push({
+          id: `reference-match:${reference.id}:${definition.id}`,
+          referenceId: reference.id,
+          definitionId: definition.id,
+          reachability: reachability.availability,
+          matchKind:
+            reachability.availability === "definite" ||
+            reachability.availability === "possible" ||
+            reachability.availability === "unknown"
+              ? "reachable-stylesheet"
+              : "unreachable-stylesheet",
+          reasons:
+            reachability.availability === "definite" ||
+            reachability.availability === "possible" ||
+            reachability.availability === "unknown"
+              ? [`class "${className}" is defined in a stylesheet reachable from this reference`]
+              : [`class "${className}" is defined, but the defining stylesheet is not reachable`],
+          traces: mergeTraces([...reference.traces, ...reachability.traces]),
+        });
+      }
+    }
+  }
+
+  return matches.sort(compareById);
+}
+
+function buildProviderClassSatisfactions(input: {
+  references: ClassReferenceAnalysis[];
+  input: ProjectAnalysisBuildInput;
+}): ProviderClassSatisfactionRelation[] {
+  const relations: ProviderClassSatisfactionRelation[] = [];
+
+  for (const reference of input.references) {
+    for (const className of collectReferenceClassNames(reference)) {
+      for (const provider of input.input.externalCssSummary.activeProviders) {
+        const satisfied =
+          provider.classNames.includes(className) ||
+          provider.classPrefixes.some((classPrefix) => className.startsWith(classPrefix));
+        if (!satisfied) {
+          continue;
+        }
+
+        relations.push({
+          id: `provider-class:${reference.id}:${provider.provider}:${className}`,
+          referenceId: reference.id,
+          className,
+          provider: provider.provider,
+          reasons: [`class "${className}" is declared by active external CSS provider`],
+          traces: [...reference.traces],
+        });
+      }
+    }
+  }
+
+  return relations.sort(compareById);
+}
+
+function buildSelectorMatches(selectorQueries: SelectorQueryAnalysis[]): SelectorMatchRelation[] {
+  return selectorQueries
+    .filter((selectorQuery) => selectorQuery.sourceResult.reachability?.kind === "css-source")
+    .map((selectorQuery) => {
+      const reachability =
+        selectorQuery.sourceResult.reachability?.kind === "css-source"
+          ? selectorQuery.sourceResult.reachability
+          : undefined;
+
+      return {
+        id: `selector-match:${selectorQuery.id}`,
+        selectorQueryId: selectorQuery.id,
+        stylesheetId: selectorQuery.stylesheetId,
+        availability: reachability?.availability,
+        outcome: selectorQuery.outcome,
+        contextCount: reachability?.contexts.length ?? 0,
+        matchedContextCount: reachability?.matchedContexts?.length ?? 0,
+        reasons: reachability?.reasons ?? selectorQuery.sourceResult.reasons,
+        traces: mergeTraces([
+          ...selectorQuery.traces,
+          ...(reachability?.contexts.flatMap((context) => context.traces) ?? []),
+          ...(reachability?.matchedContexts?.flatMap((context) => context.traces) ?? []),
+        ]),
+      };
+    })
+    .sort(compareById);
+}
+
+function indexRelations(input: {
+  referenceMatches: ClassReferenceMatchRelation[];
+  providerClassSatisfactions: ProviderClassSatisfactionRelation[];
+  selectorMatches: SelectorMatchRelation[];
+  indexes: ProjectAnalysisIndexes;
+}): void {
+  for (const match of input.referenceMatches) {
+    pushMapValue(input.indexes.matchesByReferenceId, match.referenceId, match.id);
+  }
+  for (const satisfaction of input.providerClassSatisfactions) {
+    pushMapValue(input.indexes.matchesByReferenceId, satisfaction.referenceId, satisfaction.id);
+  }
+  for (const match of input.selectorMatches) {
+    pushMapValue(input.indexes.selectorMatchesByQueryId, match.selectorQueryId, match.id);
+  }
+
+  sortIndexValues(input.indexes.matchesByReferenceId);
+  sortIndexValues(input.indexes.selectorMatchesByQueryId);
+}
+
+function buildModuleImports(
+  input: ProjectAnalysisBuildInput,
+  indexes: ProjectAnalysisIndexes,
+): ModuleImportRelation[] {
+  const imports: ModuleImportRelation[] = [];
+
+  for (const moduleNode of input.moduleGraph.modulesById.values()) {
+    if (moduleNode.kind !== "source") {
+      continue;
+    }
+
+    const sourceFileId = indexes.sourceFileIdByPath.get(normalizeProjectPath(moduleNode.filePath));
+    if (!sourceFileId) {
+      continue;
+    }
+
+    for (const importRecord of moduleNode.imports) {
+      imports.push({
+        fromSourceFileId: sourceFileId,
+        toModuleId: importRecord.resolvedModuleId,
+        specifier: importRecord.specifier,
+        importKind: importRecord.importKind,
+      });
+    }
+  }
+
+  return imports.sort((left, right) =>
+    `${left.fromSourceFileId}:${left.specifier}:${left.importKind}`.localeCompare(
+      `${right.fromSourceFileId}:${right.specifier}:${right.importKind}`,
+    ),
+  );
+}
+
+function buildComponentRenders(
+  edges: RenderGraphEdge[],
+  indexes: ProjectAnalysisIndexes,
+): ComponentRenderRelation[] {
+  const relations: ComponentRenderRelation[] = [];
+
+  for (const edge of edges) {
+    const fromComponentId = indexes.componentIdByFilePathAndName.get(
+      createComponentKey(normalizeProjectPath(edge.fromFilePath), edge.fromComponentName),
+    );
+    if (!fromComponentId) {
+      continue;
+    }
+
+    const toComponentId = edge.toFilePath
+      ? indexes.componentIdByFilePathAndName.get(
+          createComponentKey(normalizeProjectPath(edge.toFilePath), edge.toComponentName),
+        )
+      : undefined;
+
+    relations.push({
+      fromComponentId,
+      toComponentId,
+      renderPath: edge.renderPath,
+      resolution: edge.resolution,
+      location: normalizeAnchor(edge.sourceAnchor),
+      traces: [...edge.traces],
+    });
+  }
+
+  return relations.sort((left, right) =>
+    `${left.fromComponentId}:${left.toComponentId ?? ""}:${left.location.startLine}`.localeCompare(
+      `${right.fromComponentId}:${right.toComponentId ?? ""}:${right.location.startLine}`,
+    ),
+  );
+}
+
+function getStylesheetOrigin(
+  filePath: string | undefined,
+  input: ProjectAnalysisBuildInput,
+): StylesheetOrigin {
+  if (!filePath) {
+    return "unknown";
+  }
+  if (isCssModuleStylesheet(filePath)) {
+    return "css-module";
+  }
+  if (isExternalStylesheet(filePath, input)) {
+    return "external-import";
+  }
+  return "project-css";
+}
+
+function isExternalStylesheet(filePath: string, input: ProjectAnalysisBuildInput): boolean {
+  const normalizedFilePath = normalizeProjectPath(filePath);
+  for (const moduleNode of input.moduleGraph.modulesById.values()) {
+    if (
+      moduleNode.kind === "source" &&
+      moduleNode.imports.some(
+        (importRecord) =>
+          importRecord.importKind === "external-css" &&
+          normalizeProjectPath(importRecord.specifier) === normalizedFilePath,
+      )
+    ) {
+      return true;
+    }
+  }
+
+  return input.externalCssSummary.projectWideStylesheetFilePaths
+    .map(normalizeProjectPath)
+    .includes(normalizedFilePath);
+}
+
+function getDefinitionSelectorKind(
+  definition: ClassDefinitionAnalysis["sourceDefinition"],
+): ClassDefinitionSelectorKind {
+  if (definition.selectorBranch.hasUnknownSemantics) {
+    return "unsupported";
+  }
+  if (
+    definition.selectorBranch.matchKind === "standalone" &&
+    !definition.selectorBranch.hasSubjectModifiers
+  ) {
+    return "simple-root";
+  }
+  if (definition.selectorBranch.matchKind === "compound") {
+    return "compound";
+  }
+  if (definition.selectorBranch.matchKind === "contextual") {
+    return "contextual";
+  }
+  return "complex";
+}
+
+function getReferenceExpressionKind(
+  classExpression: ClassExpressionSummary,
+): ClassReferenceExpressionKind {
+  if (classExpression.value.kind === "string-exact") {
+    return "exact-string";
+  }
+  if (classExpression.value.kind === "string-set") {
+    return "string-set";
+  }
+  if (classExpression.classes.unknownDynamic) {
+    return "dynamic";
+  }
+  return "unsupported";
+}
+
+function getReferenceConfidence(classExpression: ClassExpressionSummary) {
+  if (classExpression.classes.unknownDynamic) {
+    return "low";
+  }
+  if (classExpression.classes.possible.length > 0) {
+    return "medium";
+  }
+  return "high";
+}
+
+function collectReferenceClassNames(reference: ClassReferenceAnalysis): string[] {
+  return [...new Set([...reference.definiteClassNames, ...reference.possibleClassNames])].sort(
+    (left, right) => left.localeCompare(right),
+  );
+}
+
+function getBestReachabilityForReference(input: {
+  reference: ClassReferenceAnalysis;
+  stylesheetId: ProjectAnalysisId;
+  reachabilityByStylesheetAndSource: Map<string, StylesheetReachabilityRelation[]>;
+  reachabilityByStylesheet: Map<ProjectAnalysisId, StylesheetReachabilityRelation[]>;
+}): {
+  availability: ReachabilityAvailability;
+  traces: AnalysisTrace[];
+} {
+  const candidateRelations = [
+    ...getReachabilityRelations({
+      stylesheetId: input.stylesheetId,
+      kind: "source",
+      id: input.reference.sourceFileId,
+      reachabilityByStylesheetAndSource: input.reachabilityByStylesheetAndSource,
+    }),
+    ...(input.reference.componentId
+      ? getReachabilityRelations({
+          stylesheetId: input.stylesheetId,
+          kind: "component",
+          id: input.reference.componentId,
+          reachabilityByStylesheetAndSource: input.reachabilityByStylesheetAndSource,
+        })
+      : []),
+  ];
+  const stylesheetRelations = input.reachabilityByStylesheet.get(input.stylesheetId) ?? [];
+
+  const definiteRelations = candidateRelations.filter(
+    (relation) => relation.availability === "definite",
+  );
+  if (definiteRelations.length > 0) {
+    return {
+      availability: "definite",
+      traces: mergeTraces(definiteRelations.flatMap((relation) => relation.traces)),
+    };
+  }
+
+  const possibleRelations = candidateRelations.filter(
+    (relation) => relation.availability === "possible",
+  );
+  if (possibleRelations.length > 0) {
+    return {
+      availability: "possible",
+      traces: mergeTraces(possibleRelations.flatMap((relation) => relation.traces)),
+    };
+  }
+
+  const unavailableRelations =
+    candidateRelations.length > 0
+      ? candidateRelations.filter((relation) => relation.availability === "unavailable")
+      : stylesheetRelations.filter((relation) => relation.availability === "unavailable");
+  if (unavailableRelations.length > 0) {
+    return {
+      availability: "unavailable",
+      traces: mergeTraces(unavailableRelations.flatMap((relation) => relation.traces)),
+    };
+  }
+
+  return {
+    availability: "unknown",
+    traces: mergeTraces(candidateRelations.flatMap((relation) => relation.traces)),
+  };
+}
+
+function getReachabilityRelations(input: {
+  stylesheetId: ProjectAnalysisId;
+  kind: "source" | "component";
+  id: ProjectAnalysisId;
+  reachabilityByStylesheetAndSource: Map<string, StylesheetReachabilityRelation[]>;
+}): StylesheetReachabilityRelation[] {
+  return (
+    input.reachabilityByStylesheetAndSource.get(
+      createReachabilityContextKey(input.stylesheetId, input.kind, input.id),
+    ) ?? []
+  );
+}
+
+function getSourceFileIdForContext(
+  contextRecord: StylesheetReachabilityRelation["contexts"][number],
+  indexes: ProjectAnalysisIndexes,
+): ProjectAnalysisId | undefined {
+  const context = contextRecord.context;
+  if (
+    context.kind === "source-file" ||
+    context.kind === "component" ||
+    context.kind === "render-subtree-root" ||
+    context.kind === "render-region"
+  ) {
+    return indexes.sourceFileIdByPath.get(normalizeProjectPath(context.filePath));
+  }
+
+  return undefined;
+}
+
+function getComponentIdForContext(
+  contextRecord: StylesheetReachabilityRelation["contexts"][number],
+  indexes: ProjectAnalysisIndexes,
+): ProjectAnalysisId | undefined {
+  const context = contextRecord.context;
+  if (
+    (context.kind === "component" ||
+      context.kind === "render-subtree-root" ||
+      context.kind === "render-region") &&
+    context.componentName
+  ) {
+    return indexes.componentIdByFilePathAndName.get(
+      createComponentKey(normalizeProjectPath(context.filePath), context.componentName),
+    );
+  }
+
+  return undefined;
+}
+
+function simplifyConstraint(
+  selectorQueryResult: SelectorQueryResult,
+): SelectorQueryAnalysis["constraint"] {
+  const constraint = selectorQueryResult.constraint;
+  if (!constraint) {
+    return undefined;
+  }
+  if (constraint.kind === "unsupported") {
+    return {
+      kind: "unsupported",
+      reason: constraint.reason,
+    };
+  }
+
+  return constraint;
+}
+
+function getDeclarationSignature(declarations: DeclarationForSignature[]): string {
+  return declarations
+    .map((declaration) => `${declaration.property}:${declaration.value}`)
+    .sort((left, right) => left.localeCompare(right))
+    .join("|");
+}
+
+function createEmptyIndexes(): ProjectAnalysisIndexes {
+  return {
+    sourceFileIdByPath: new Map(),
+    stylesheetIdByPath: new Map(),
+    componentIdByFilePathAndName: new Map(),
+    definitionsByClassName: new Map(),
+    definitionsByStylesheetId: new Map(),
+    referencesByClassName: new Map(),
+    referencesBySourceFileId: new Map(),
+    reachableStylesheetsBySourceFileId: new Map(),
+    reachableStylesheetsByComponentId: new Map(),
+    selectorQueriesByStylesheetId: new Map(),
+    matchesByReferenceId: new Map(),
+    selectorMatchesByQueryId: new Map(),
+  };
+}
+
+function createClassDefinitionId(
+  stylesheetId: ProjectAnalysisId,
+  definition: ClassDefinitionAnalysis["sourceDefinition"],
+): ProjectAnalysisId {
+  return [
+    "class-definition",
+    stylesheetId,
+    definition.className,
+    definition.line,
+    stableHash(
+      `${definition.selector}:${definition.atRuleContext
+        .map((entry) => `${entry.name}:${entry.params}`)
+        .join("|")}`,
+    ),
+  ].join(":");
+}
+
+function createSelectorQueryId(
+  selectorQueryResult: SelectorQueryResult,
+  index: number,
+): ProjectAnalysisId {
+  const anchor =
+    selectorQueryResult.source.kind === "css-source"
+      ? selectorQueryResult.source.selectorAnchor
+      : undefined;
+  return anchor
+    ? createAnchorId("selector-query", anchor, index)
+    : `selector-query:direct:${index}:${stableHash(selectorQueryResult.selectorText)}`;
+}
+
+function createAnchorId(kind: string, anchor: SourceAnchor, index: number): ProjectAnalysisId {
+  const normalizedAnchor = normalizeAnchor(anchor);
+  return [
+    kind,
+    normalizeProjectPath(normalizedAnchor.filePath),
+    normalizedAnchor.startLine,
+    normalizedAnchor.startColumn,
+    index,
+  ].join(":");
+}
+
+function createPathId(kind: string, filePath: string): ProjectAnalysisId {
+  return `${kind}:${normalizeProjectPath(filePath)}`;
+}
+
+function createComponentId(filePath: string, componentName: string): ProjectAnalysisId {
+  return `component:${filePath}:${componentName}`;
+}
+
+function createComponentKey(filePath: string, componentName: string): string {
+  return `${filePath}::${componentName}`;
+}
+
+function createReachabilityContextKey(
+  stylesheetId: ProjectAnalysisId,
+  kind: "source" | "component",
+  id: ProjectAnalysisId,
+): string {
+  return `${stylesheetId}:${kind}:${id}`;
+}
+
+function isCssModuleStylesheet(filePath: string | undefined): boolean {
+  return Boolean(filePath?.match(/\.module\.[cm]?css$/i));
+}
+
+function normalizeProjectPath(filePath: string): string {
+  return filePath.replace(/\\/g, "/");
+}
+
+function normalizeOptionalProjectPath(filePath: string | undefined): string | undefined {
+  return filePath ? normalizeProjectPath(filePath) : undefined;
+}
+
+function normalizeAnchor(anchor: SourceAnchor): SourceAnchor {
+  return {
+    ...anchor,
+    filePath: normalizeProjectPath(anchor.filePath),
+  };
+}
+
+function normalizeOptionalAnchor(anchor: SourceAnchor | undefined): SourceAnchor | undefined {
+  return anchor ? normalizeAnchor(anchor) : undefined;
+}
+
+function pushMapValue<TKey, TValue>(map: Map<TKey, TValue[]>, key: TKey, value: TValue): void {
+  const existing = map.get(key) ?? [];
+  existing.push(value);
+  map.set(key, existing);
+}
+
+function pushUniqueMapValue<TKey, TValue>(
+  map: Map<TKey, TValue[]>,
+  key: TKey,
+  value: TValue,
+): void {
+  const existing = map.get(key) ?? [];
+  if (!existing.includes(value)) {
+    existing.push(value);
+  }
+  map.set(key, existing);
+}
+
+function mergeTraces(traces: AnalysisTrace[]): AnalysisTrace[] {
+  const tracesByKey = new Map<string, AnalysisTrace>();
+  for (const trace of traces) {
+    tracesByKey.set(JSON.stringify(trace), trace);
+  }
+
+  return [...tracesByKey.values()].sort((left, right) => left.traceId.localeCompare(right.traceId));
+}
+
+function sortIndexValues(map: Map<string, string[]>): void {
+  for (const [key, values] of map.entries()) {
+    map.set(
+      key,
+      [...values].sort((left, right) => left.localeCompare(right)),
+    );
+  }
+}
+
+function compareById<T extends { id: string }>(left: T, right: T): number {
+  return left.id.localeCompare(right.id);
+}
+
+function compareReachabilityRelations(
+  left: StylesheetReachabilityRelation,
+  right: StylesheetReachabilityRelation,
+): number {
+  return `${left.stylesheetId}:${left.sourceFileId ?? ""}:${left.componentId ?? ""}:${left.availability}`.localeCompare(
+    `${right.stylesheetId}:${right.sourceFileId ?? ""}:${right.componentId ?? ""}:${right.availability}`,
+  );
+}
+
+function compareAnchors(left: SourceAnchor, right: SourceAnchor): number {
+  return (
+    normalizeProjectPath(left.filePath).localeCompare(normalizeProjectPath(right.filePath)) ||
+    left.startLine - right.startLine ||
+    left.startColumn - right.startColumn ||
+    (left.endLine ?? 0) - (right.endLine ?? 0) ||
+    (left.endColumn ?? 0) - (right.endColumn ?? 0)
+  );
+}
+
+function stableHash(value: string): string {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) >>> 0;
+  }
+  return hash.toString(36);
+}
