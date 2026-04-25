@@ -4,7 +4,14 @@ import type { AnalysisTrace } from "../../../types/analysis.js";
 export type AbstractValue =
   | { kind: "unknown"; reason: string }
   | { kind: "string-exact"; value: string }
-  | { kind: "string-set"; values: string[] };
+  | { kind: "string-set"; values: string[] }
+  | {
+      kind: "class-set";
+      definite: string[];
+      possible: string[];
+      unknownDynamic: boolean;
+      reason?: string;
+    };
 
 export type ClassDerivationStep = {
   sourceAnchor?: SourceAnchor;
