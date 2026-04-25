@@ -7,6 +7,7 @@ export type ScanProjectInput = {
   sourceFilePaths?: string[];
   cssFilePaths?: string[];
   configPath?: string;
+  configBaseDir?: string;
 };
 
 export type ScanDiagnosticSeverity = "debug" | "info" | "warning" | "error";

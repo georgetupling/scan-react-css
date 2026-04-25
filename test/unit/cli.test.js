@@ -113,6 +113,76 @@ test("CLI reports JSON output write failures clearly", async () => {
   }
 });
 
+test("CLI discovers scan-react-css config from the command directory", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      rules: {
+        "missing-css-class": "off",
+      },
+    })
+    .withSourceFile(
+      "app/src/App.tsx",
+      'export function App() { return <main className="missing">Hello</main>; }\n',
+    )
+    .build();
+
+  try {
+    const outputPath = project.filePath("report.json");
+    await runCli([project.filePath("app"), "--json", "--output-file", outputPath], {
+      cwd: project.rootDir,
+    });
+    const output = await readJsonFile(outputPath);
+
+    assert.equal(output.config.source.kind, "project");
+    assert.deepEqual(output.findings, []);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI resolves relative --config paths from the command directory", async () => {
+  const project = await new TestProjectBuilder()
+    .withFile(
+      "config/custom.scan-react-css.json",
+      JSON.stringify({
+        failOnSeverity: "error",
+        rules: {
+          "missing-css-class": "warn",
+        },
+      }),
+    )
+    .withSourceFile(
+      "app/src/App.tsx",
+      'export function App() { return <main className="missing">Hello</main>; }\n',
+    )
+    .build();
+
+  try {
+    const outputPath = project.filePath("report.json");
+    await runCli(
+      [
+        project.filePath("app"),
+        "--config",
+        "config/custom.scan-react-css.json",
+        "--json",
+        "--output-file",
+        outputPath,
+      ],
+      { cwd: project.rootDir },
+    );
+    const output = await readJsonFile(outputPath);
+
+    assert.deepEqual(output.config.source, {
+      kind: "explicit",
+      path: "config/custom.scan-react-css.json",
+    });
+    assert.equal(output.findings[0].severity, "warn");
+    assert.equal(output.failed, false);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("CLI groups human-readable findings by file and prints summary last", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
@@ -155,12 +225,10 @@ test("CLI exit code follows configured fail threshold", async () => {
 
   try {
     const outputPath = project.filePath("report.json");
-    const error = await captureRejectedCliRun([
-      project.rootDir,
-      "--json",
-      "--output-file",
-      outputPath,
-    ]);
+    const error = await captureRejectedCliRun(
+      [project.rootDir, "--json", "--output-file", outputPath],
+      { cwd: project.rootDir },
+    );
     assert.equal(error.code, 1);
 
     const output = await readJsonFile(outputPath);
@@ -274,14 +342,10 @@ test("CLI --focus filters findings after full project analysis", async () => {
 
   try {
     const focusedOutputPath = project.filePath("focused-report.json");
-    await runCli([
-      project.rootDir,
-      "--focus",
-      "src/components",
-      "--json",
-      "--output-file",
-      focusedOutputPath,
-    ]);
+    await runCli(
+      [project.rootDir, "--focus", "src/components", "--json", "--output-file", focusedOutputPath],
+      { cwd: project.rootDir },
+    );
     const focusedOutput = await readJsonFile(focusedOutputPath);
 
     assert.equal(focusedOutput.failed, false);
@@ -289,14 +353,17 @@ test("CLI --focus filters findings after full project analysis", async () => {
     assert.equal(focusedOutput.summary.findingCount, 0);
     assert.deepEqual(focusedOutput.findings, []);
 
-    const pageError = await captureRejectedCliRun([
-      project.rootDir,
-      "--focus",
-      "src/pages",
-      "--json",
-      "--output-file",
-      project.filePath("page-report.json"),
-    ]);
+    const pageError = await captureRejectedCliRun(
+      [
+        project.rootDir,
+        "--focus",
+        "src/pages",
+        "--json",
+        "--output-file",
+        project.filePath("page-report.json"),
+      ],
+      { cwd: project.rootDir },
+    );
     const pageOutput = await readJsonFile(project.filePath("page-report.json"));
 
     assert.equal(pageError.code, 1);
@@ -415,9 +482,9 @@ function runCli(args, options = {}) {
   });
 }
 
-async function captureRejectedCliRun(args) {
+async function captureRejectedCliRun(args, options = {}) {
   try {
-    await runCli(args);
+    await runCli(args, options);
   } catch (error) {
     return error;
   }

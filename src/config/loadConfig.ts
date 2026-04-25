@@ -33,11 +33,13 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
 
 export async function loadScannerConfig(input: {
   rootDir: string;
+  configBaseDir?: string;
   configPath?: string;
   diagnostics: ScanDiagnostic[];
 }): Promise<ResolvedScannerConfig> {
+  const configBaseDir = path.resolve(input.configBaseDir ?? input.rootDir);
   const explicitConfigPath = input.configPath
-    ? path.resolve(input.rootDir, input.configPath)
+    ? path.resolve(configBaseDir, input.configPath)
     : undefined;
 
   if (explicitConfigPath) {
@@ -45,13 +47,13 @@ export async function loadScannerConfig(input: {
       absolutePath: explicitConfigPath,
       source: {
         kind: "explicit",
-        path: normalizeProjectPath(path.relative(input.rootDir, explicitConfigPath)),
+        path: normalizeProjectPath(path.relative(configBaseDir, explicitConfigPath)),
       },
       diagnostics: input.diagnostics,
     });
   }
 
-  const projectConfigPath = path.join(input.rootDir, CONFIG_FILE_NAME);
+  const projectConfigPath = path.join(configBaseDir, CONFIG_FILE_NAME);
   if (await fileExists(projectConfigPath)) {
     return loadConfigFile({
       absolutePath: projectConfigPath,

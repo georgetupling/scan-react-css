@@ -137,13 +137,16 @@ npx scan-react-css --json --output-file ./reports/scan-react-css.json --overwrit
 
 The config file is JSON and defaults to `scan-react-css.json`.
 
-Discovery order:
+CLI discovery order:
 
-1. explicit `--config` or API `configPath`
-2. project-root `scan-react-css.json`
+1. explicit `--config`, resolved from the directory where the command is run
+2. `scan-react-css.json` in the directory where the command is run
 3. `SCAN_REACT_CSS_CONFIG_DIR/scan-react-css.json`
 4. first `scan-react-css.json` found on the OS `PATH`
 5. built-in defaults
+
+The Node API uses `configBaseDir` for explicit `configPath` resolution and project config discovery.
+If `configBaseDir` is omitted, it defaults to `rootDir`.
 
 Only one config source is loaded. There is no config merging.
 
@@ -215,6 +218,7 @@ type ScanProjectInput = {
   sourceFilePaths?: string[];
   cssFilePaths?: string[];
   configPath?: string;
+  configBaseDir?: string;
 };
 ```
 

@@ -81,6 +81,7 @@ type ScanProjectInput = {
   sourceFilePaths?: string[];
   cssFilePaths?: string[];
   configPath?: string;
+  configBaseDir?: string;
 };
 
 async function scanProject(input?: ScanProjectInput): Promise<ScanProjectResult>;
@@ -95,6 +96,11 @@ Recommended intent:
 `rootDir` drives default discovery. Explicit `sourceFilePaths` or `cssFilePaths` replace default
 discovery for that file kind; they are not additive include lists. This keeps targeted tests and
 programmatic scans deterministic while preserving a simple project-scan default.
+
+`configBaseDir` controls explicit `configPath` resolution and default `scan-react-css.json`
+discovery for the Node API. If omitted, it defaults to `rootDir`. The CLI passes the command
+directory as `configBaseDir`, so users can scan nested roots while keeping config in the directory
+where they invoked `scan-react-css`.
 
 The root package export should not expose `analyzeProject`, discovery helpers, rule runners, config
 loaders, or raw analysis types as part of the stable product API.
@@ -417,6 +423,7 @@ type ScanProjectInput = {
   sourceFilePaths?: string[];
   cssFilePaths?: string[];
   configPath?: string;
+  configBaseDir?: string;
 };
 
 type ScanProjectResult = {
@@ -508,6 +515,8 @@ Design rules:
 
 - config format is JSON
 - no config merging
+- CLI config discovery checks the command directory before env and PATH fallbacks
+- API config discovery uses `configBaseDir`, defaulting to `rootDir`
 - CSS Module `localsConvention` defaults to `camelCase`
 - default rule severities come from `docs/design/rules-catalogue.md` and the rule catalogue code
 - rule ids follow the reboot catalogue; old scanner rule ids are not part of the clean contract

@@ -318,6 +318,32 @@ test("scanProject applies project config rule severity overrides", async () => {
   }
 });
 
+test("scanProject can discover project config from an explicit config base directory", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      rules: {
+        "missing-css-class": "off",
+      },
+    })
+    .withSourceFile(
+      "app/src/App.tsx",
+      'export function App() { return <main className="missing">Hello</main>; }\n',
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.filePath("app"),
+      configBaseDir: project.rootDir,
+    });
+
+    assert.equal(result.config.source.kind, "project");
+    assert.deepEqual(result.findings, []);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("scanProject discovers config from SCAN_REACT_CSS_CONFIG_DIR", async () => {
   const project = await new TestProjectBuilder()
     .withFile(

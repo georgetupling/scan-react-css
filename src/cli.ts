@@ -53,6 +53,7 @@ if (args.help) {
 
 const result = await scanProject({
   rootDir: args.rootDir,
+  configBaseDir: process.cwd(),
   configPath: args.configPath,
 });
 const focusedResult = applyFocusFilter(result, args.focusPaths);

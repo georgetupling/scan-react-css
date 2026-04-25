@@ -17,6 +17,7 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
   const diagnostics: ScanDiagnostic[] = [...discovered.diagnostics];
   const config = await loadScannerConfig({
     rootDir: discovered.rootDir,
+    configBaseDir: input.configBaseDir,
     configPath: input.configPath,
     diagnostics,
   });
