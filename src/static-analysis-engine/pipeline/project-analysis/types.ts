@@ -11,6 +11,7 @@ import type { RenderSubtree } from "../render-model/render-ir/types.js";
 import type { SelectorConstraint, SelectorQueryResult } from "../selector-analysis/types.js";
 import type { AnalysisConfidence, AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
+import type { CssModuleAnalysis } from "../css-modules/types.js";
 import type {
   CssAtRuleContextFact,
   CssClassDefinitionFact,
@@ -58,6 +59,9 @@ export type ProjectAnalysisEntities = {
   components: ComponentAnalysis[];
   renderSubtrees: RenderSubtreeAnalysis[];
   unsupportedClassReferences: UnsupportedClassReferenceAnalysis[];
+  cssModuleImports: CssModuleImportAnalysis[];
+  cssModuleMemberReferences: CssModuleMemberReferenceAnalysis[];
+  cssModuleReferenceDiagnostics: CssModuleReferenceDiagnosticAnalysis[];
 };
 
 export type SourceFileAnalysis = SourceFileRecord & {
@@ -161,6 +165,42 @@ export type UnsupportedClassReferenceAnalysis = {
   sourceDiagnostic: UnsupportedClassReferenceDiagnostic;
 };
 
+export type CssModuleImportAnalysis = {
+  id: ProjectAnalysisId;
+  sourceFileId: ProjectAnalysisId;
+  stylesheetId: ProjectAnalysisId;
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  specifier: string;
+  localName: string;
+  importKind: "default" | "namespace" | "named";
+};
+
+export type CssModuleMemberReferenceAnalysis = {
+  id: ProjectAnalysisId;
+  importId: ProjectAnalysisId;
+  sourceFileId: ProjectAnalysisId;
+  stylesheetId: ProjectAnalysisId;
+  localName: string;
+  memberName: string;
+  accessKind: "property" | "string-literal-element";
+  location: SourceAnchor;
+  rawExpressionText: string;
+  traces: AnalysisTrace[];
+};
+
+export type CssModuleReferenceDiagnosticAnalysis = {
+  id: ProjectAnalysisId;
+  importId: ProjectAnalysisId;
+  sourceFileId: ProjectAnalysisId;
+  stylesheetId: ProjectAnalysisId;
+  localName: string;
+  reason: "computed-css-module-member";
+  location: SourceAnchor;
+  rawExpressionText: string;
+  traces: AnalysisTrace[];
+};
+
 export type ProjectAnalysisRelations = {
   moduleImports: ModuleImportRelation[];
   componentRenders: ComponentRenderRelation[];
@@ -168,6 +208,7 @@ export type ProjectAnalysisRelations = {
   referenceMatches: ClassReferenceMatchRelation[];
   selectorMatches: SelectorMatchRelation[];
   providerClassSatisfactions: ProviderClassSatisfactionRelation[];
+  cssModuleMemberMatches: CssModuleMemberMatchRelation[];
 };
 
 export type ModuleImportRelation = {
@@ -230,6 +271,18 @@ export type ProviderClassSatisfactionRelation = {
   traces: AnalysisTrace[];
 };
 
+export type CssModuleMemberMatchRelation = {
+  id: ProjectAnalysisId;
+  referenceId: ProjectAnalysisId;
+  importId: ProjectAnalysisId;
+  stylesheetId: ProjectAnalysisId;
+  definitionId?: ProjectAnalysisId;
+  className: string;
+  status: "matched" | "missing";
+  reasons: string[];
+  traces: AnalysisTrace[];
+};
+
 export type ProjectAnalysisIndexes = {
   sourceFilesById: Map<ProjectAnalysisId, SourceFileAnalysis>;
   stylesheetsById: Map<ProjectAnalysisId, StylesheetAnalysis>;
@@ -237,6 +290,9 @@ export type ProjectAnalysisIndexes = {
   classDefinitionsById: Map<ProjectAnalysisId, ClassDefinitionAnalysis>;
   selectorQueriesById: Map<ProjectAnalysisId, SelectorQueryAnalysis>;
   unsupportedClassReferencesById: Map<ProjectAnalysisId, UnsupportedClassReferenceAnalysis>;
+  cssModuleImportsById: Map<ProjectAnalysisId, CssModuleImportAnalysis>;
+  cssModuleMemberReferencesById: Map<ProjectAnalysisId, CssModuleMemberReferenceAnalysis>;
+  cssModuleReferenceDiagnosticsById: Map<ProjectAnalysisId, CssModuleReferenceDiagnosticAnalysis>;
   sourceFileIdByPath: Map<string, ProjectAnalysisId>;
   stylesheetIdByPath: Map<string, ProjectAnalysisId>;
   componentIdByFilePathAndName: Map<string, ProjectAnalysisId>;
@@ -255,6 +311,14 @@ export type ProjectAnalysisIndexes = {
   providerSatisfactionsByReferenceAndClassName: Map<string, ProjectAnalysisId[]>;
   selectorMatchesById: Map<ProjectAnalysisId, SelectorMatchRelation>;
   selectorMatchesByQueryId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  cssModuleMemberMatchesById: Map<ProjectAnalysisId, CssModuleMemberMatchRelation>;
+  cssModuleImportsBySourceFileId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  cssModuleImportsByStylesheetId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  cssModuleMemberReferencesByImportId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  cssModuleMemberReferencesByStylesheetAndClassName: Map<string, ProjectAnalysisId[]>;
+  cssModuleMemberMatchesByReferenceId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  cssModuleMemberMatchesByDefinitionId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  cssModuleReferenceDiagnosticsByImportId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
 };
 
 export type SerializableProjectAnalysis = Omit<ProjectAnalysis, "indexes"> & {
@@ -268,6 +332,7 @@ export type SerializableProjectAnalysisIndexes = {
 export type ProjectAnalysisBuildInput = {
   moduleGraph: import("../module-graph/types.js").ModuleGraph;
   cssFiles: import("../css-analysis/types.js").ExperimentalCssFileAnalysis[];
+  cssModules: CssModuleAnalysis;
   externalCssSummary: ExternalCssSummary;
   reachabilitySummary: import("../reachability/types.js").ReachabilitySummary;
   renderGraph: import("../render-model/render-graph/types.js").RenderGraph;

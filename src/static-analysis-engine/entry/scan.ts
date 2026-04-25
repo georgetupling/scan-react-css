@@ -2,6 +2,7 @@ import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
 import type { StaticAnalysisEngineResult } from "../types/runtime.js";
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
+import { runCssModuleAnalysisStage } from "./stages/cssModuleAnalysisStage.js";
 import { runExternalCssStage } from "./stages/externalCssStage.js";
 import { runModuleGraphStage } from "./stages/moduleGraphStage.js";
 import { runParseStage } from "./stages/parseStage.js";
@@ -55,6 +56,11 @@ export function analyzeProjectSourceTexts(input: {
   const cssAnalysisStage = runCssAnalysisStage({
     selectorCssSources: input.selectorCssSources ?? [],
   });
+  const cssModuleAnalysisStage = runCssModuleAnalysisStage({
+    parsedFiles: parseStage.parsedFiles,
+    moduleGraph: moduleGraphStage.moduleGraph,
+    cssFiles: cssAnalysisStage.cssFiles,
+  });
   const externalCssStage = runExternalCssStage({
     externalCss: input.externalCss,
   });
@@ -74,6 +80,7 @@ export function analyzeProjectSourceTexts(input: {
   const projectAnalysisStage = runProjectAnalysisStage({
     moduleGraph: moduleGraphStage.moduleGraph,
     cssFiles: cssAnalysisStage.cssFiles,
+    cssModules: cssModuleAnalysisStage.cssModules,
     externalCssSummary: externalCssStage.externalCssSummary,
     reachabilitySummary: reachabilityStage.reachabilitySummary,
     renderGraph: renderModelStage.renderGraph,

@@ -12,6 +12,8 @@ export type RuleId =
   | "missing-css-class"
   | "css-class-unreachable"
   | "unused-css-class"
+  | "missing-css-module-class"
+  | "unused-css-module-class"
   | "dynamic-class-reference"
   | "unsupported-syntax-affecting-analysis";
 
@@ -22,6 +24,9 @@ export type AnalysisEntityRef =
   | { kind: "class-reference"; id: ProjectAnalysisId }
   | { kind: "unsupported-class-reference"; id: ProjectAnalysisId }
   | { kind: "class-definition"; id: ProjectAnalysisId }
+  | { kind: "css-module-import"; id: ProjectAnalysisId }
+  | { kind: "css-module-member-reference"; id: ProjectAnalysisId }
+  | { kind: "css-module-reference-diagnostic"; id: ProjectAnalysisId }
   | { kind: "selector-query"; id: ProjectAnalysisId };
 
 export type Finding = {

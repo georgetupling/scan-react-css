@@ -1,5 +1,6 @@
 import type { UnsupportedClassReferenceDiagnostic } from "../../pipeline/render-model/class-reference-diagnostics/index.js";
 import type { ExperimentalCssFileAnalysis } from "../../pipeline/css-analysis/index.js";
+import type { CssModuleAnalysis } from "../../pipeline/css-modules/index.js";
 import type { ExternalCssSummary } from "../../pipeline/external-css/index.js";
 import type { ModuleGraph } from "../../pipeline/module-graph/index.js";
 import { buildProjectAnalysis } from "../../pipeline/project-analysis/index.js";
@@ -11,6 +12,7 @@ import type { ProjectAnalysisStageResult, SelectorAnalysisStageResult } from "./
 export function runProjectAnalysisStage(input: {
   moduleGraph: ModuleGraph;
   cssFiles: ExperimentalCssFileAnalysis[];
+  cssModules: CssModuleAnalysis;
   externalCssSummary: ExternalCssSummary;
   reachabilitySummary: ReachabilitySummary;
   renderGraph: RenderGraph;

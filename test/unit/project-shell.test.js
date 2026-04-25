@@ -85,6 +85,8 @@ test("scanProject returns deterministic public summary from discovered files", a
     assert.equal(result.config.rules["missing-css-class"], "error");
     assert.equal(result.config.rules["css-class-unreachable"], "error");
     assert.equal(result.config.rules["unused-css-class"], "warn");
+    assert.equal(result.config.rules["missing-css-module-class"], "error");
+    assert.equal(result.config.rules["unused-css-module-class"], "warn");
     assert.equal(result.config.rules["dynamic-class-reference"], "info");
     assert.equal(result.config.rules["unsupported-syntax-affecting-analysis"], "debug");
     assert.equal(result.failed, false);

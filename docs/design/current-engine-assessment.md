@@ -32,6 +32,8 @@ Implemented areas include:
 - reference match relations with class-token, definite/possible, reachability, reasons, and trace evidence
 - declared-provider satisfaction relations indexed by reference and class name
 - serializable `ProjectAnalysis` debug snapshots
+- a dedicated CSS Module analysis stage for import records, static member references, and computed-member diagnostics
+- CSS Module member-to-export match relations projected and indexed through `ProjectAnalysis`
 - render-model internals grouped under the render-model pipeline stage
 
 The pipeline in `entry/scan.ts` is coherent enough to act as the nucleus of the reboot.
@@ -62,21 +64,30 @@ The projection currently covers:
 
 Remaining gaps include:
 
-- CSS Module binding records
 - ownership and organization records
 - richer external CSS ingestion records
 - stronger match semantics for dynamic and unsupported analysis beyond the current class-reference slice
 
-### 2. CSS Modules are not a first-class analysis concept
+### 2. CSS Modules are a first slice, not yet complete
 
-The current engine mostly recognizes CSS Modules by filename convention inside rules. That is not enough.
+The current engine now recognizes CSS Modules as first-class analysis records for the core static
+member path. CSS Module extraction lives in `cssModuleAnalysisStage` and
+`pipeline/css-modules`; `ProjectAnalysis` consumes those records to assign stable ids, connect them
+to source and stylesheet entities, and build rule-facing relations and indexes.
 
-Missing engine capabilities:
+Implemented:
 
-- mapping `styles.foo` to a stylesheet and exported token
-- distinguishing CSS Module references from plain class-string references
-- building CSS Module-specific match edges
-- supporting rules like missing CSS module class without legacy-model adapters
+- CSS Module import records
+- `styles.foo` and `styles["foo"]` member reference records
+- module member-to-class-definition match relations
+- computed member access diagnostics
+
+Still missing:
+
+- `localsConvention` transformations
+- `composes` target analysis
+- destructured or re-exported CSS Module member patterns
+- full integration between CSS Module member access and generic class-expression diagnostics
 
 ### 3. Dynamic class analysis is still narrow
 
@@ -172,7 +183,6 @@ Current implemented rule families include:
 
 Remaining analysis gaps for target rules include:
 
-- CSS Module-specific reference and export relations
 - ownership and organization records
 - utility/migration-style declaration analysis
 - richer selector satisfiability records
@@ -363,11 +373,6 @@ If we do that, the existing pipeline becomes an asset instead of a refactor trap
    - diagnostics versus findings support
    - trace propagation
    - serializable debug output
-2. Add CSS Module analysis:
-   - module imports
-   - member references
-   - module export/member relations
-   - computed module-reference diagnostics
-3. Improve dynamic class extraction for common syntax and helper libraries.
-4. Expand selector semantics once the selector result contract is stable.
-5. Add ownership analysis only after correctness and reachability are dependable.
+2. Improve dynamic class extraction for common syntax and helper libraries.
+3. Expand selector semantics once the selector result contract is stable.
+4. Add ownership analysis only after correctness and reachability are dependable.

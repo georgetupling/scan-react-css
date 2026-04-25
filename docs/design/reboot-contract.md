@@ -35,6 +35,7 @@ Responsibilities:
 - build render IR and render graph
 - analyze CSS selectors and definitions
 - analyze stylesheet reachability
+- analyze CSS Module imports and member references
 - analyze class references
 - build direct reference-to-definition and selector-to-context evidence
 - expose stable indexes over the analyzed project
@@ -116,7 +117,10 @@ Examples include:
 
 An initial implementation now exists under `src/static-analysis-engine/pipeline/project-analysis`.
 It is a final projection stage over the existing pipeline outputs and is the only data exposed by
-`StaticAnalysisEngineResult`.
+`StaticAnalysisEngineResult`. Feature-specific extraction should happen before this projection when
+it needs raw syntax or stage-specific context. For example, CSS Module import and member-reference
+extraction lives in `cssModuleAnalysisStage` and `pipeline/css-modules`; `ProjectAnalysis` indexes
+those records for rules instead of walking parsed source text itself.
 
 This first slice intentionally covers the rule-facing contract that current stages can support:
 
@@ -125,6 +129,12 @@ This first slice intentionally covers the rule-facing contract that current stag
 - deterministic indexes for class names, source files, stylesheets, reachability, selector queries, and matches
 
 It does not yet claim full CSS Module binding semantics, ownership classification, or a complete external CSS ingestion contract.
+
+The current CSS Module slice supports relative CSS Module imports, static member reads such as
+`styles.root` and `styles["root"]`, member-to-class-definition match relations, missing module
+member findings, unused module class findings, and computed member diagnostics. It does not yet
+claim `localsConvention`, `composes`, destructured member patterns, or re-exported CSS Module
+semantics.
 
 Rule execution now lives outside the static-analysis engine in `src/rules`.
 The engine entry points return analysis only; rule runners should be invoked as a layer above
@@ -181,6 +191,9 @@ type ProjectAnalysisEntities = {
   classReferences: ClassReferenceAnalysis[];
   classDefinitions: ClassDefinitionAnalysis[];
   selectorQueries: SelectorQueryAnalysis[];
+  cssModuleImports: CssModuleImportAnalysis[];
+  cssModuleMemberReferences: CssModuleMemberReferenceAnalysis[];
+  cssModuleReferenceDiagnostics: CssModuleReferenceDiagnosticAnalysis[];
   components: ComponentAnalysis[];
   renderSubtrees: RenderSubtreeAnalysis[];
 };
@@ -203,7 +216,7 @@ type ProjectAnalysisRelations = {
   stylesheetReachability: StylesheetReachabilityRelation[];
   referenceMatches: ClassReferenceMatchRelation[];
   selectorMatches: SelectorMatchRelation[];
-  cssModuleBindings: CssModuleBindingRelation[];
+  cssModuleMemberMatches: CssModuleMemberMatchRelation[];
 };
 ```
 

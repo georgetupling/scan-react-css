@@ -1,5 +1,6 @@
 export { analyzeProjectSourceTexts, analyzeSourceText } from "./entry/scan.js";
 export { analyzeCssSources } from "./pipeline/css-analysis/index.js";
+export { analyzeCssModules } from "./pipeline/css-modules/index.js";
 export { parseSourceFile } from "./pipeline/parse/index.js";
 export {
   buildModuleGraphFromSource,
@@ -46,6 +47,12 @@ export type {
 export { deriveAnalysisConfidence } from "./types/analysis.js";
 export type { StaticAnalysisEngineResult } from "./types/runtime.js";
 export type { ExperimentalCssFileAnalysis } from "./pipeline/css-analysis/index.js";
+export type {
+  CssModuleAnalysis,
+  CssModuleImportRecord,
+  CssModuleMemberReferenceRecord,
+  CssModuleReferenceDiagnosticRecord,
+} from "./pipeline/css-modules/index.js";
 export type {
   ActiveExternalCssProvider,
   ExternalCssAnalysisInput,
@@ -106,6 +113,10 @@ export type {
   ClassReferenceOrigin,
   ComponentAnalysis,
   ComponentRenderRelation,
+  CssModuleImportAnalysis,
+  CssModuleMemberMatchRelation,
+  CssModuleMemberReferenceAnalysis,
+  CssModuleReferenceDiagnosticAnalysis,
   ModuleImportRelation,
   ProjectAnalysis,
   ProjectAnalysisEntities,

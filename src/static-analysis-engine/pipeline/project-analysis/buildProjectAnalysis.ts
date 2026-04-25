@@ -6,6 +6,10 @@ import type {
   ClassReferenceMatchRelation,
   ComponentAnalysis,
   ComponentRenderRelation,
+  CssModuleImportAnalysis,
+  CssModuleMemberMatchRelation,
+  CssModuleMemberReferenceAnalysis,
+  CssModuleReferenceDiagnosticAnalysis,
   DeclarationForSignature,
   ModuleImportRelation,
   ProjectAnalysis,
@@ -44,6 +48,15 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
   const classReferences = buildClassReferences(renderSubtrees, indexes);
   const unsupportedClassReferences = buildUnsupportedClassReferences(input, indexes);
   const selectorQueries = buildSelectorQueries(input.selectorQueryResults, stylesheets, indexes);
+  const cssModuleImports = buildCssModuleImports(input, indexes);
+  const {
+    memberReferences: cssModuleMemberReferences,
+    diagnostics: cssModuleReferenceDiagnostics,
+  } = buildCssModuleMemberReferences({
+    projectInput: input,
+    imports: cssModuleImports,
+    indexes,
+  });
   indexEntities({
     sourceFiles,
     stylesheets,
@@ -51,6 +64,9 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
     classDefinitions,
     selectorQueries,
     unsupportedClassReferences,
+    cssModuleImports,
+    cssModuleMemberReferences,
+    cssModuleReferenceDiagnostics,
     indexes,
   });
   const stylesheetReachability = buildStylesheetReachability(input, indexes);
@@ -65,11 +81,16 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
     input,
   });
   const selectorMatches = buildSelectorMatches(selectorQueries);
+  const cssModuleMemberMatches = buildCssModuleMemberMatches({
+    references: cssModuleMemberReferences,
+    indexes,
+  });
 
   indexRelations({
     referenceMatches,
     providerClassSatisfactions,
     selectorMatches,
+    cssModuleMemberMatches,
     indexes,
   });
 
@@ -93,6 +114,9 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
       components,
       renderSubtrees,
       unsupportedClassReferences,
+      cssModuleImports,
+      cssModuleMemberReferences,
+      cssModuleReferenceDiagnostics,
     },
     relations: {
       moduleImports: buildModuleImports(input, indexes),
@@ -101,6 +125,7 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
       referenceMatches,
       selectorMatches,
       providerClassSatisfactions,
+      cssModuleMemberMatches,
     },
     indexes,
   };
@@ -321,6 +346,119 @@ function buildUnsupportedClassReferences(
       };
     })
     .sort(compareById);
+}
+
+function buildCssModuleImports(
+  input: ProjectAnalysisBuildInput,
+  indexes: ProjectAnalysisIndexes,
+): CssModuleImportAnalysis[] {
+  return input.cssModules.imports
+    .map((cssModuleImport) => {
+      const sourceFilePath = normalizeProjectPath(cssModuleImport.sourceFilePath);
+      const stylesheetFilePath = normalizeProjectPath(cssModuleImport.stylesheetFilePath);
+      const sourceFileId = indexes.sourceFileIdByPath.get(sourceFilePath);
+      const stylesheetId = indexes.stylesheetIdByPath.get(stylesheetFilePath);
+
+      if (!sourceFileId || !stylesheetId) {
+        return undefined;
+      }
+
+      return {
+        id: createCssModuleImportId({
+          sourceFilePath,
+          stylesheetFilePath,
+          localName: cssModuleImport.localName,
+        }),
+        sourceFileId,
+        stylesheetId,
+        sourceFilePath,
+        stylesheetFilePath,
+        specifier: cssModuleImport.specifier,
+        localName: cssModuleImport.localName,
+        importKind: cssModuleImport.importKind,
+      };
+    })
+    .filter((cssModuleImport): cssModuleImport is CssModuleImportAnalysis =>
+      Boolean(cssModuleImport),
+    )
+    .sort(compareById);
+}
+
+function buildCssModuleMemberReferences(input: {
+  projectInput: ProjectAnalysisBuildInput;
+  imports: CssModuleImportAnalysis[];
+  indexes: ProjectAnalysisIndexes;
+}): {
+  memberReferences: CssModuleMemberReferenceAnalysis[];
+  diagnostics: CssModuleReferenceDiagnosticAnalysis[];
+} {
+  const importsBySourceStylesheetAndLocalName = new Map<string, CssModuleImportAnalysis>();
+  for (const cssModuleImport of input.imports) {
+    importsBySourceStylesheetAndLocalName.set(
+      createCssModuleImportLookupKey({
+        sourceFilePath: cssModuleImport.sourceFilePath,
+        stylesheetFilePath: cssModuleImport.stylesheetFilePath,
+        localName: cssModuleImport.localName,
+      }),
+      cssModuleImport,
+    );
+  }
+
+  return {
+    memberReferences: input.projectInput.cssModules.memberReferences
+      .map((reference) => {
+        const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
+          createCssModuleImportLookupKey(reference),
+        );
+        if (!cssModuleImport) {
+          return undefined;
+        }
+
+        return {
+          id: createCssModuleMemberReferenceId(
+            reference.location,
+            cssModuleImport.id,
+            reference.memberName,
+          ),
+          importId: cssModuleImport.id,
+          sourceFileId: cssModuleImport.sourceFileId,
+          stylesheetId: cssModuleImport.stylesheetId,
+          localName: reference.localName,
+          memberName: reference.memberName,
+          accessKind: reference.accessKind,
+          location: normalizeAnchor(reference.location),
+          rawExpressionText: reference.rawExpressionText,
+          traces: [...reference.traces],
+        };
+      })
+      .filter((reference): reference is CssModuleMemberReferenceAnalysis => Boolean(reference))
+      .sort(compareById),
+    diagnostics: input.projectInput.cssModules.diagnostics
+      .map((diagnostic) => {
+        const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
+          createCssModuleImportLookupKey(diagnostic),
+        );
+        if (!cssModuleImport) {
+          return undefined;
+        }
+
+        return {
+          id: createCssModuleDiagnosticId(diagnostic.location, cssModuleImport.id),
+          importId: cssModuleImport.id,
+          sourceFileId: cssModuleImport.sourceFileId,
+          stylesheetId: cssModuleImport.stylesheetId,
+          localName: diagnostic.localName,
+          reason: diagnostic.reason,
+          location: normalizeAnchor(diagnostic.location),
+          rawExpressionText: diagnostic.rawExpressionText,
+          traces: [...diagnostic.traces],
+        };
+      })
+      .filter((diagnostic): diagnostic is CssModuleReferenceDiagnosticAnalysis =>
+        Boolean(diagnostic),
+      )
+      .sort(compareById),
+  };
 }
 
 type RenderClassExpressionEntry = {
@@ -705,10 +843,54 @@ function buildSelectorMatches(selectorQueries: SelectorQueryAnalysis[]): Selecto
     .sort(compareById);
 }
 
+function buildCssModuleMemberMatches(input: {
+  references: CssModuleMemberReferenceAnalysis[];
+  indexes: ProjectAnalysisIndexes;
+}): CssModuleMemberMatchRelation[] {
+  const matches: CssModuleMemberMatchRelation[] = [];
+
+  for (const reference of input.references) {
+    const definitionIds = input.indexes.definitionsByStylesheetId.get(reference.stylesheetId) ?? [];
+    const definitionId = definitionIds.find((candidateId) => {
+      const definition = input.indexes.classDefinitionsById.get(candidateId);
+      return definition?.className === reference.memberName;
+    });
+
+    if (definitionId) {
+      matches.push({
+        id: `css-module-member-match:${reference.id}:${definitionId}`,
+        referenceId: reference.id,
+        importId: reference.importId,
+        stylesheetId: reference.stylesheetId,
+        definitionId,
+        className: reference.memberName,
+        status: "matched",
+        reasons: [`CSS Module member "${reference.memberName}" matched an exported class`],
+        traces: mergeTraces(reference.traces),
+      });
+      continue;
+    }
+
+    matches.push({
+      id: `css-module-member-match:${reference.id}:missing`,
+      referenceId: reference.id,
+      importId: reference.importId,
+      stylesheetId: reference.stylesheetId,
+      className: reference.memberName,
+      status: "missing",
+      reasons: [`CSS Module member "${reference.memberName}" has no exported class`],
+      traces: mergeTraces(reference.traces),
+    });
+  }
+
+  return matches.sort(compareById);
+}
+
 function indexRelations(input: {
   referenceMatches: ClassReferenceMatchRelation[];
   providerClassSatisfactions: ProviderClassSatisfactionRelation[];
   selectorMatches: SelectorMatchRelation[];
+  cssModuleMemberMatches: CssModuleMemberMatchRelation[];
   indexes: ProjectAnalysisIndexes;
 }): void {
   for (const match of input.referenceMatches) {
@@ -738,12 +920,25 @@ function indexRelations(input: {
     input.indexes.selectorMatchesById.set(match.id, match);
     pushMapValue(input.indexes.selectorMatchesByQueryId, match.selectorQueryId, match.id);
   }
+  for (const match of input.cssModuleMemberMatches) {
+    input.indexes.cssModuleMemberMatchesById.set(match.id, match);
+    pushMapValue(input.indexes.cssModuleMemberMatchesByReferenceId, match.referenceId, match.id);
+    if (match.definitionId) {
+      pushMapValue(
+        input.indexes.cssModuleMemberMatchesByDefinitionId,
+        match.definitionId,
+        match.id,
+      );
+    }
+  }
 
   sortIndexValues(input.indexes.matchesByReferenceId);
   sortIndexValues(input.indexes.referenceMatchesByReferenceAndClassName);
   sortIndexValues(input.indexes.providerSatisfactionsByReferenceId);
   sortIndexValues(input.indexes.providerSatisfactionsByReferenceAndClassName);
   sortIndexValues(input.indexes.selectorMatchesByQueryId);
+  sortIndexValues(input.indexes.cssModuleMemberMatchesByReferenceId);
+  sortIndexValues(input.indexes.cssModuleMemberMatchesByDefinitionId);
 }
 
 function indexEntities(input: {
@@ -753,6 +948,9 @@ function indexEntities(input: {
   classDefinitions: ClassDefinitionAnalysis[];
   selectorQueries: SelectorQueryAnalysis[];
   unsupportedClassReferences: UnsupportedClassReferenceAnalysis[];
+  cssModuleImports: CssModuleImportAnalysis[];
+  cssModuleMemberReferences: CssModuleMemberReferenceAnalysis[];
+  cssModuleReferenceDiagnostics: CssModuleReferenceDiagnosticAnalysis[];
   indexes: ProjectAnalysisIndexes;
 }): void {
   for (const sourceFile of input.sourceFiles) {
@@ -773,6 +971,46 @@ function indexEntities(input: {
   for (const unsupportedReference of input.unsupportedClassReferences) {
     input.indexes.unsupportedClassReferencesById.set(unsupportedReference.id, unsupportedReference);
   }
+  for (const cssModuleImport of input.cssModuleImports) {
+    input.indexes.cssModuleImportsById.set(cssModuleImport.id, cssModuleImport);
+    pushMapValue(
+      input.indexes.cssModuleImportsBySourceFileId,
+      cssModuleImport.sourceFileId,
+      cssModuleImport.id,
+    );
+    pushMapValue(
+      input.indexes.cssModuleImportsByStylesheetId,
+      cssModuleImport.stylesheetId,
+      cssModuleImport.id,
+    );
+  }
+  for (const reference of input.cssModuleMemberReferences) {
+    input.indexes.cssModuleMemberReferencesById.set(reference.id, reference);
+    pushMapValue(
+      input.indexes.cssModuleMemberReferencesByImportId,
+      reference.importId,
+      reference.id,
+    );
+    pushMapValue(
+      input.indexes.cssModuleMemberReferencesByStylesheetAndClassName,
+      createStylesheetClassKey(reference.stylesheetId, reference.memberName),
+      reference.id,
+    );
+  }
+  for (const diagnostic of input.cssModuleReferenceDiagnostics) {
+    input.indexes.cssModuleReferenceDiagnosticsById.set(diagnostic.id, diagnostic);
+    pushMapValue(
+      input.indexes.cssModuleReferenceDiagnosticsByImportId,
+      diagnostic.importId,
+      diagnostic.id,
+    );
+  }
+
+  sortIndexValues(input.indexes.cssModuleImportsBySourceFileId);
+  sortIndexValues(input.indexes.cssModuleImportsByStylesheetId);
+  sortIndexValues(input.indexes.cssModuleMemberReferencesByImportId);
+  sortIndexValues(input.indexes.cssModuleMemberReferencesByStylesheetAndClassName);
+  sortIndexValues(input.indexes.cssModuleReferenceDiagnosticsByImportId);
 }
 
 function buildModuleImports(
@@ -1078,6 +1316,9 @@ function createEmptyIndexes(): ProjectAnalysisIndexes {
     classDefinitionsById: new Map(),
     selectorQueriesById: new Map(),
     unsupportedClassReferencesById: new Map(),
+    cssModuleImportsById: new Map(),
+    cssModuleMemberReferencesById: new Map(),
+    cssModuleReferenceDiagnosticsById: new Map(),
     sourceFileIdByPath: new Map(),
     stylesheetIdByPath: new Map(),
     componentIdByFilePathAndName: new Map(),
@@ -1096,6 +1337,14 @@ function createEmptyIndexes(): ProjectAnalysisIndexes {
     providerSatisfactionsByReferenceAndClassName: new Map(),
     selectorMatchesById: new Map(),
     selectorMatchesByQueryId: new Map(),
+    cssModuleMemberMatchesById: new Map(),
+    cssModuleImportsBySourceFileId: new Map(),
+    cssModuleImportsByStylesheetId: new Map(),
+    cssModuleMemberReferencesByImportId: new Map(),
+    cssModuleMemberReferencesByStylesheetAndClassName: new Map(),
+    cssModuleMemberMatchesByReferenceId: new Map(),
+    cssModuleMemberMatchesByDefinitionId: new Map(),
+    cssModuleReferenceDiagnosticsByImportId: new Map(),
   };
 }
 
@@ -1162,6 +1411,61 @@ function createReachabilityContextKey(
 
 function createReferenceClassKey(referenceId: ProjectAnalysisId, className: string): string {
   return `${referenceId}:${className}`;
+}
+
+function createStylesheetClassKey(stylesheetId: ProjectAnalysisId, className: string): string {
+  return `${stylesheetId}:${className}`;
+}
+
+function createCssModuleImportId(input: {
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  localName: string;
+}): ProjectAnalysisId {
+  return [
+    "css-module-import",
+    normalizeProjectPath(input.sourceFilePath),
+    normalizeProjectPath(input.stylesheetFilePath),
+    input.localName,
+  ].join(":");
+}
+
+function createCssModuleMemberReferenceId(
+  location: SourceAnchor,
+  importId: ProjectAnalysisId,
+  memberName: string,
+): ProjectAnalysisId {
+  return [
+    "css-module-member-reference",
+    importId,
+    memberName,
+    location.startLine,
+    location.startColumn,
+  ].join(":");
+}
+
+function createCssModuleDiagnosticId(
+  location: SourceAnchor,
+  importId: ProjectAnalysisId,
+): ProjectAnalysisId {
+  return [
+    "css-module-reference-diagnostic",
+    importId,
+    location.startLine,
+    location.startColumn,
+  ].join(":");
+}
+
+function createCssModuleImportLookupKey(input: {
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  localName: string;
+}): string {
+  return [
+    normalizeProjectPath(input.sourceFilePath),
+    normalizeProjectPath(input.stylesheetFilePath),
+    input.localName,
+  ].join(":");
 }
 
 function isCssModuleStylesheet(filePath: string | undefined): boolean {
