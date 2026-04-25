@@ -44,6 +44,15 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
   const classReferences = buildClassReferences(renderSubtrees, indexes);
   const unsupportedClassReferences = buildUnsupportedClassReferences(input, indexes);
   const selectorQueries = buildSelectorQueries(input.selectorQueryResults, stylesheets, indexes);
+  indexEntities({
+    sourceFiles,
+    stylesheets,
+    classReferences,
+    classDefinitions,
+    selectorQueries,
+    unsupportedClassReferences,
+    indexes,
+  });
   const stylesheetReachability = buildStylesheetReachability(input, indexes);
   const referenceMatches = buildReferenceMatches({
     references: classReferences,
@@ -608,6 +617,10 @@ function buildReferenceMatches(input: {
           id: `reference-match:${reference.id}:${definition.id}`,
           referenceId: reference.id,
           definitionId: definition.id,
+          className,
+          referenceClassKind: reference.definiteClassNames.includes(className)
+            ? "definite"
+            : "possible",
           reachability: reachability.availability,
           matchKind:
             reachability.availability === "definite" ||
@@ -650,6 +663,9 @@ function buildProviderClassSatisfactions(input: {
           id: `provider-class:${reference.id}:${provider.provider}:${className}`,
           referenceId: reference.id,
           className,
+          referenceClassKind: reference.definiteClassNames.includes(className)
+            ? "definite"
+            : "possible",
           provider: provider.provider,
           reasons: [`class "${className}" is declared by active external CSS provider`],
           traces: [...reference.traces],
@@ -696,17 +712,67 @@ function indexRelations(input: {
   indexes: ProjectAnalysisIndexes;
 }): void {
   for (const match of input.referenceMatches) {
+    input.indexes.referenceMatchesById.set(match.id, match);
     pushMapValue(input.indexes.matchesByReferenceId, match.referenceId, match.id);
+    pushMapValue(
+      input.indexes.referenceMatchesByReferenceAndClassName,
+      createReferenceClassKey(match.referenceId, match.className),
+      match.id,
+    );
   }
   for (const satisfaction of input.providerClassSatisfactions) {
+    input.indexes.providerSatisfactionsById.set(satisfaction.id, satisfaction);
     pushMapValue(input.indexes.matchesByReferenceId, satisfaction.referenceId, satisfaction.id);
+    pushMapValue(
+      input.indexes.providerSatisfactionsByReferenceId,
+      satisfaction.referenceId,
+      satisfaction.id,
+    );
+    pushMapValue(
+      input.indexes.providerSatisfactionsByReferenceAndClassName,
+      createReferenceClassKey(satisfaction.referenceId, satisfaction.className),
+      satisfaction.id,
+    );
   }
   for (const match of input.selectorMatches) {
+    input.indexes.selectorMatchesById.set(match.id, match);
     pushMapValue(input.indexes.selectorMatchesByQueryId, match.selectorQueryId, match.id);
   }
 
   sortIndexValues(input.indexes.matchesByReferenceId);
+  sortIndexValues(input.indexes.referenceMatchesByReferenceAndClassName);
+  sortIndexValues(input.indexes.providerSatisfactionsByReferenceId);
+  sortIndexValues(input.indexes.providerSatisfactionsByReferenceAndClassName);
   sortIndexValues(input.indexes.selectorMatchesByQueryId);
+}
+
+function indexEntities(input: {
+  sourceFiles: SourceFileAnalysis[];
+  stylesheets: StylesheetAnalysis[];
+  classReferences: ClassReferenceAnalysis[];
+  classDefinitions: ClassDefinitionAnalysis[];
+  selectorQueries: SelectorQueryAnalysis[];
+  unsupportedClassReferences: UnsupportedClassReferenceAnalysis[];
+  indexes: ProjectAnalysisIndexes;
+}): void {
+  for (const sourceFile of input.sourceFiles) {
+    input.indexes.sourceFilesById.set(sourceFile.id, sourceFile);
+  }
+  for (const stylesheet of input.stylesheets) {
+    input.indexes.stylesheetsById.set(stylesheet.id, stylesheet);
+  }
+  for (const reference of input.classReferences) {
+    input.indexes.classReferencesById.set(reference.id, reference);
+  }
+  for (const definition of input.classDefinitions) {
+    input.indexes.classDefinitionsById.set(definition.id, definition);
+  }
+  for (const selectorQuery of input.selectorQueries) {
+    input.indexes.selectorQueriesById.set(selectorQuery.id, selectorQuery);
+  }
+  for (const unsupportedReference of input.unsupportedClassReferences) {
+    input.indexes.unsupportedClassReferencesById.set(unsupportedReference.id, unsupportedReference);
+  }
 }
 
 function buildModuleImports(
@@ -1006,6 +1072,12 @@ function getDeclarationSignature(declarations: DeclarationForSignature[]): strin
 
 function createEmptyIndexes(): ProjectAnalysisIndexes {
   return {
+    sourceFilesById: new Map(),
+    stylesheetsById: new Map(),
+    classReferencesById: new Map(),
+    classDefinitionsById: new Map(),
+    selectorQueriesById: new Map(),
+    unsupportedClassReferencesById: new Map(),
     sourceFileIdByPath: new Map(),
     stylesheetIdByPath: new Map(),
     componentIdByFilePathAndName: new Map(),
@@ -1016,7 +1088,13 @@ function createEmptyIndexes(): ProjectAnalysisIndexes {
     reachableStylesheetsBySourceFileId: new Map(),
     reachableStylesheetsByComponentId: new Map(),
     selectorQueriesByStylesheetId: new Map(),
+    referenceMatchesById: new Map(),
     matchesByReferenceId: new Map(),
+    referenceMatchesByReferenceAndClassName: new Map(),
+    providerSatisfactionsById: new Map(),
+    providerSatisfactionsByReferenceId: new Map(),
+    providerSatisfactionsByReferenceAndClassName: new Map(),
+    selectorMatchesById: new Map(),
     selectorMatchesByQueryId: new Map(),
   };
 }
@@ -1080,6 +1158,10 @@ function createReachabilityContextKey(
   id: ProjectAnalysisId,
 ): string {
   return `${stylesheetId}:${kind}:${id}`;
+}
+
+function createReferenceClassKey(referenceId: ProjectAnalysisId, className: string): string {
+  return `${referenceId}:${className}`;
 }
 
 function isCssModuleStylesheet(filePath: string | undefined): boolean {

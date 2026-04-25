@@ -1,4 +1,5 @@
 export { buildProjectAnalysis } from "./buildProjectAnalysis.js";
+export { serializeProjectAnalysis } from "./serializeProjectAnalysis.js";
 export type {
   ClassDefinitionAnalysis,
   ClassDefinitionSelectorKind,
@@ -22,6 +23,8 @@ export type {
   RenderSubtreeAnalysis,
   SelectorMatchRelation,
   SelectorQueryAnalysis,
+  SerializableProjectAnalysis,
+  SerializableProjectAnalysisIndexes,
   SourceFileAnalysis,
   SourceFileRecord,
   StylesheetAnalysis,

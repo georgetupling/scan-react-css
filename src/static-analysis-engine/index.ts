@@ -20,7 +20,10 @@ export {
 } from "./pipeline/selector-analysis/index.js";
 export { buildReachabilitySummary } from "./pipeline/reachability/index.js";
 export { buildRenderGraph, buildRenderModel } from "./pipeline/render-model/index.js";
-export { buildProjectAnalysis } from "./pipeline/project-analysis/index.js";
+export {
+  buildProjectAnalysis,
+  serializeProjectAnalysis,
+} from "./pipeline/project-analysis/index.js";
 export type { EngineModuleId, EngineSymbolId, SourceAnchor } from "./types/core.js";
 export type {
   CssAtRuleContextFact,
@@ -115,6 +118,8 @@ export type {
   RenderSubtreeAnalysis,
   SelectorMatchRelation,
   SelectorQueryAnalysis,
+  SerializableProjectAnalysis,
+  SerializableProjectAnalysisIndexes,
   SourceFileAnalysis,
   StylesheetAnalysis,
   StylesheetOrigin,

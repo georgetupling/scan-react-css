@@ -10,27 +10,14 @@ export const cssClassUnreachableRule: RuleDefinition = {
 
 function runCssClassUnreachableRule(context: RuleContext): UnresolvedFinding[] {
   const findings: UnresolvedFinding[] = [];
-  const definitionsById = new Map(
-    context.analysis.entities.classDefinitions.map((definition) => [definition.id, definition]),
-  );
-  const stylesheetsById = new Map(
-    context.analysis.entities.stylesheets.map((stylesheet) => [stylesheet.id, stylesheet]),
-  );
-  const providerSatisfactionsByReferenceAndClass = new Set(
-    context.analysis.relations.providerClassSatisfactions.map(
-      (satisfaction) => `${satisfaction.referenceId}:${satisfaction.className}`,
-    ),
-  );
-  const matchesByReferenceAndDefinition = new Map(
-    context.analysis.relations.referenceMatches.map((match) => [
-      `${match.referenceId}:${match.definitionId}`,
-      match,
-    ]),
-  );
 
   for (const reference of context.analysis.entities.classReferences) {
     for (const className of reference.definiteClassNames) {
-      if (providerSatisfactionsByReferenceAndClass.has(`${reference.id}:${className}`)) {
+      if (
+        context.analysis.indexes.providerSatisfactionsByReferenceAndClassName.has(
+          createReferenceClassKey(reference.id, className),
+        )
+      ) {
         continue;
       }
 
@@ -39,17 +26,19 @@ function runCssClassUnreachableRule(context: RuleContext): UnresolvedFinding[] {
         continue;
       }
 
-      const matches = definitionIds
-        .map((definitionId) =>
-          matchesByReferenceAndDefinition.get(`${reference.id}:${definitionId}`),
-        )
+      const matches = (
+        context.analysis.indexes.referenceMatchesByReferenceAndClassName.get(
+          createReferenceClassKey(reference.id, className),
+        ) ?? []
+      )
+        .map((matchId) => context.analysis.indexes.referenceMatchesById.get(matchId))
         .filter((match): match is NonNullable<typeof match> => Boolean(match));
       if (matches.length === 0 || matches.some((match) => match.reachability !== "unavailable")) {
         continue;
       }
 
       const definitions = definitionIds
-        .map((definitionId) => definitionsById.get(definitionId))
+        .map((definitionId) => context.analysis.indexes.classDefinitionsById.get(definitionId))
         .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition));
       const stylesheetIds = [
         ...new Set(definitions.map((definition) => definition.stylesheetId)),
@@ -80,7 +69,10 @@ function runCssClassUnreachableRule(context: RuleContext): UnresolvedFinding[] {
           className,
           matches,
           stylesheetFilePaths: stylesheetIds
-            .map((stylesheetId) => stylesheetsById.get(stylesheetId)?.filePath)
+            .map(
+              (stylesheetId) =>
+                context.analysis.indexes.stylesheetsById.get(stylesheetId)?.filePath,
+            )
             .filter((filePath): filePath is string => Boolean(filePath)),
         }),
         data: {
@@ -95,6 +87,10 @@ function runCssClassUnreachableRule(context: RuleContext): UnresolvedFinding[] {
   }
 
   return findings.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function createReferenceClassKey(referenceId: string, className: string): string {
+  return `${referenceId}:${className}`;
 }
 
 function buildUnreachableClassTraces(input: {

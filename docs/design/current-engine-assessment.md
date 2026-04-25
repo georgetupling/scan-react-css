@@ -29,6 +29,9 @@ Implemented areas include:
 - selector normalization for a bounded subset of selectors
 - stylesheet reachability analysis
 - a normalized `ProjectAnalysis` projection for rule-facing entities, relations, and indexes
+- reference match relations with class-token, definite/possible, reachability, reasons, and trace evidence
+- declared-provider satisfaction relations indexed by reference and class name
+- serializable `ProjectAnalysis` debug snapshots
 - render-model internals grouped under the render-model pipeline stage
 
 The pipeline in `entry/scan.ts` is coherent enough to act as the nucleus of the reboot.
@@ -62,7 +65,7 @@ Remaining gaps include:
 - CSS Module binding records
 - ownership and organization records
 - richer external CSS ingestion records
-- stronger match semantics for dynamic and unsupported analysis
+- stronger match semantics for dynamic and unsupported analysis beyond the current class-reference slice
 
 ### 2. CSS Modules are not a first-class analysis concept
 

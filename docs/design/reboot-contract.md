@@ -211,6 +211,12 @@ Critical requirement:
 
 - The analysis layer should emit direct `referenceMatches` and `selectorMatches`.
 - Rules should not have to rebuild reachability maps, definition sets, or candidate match groups.
+- Reference matches should carry the matched `className`, whether the token came from a definite or
+  possible reference, reachability, match kind, reasons, and traces.
+- Declared external-provider satisfactions should be represented as explicit relations and indexed
+  by reference and class name.
+- A serializable debug snapshot should be produced through an explicit serializer rather than by
+  relying on `JSON.stringify()` to understand in-memory `Map` indexes.
 
 ### Indexes
 

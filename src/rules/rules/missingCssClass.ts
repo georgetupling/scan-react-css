@@ -10,11 +10,6 @@ export const missingCssClassRule: RuleDefinition = {
 
 function runMissingCssClassRule(context: RuleContext): UnresolvedFinding[] {
   const findings: UnresolvedFinding[] = [];
-  const providerSatisfactionsByReferenceAndClass = new Set(
-    context.analysis.relations.providerClassSatisfactions.map(
-      (satisfaction) => `${satisfaction.referenceId}:${satisfaction.className}`,
-    ),
-  );
 
   for (const reference of context.analysis.entities.classReferences) {
     for (const className of reference.definiteClassNames) {
@@ -22,7 +17,11 @@ function runMissingCssClassRule(context: RuleContext): UnresolvedFinding[] {
         continue;
       }
 
-      if (providerSatisfactionsByReferenceAndClass.has(`${reference.id}:${className}`)) {
+      if (
+        context.analysis.indexes.providerSatisfactionsByReferenceAndClassName.has(
+          createReferenceClassKey(reference.id, className),
+        )
+      ) {
         continue;
       }
 
@@ -56,6 +55,10 @@ function runMissingCssClassRule(context: RuleContext): UnresolvedFinding[] {
   }
 
   return findings.sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function createReferenceClassKey(referenceId: string, className: string): string {
+  return `${referenceId}:${className}`;
 }
 
 function buildMissingClassTraces(input: {

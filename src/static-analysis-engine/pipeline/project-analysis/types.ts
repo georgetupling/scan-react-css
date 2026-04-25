@@ -200,6 +200,8 @@ export type ClassReferenceMatchRelation = {
   id: ProjectAnalysisId;
   referenceId: ProjectAnalysisId;
   definitionId: ProjectAnalysisId;
+  className: string;
+  referenceClassKind: "definite" | "possible";
   reachability: ReachabilityAvailability;
   matchKind: "reachable-stylesheet" | "unreachable-stylesheet";
   reasons: string[];
@@ -222,12 +224,19 @@ export type ProviderClassSatisfactionRelation = {
   id: ProjectAnalysisId;
   referenceId: ProjectAnalysisId;
   className: string;
+  referenceClassKind: "definite" | "possible";
   provider: string;
   reasons: string[];
   traces: AnalysisTrace[];
 };
 
 export type ProjectAnalysisIndexes = {
+  sourceFilesById: Map<ProjectAnalysisId, SourceFileAnalysis>;
+  stylesheetsById: Map<ProjectAnalysisId, StylesheetAnalysis>;
+  classReferencesById: Map<ProjectAnalysisId, ClassReferenceAnalysis>;
+  classDefinitionsById: Map<ProjectAnalysisId, ClassDefinitionAnalysis>;
+  selectorQueriesById: Map<ProjectAnalysisId, SelectorQueryAnalysis>;
+  unsupportedClassReferencesById: Map<ProjectAnalysisId, UnsupportedClassReferenceAnalysis>;
   sourceFileIdByPath: Map<string, ProjectAnalysisId>;
   stylesheetIdByPath: Map<string, ProjectAnalysisId>;
   componentIdByFilePathAndName: Map<string, ProjectAnalysisId>;
@@ -238,8 +247,22 @@ export type ProjectAnalysisIndexes = {
   reachableStylesheetsBySourceFileId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
   reachableStylesheetsByComponentId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
   selectorQueriesByStylesheetId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  referenceMatchesById: Map<ProjectAnalysisId, ClassReferenceMatchRelation>;
   matchesByReferenceId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  referenceMatchesByReferenceAndClassName: Map<string, ProjectAnalysisId[]>;
+  providerSatisfactionsById: Map<ProjectAnalysisId, ProviderClassSatisfactionRelation>;
+  providerSatisfactionsByReferenceId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  providerSatisfactionsByReferenceAndClassName: Map<string, ProjectAnalysisId[]>;
+  selectorMatchesById: Map<ProjectAnalysisId, SelectorMatchRelation>;
   selectorMatchesByQueryId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+};
+
+export type SerializableProjectAnalysis = Omit<ProjectAnalysis, "indexes"> & {
+  indexes: SerializableProjectAnalysisIndexes;
+};
+
+export type SerializableProjectAnalysisIndexes = {
+  [K in keyof ProjectAnalysisIndexes]: Record<string, unknown>;
 };
 
 export type ProjectAnalysisBuildInput = {

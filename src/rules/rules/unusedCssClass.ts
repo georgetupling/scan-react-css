@@ -10,15 +10,12 @@ export const unusedCssClassRule: RuleDefinition = {
 
 function runUnusedCssClassRule(context: RuleContext): UnresolvedFinding[] {
   const findings: UnresolvedFinding[] = [];
-  const stylesheetsById = new Map(
-    context.analysis.entities.stylesheets.map((stylesheet) => [stylesheet.id, stylesheet]),
-  );
   const hasUnknownDynamicReferences = context.analysis.entities.classReferences.some(
     (reference) => reference.unknownDynamic,
   );
 
   for (const definition of context.analysis.entities.classDefinitions) {
-    const stylesheet = stylesheetsById.get(definition.stylesheetId);
+    const stylesheet = context.analysis.indexes.stylesheetsById.get(definition.stylesheetId);
     if (!stylesheet || stylesheet.origin === "external-import" || definition.isCssModule) {
       continue;
     }
