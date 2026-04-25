@@ -473,8 +473,8 @@ Unsupported analysis should normally be emitted as `debug` diagnostics. A rule m
 user-facing finding when uncertainty itself is the subject of that rule, but the default product
 behavior should keep bounded-analysis detail out of normal finding lists.
 
-CLI text output should hide `debug` diagnostics by default. CLI JSON may include debug diagnostics
-when debug output is explicitly requested, but it should still avoid raw analysis snapshots.
+CLI text and JSON output hide `debug` diagnostics and findings. Detailed trace/debug export should
+be added as a separate report mode rather than mixed into the default user-facing reports.
 
 ## Focused CLI Output
 
@@ -567,10 +567,10 @@ CLI JSON should be deterministic and readable by a person reviewing CI output.
 
 Output path behavior:
 
-- default path is `scan-react-css-output.json` in the current working directory
+- default path is `scan-react-css-reports/scan-react-css-output.json` in the current working directory
 - `--output-file <path>` selects a custom report path and requires `--json`
-- existing report files are preserved by writing the next suffixed path, such as
-  `scan-react-css-output-1.json`, unless `--overwrite-output` is supplied
+- existing report files are preserved by writing the next suffixed path in the reports directory,
+  such as `scan-react-css-output-1.json`, unless `--overwrite-output` is supplied
 - `--overwrite-output` replaces the selected output path and requires `--json`
 - stdout contains only a short human-readable confirmation and final failure status
 - the CLI exit code still follows the scan failure state after the report is written
@@ -604,7 +604,7 @@ Text output should:
 - put the summary at the end
 - color severity labels in interactive terminals
 - suppress color when stdout is not a TTY or `NO_COLOR` is set
-- keep trace details hidden unless `--trace` or `--debug` is supplied
+- omit trace details from CLI output
 
 ## Rebuild Scope Around The Core
 

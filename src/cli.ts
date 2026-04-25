@@ -15,7 +15,6 @@ type CliArgs = {
   outputFile?: string;
   overwriteOutput: boolean;
   json: boolean;
-  trace: boolean;
   help: boolean;
 };
 
@@ -62,7 +61,6 @@ if (args.json) {
   try {
     const outputPath = await writeJsonReport({
       result: focusedResult,
-      includeDebug: args.trace,
       outputFile: args.outputFile,
       overwriteOutput: args.overwriteOutput,
     });
@@ -73,8 +71,8 @@ if (args.json) {
     process.exit(1);
   }
 } else {
-  const visibleDiagnostics = filterDiagnostics(focusedResult.diagnostics, args.trace);
-  const visibleFindings = filterFindings(focusedResult.findings, args.trace);
+  const visibleDiagnostics = filterDiagnostics(focusedResult.diagnostics);
+  const visibleFindings = filterFindings(focusedResult.findings);
 
   console.log(
     formatTextReport({
@@ -82,7 +80,6 @@ if (args.json) {
       diagnostics: visibleDiagnostics,
       findings: visibleFindings,
       focusPaths: args.focusPaths,
-      includeTrace: args.trace,
       useColor: shouldUseColor(process.stdout),
     }),
   );
@@ -95,7 +92,6 @@ function parseArgs(rawArgs: string[]): CliArgs {
     focusPaths: [],
     overwriteOutput: false,
     json: false,
-    trace: false,
     help: false,
   };
 
@@ -145,11 +141,6 @@ function parseArgs(rawArgs: string[]): CliArgs {
       continue;
     }
 
-    if (arg === "--trace" || arg === "--debug") {
-      args.trace = true;
-      continue;
-    }
-
     if (arg === "--help" || arg === "-h") {
       args.help = true;
       continue;
@@ -180,22 +171,23 @@ function parseArgs(rawArgs: string[]): CliArgs {
 
 function printHelp(stream: NodeJS.WriteStream = process.stdout): void {
   stream.write(
-    `Usage: scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output] [--trace]\n`,
+    `Usage: scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output]\n`,
   );
 }
 
 async function writeJsonReport(input: {
   result: ScanProjectResult;
-  includeDebug: boolean;
   outputFile?: string;
   overwriteOutput: boolean;
 }): Promise<string> {
-  const requestedPath = path.resolve(input.outputFile ?? "scan-react-css-output.json");
+  const requestedPath = path.resolve(
+    input.outputFile ?? path.join("scan-react-css-reports", "scan-react-css-output.json"),
+  );
   const outputPath = input.overwriteOutput
     ? requestedPath
     : await findAvailableOutputPath(requestedPath);
   const outputDirectory = path.dirname(outputPath);
-  const json = `${JSON.stringify(formatJsonResult(input.result, input.includeDebug), null, 2)}\n`;
+  const json = `${JSON.stringify(formatJsonResult(input.result), null, 2)}\n`;
 
   try {
     await mkdir(outputDirectory, { recursive: true });
@@ -241,13 +233,12 @@ function formatTextReport(input: {
   diagnostics: ScanDiagnostic[];
   findings: Finding[];
   focusPaths: string[];
-  includeTrace: boolean;
   useColor: boolean;
 }): string {
   const sections = [
     formatTextHeader(input.result, input.focusPaths),
     ...formatDiagnosticSections(input.diagnostics, input.useColor),
-    ...formatFindingSections(input.findings, input.includeTrace, input.useColor),
+    ...formatFindingSections(input.findings, input.useColor),
     formatTextSummary(input.result, input.findings.length),
   ];
 
@@ -287,11 +278,7 @@ function formatDiagnosticSections(diagnostics: ScanDiagnostic[], useColor: boole
   });
 }
 
-function formatFindingSections(
-  findings: Finding[],
-  includeTrace: boolean,
-  useColor: boolean,
-): string[] {
+function formatFindingSections(findings: Finding[], useColor: boolean): string[] {
   if (findings.length === 0) {
     return ["Findings\n  No findings."];
   }
@@ -305,11 +292,6 @@ function formatFindingSections(
       const target = location ? ` at ${location}` : "";
       lines.push(`  [${severity}] ${finding.ruleId}${target}`);
       lines.push(`          ${finding.message}`);
-      if (includeTrace) {
-        for (const trace of finding.traces) {
-          lines.push(...formatTraceLines(trace, "          "));
-        }
-      }
     }
 
     return lines.join("\n");
@@ -453,16 +435,10 @@ function groupBy<T>(
   return [...groups.entries()].sort(([left], [right]) => compareKeys(left, right));
 }
 
-function formatTraceLines(trace: AnalysisTrace, indent: string): string[] {
-  const lines = [`${indent}- ${trace.summary}`];
-  for (const child of trace.children) {
-    lines.push(...formatTraceLines(child, `${indent}  `));
-  }
+function formatJsonResult(result: ScanProjectResult): object {
+  const diagnostics = filterDiagnostics(result.diagnostics);
+  const findings = filterFindings(result.findings);
 
-  return lines;
-}
-
-function formatJsonResult(result: ScanProjectResult, includeDebug: boolean): object {
   return {
     rootDir: result.rootDir,
     config: {
@@ -470,11 +446,19 @@ function formatJsonResult(result: ScanProjectResult, includeDebug: boolean): obj
       failOnSeverity: result.config.failOnSeverity,
       rules: result.config.rules,
     },
-    diagnostics: filterDiagnostics(result.diagnostics, includeDebug),
-    findings: filterFindings(result.findings, includeDebug),
-    summary: includeDebug ? result.summary : withoutDebugCounts(result.summary),
+    diagnostics,
+    findings: findings.map(withoutFindingTraces),
+    summary: withoutDebugCounts(result.summary),
     failed: result.failed,
   };
+}
+
+function withoutFindingTraces(finding: Finding): Omit<Finding, "traces"> & {
+  traces?: Finding["traces"];
+} {
+  const { traces, ...rest } = finding;
+  void traces;
+  return rest;
 }
 
 function applyFocusFilter(result: ScanProjectResult, focusPaths: string[]): ScanProjectResult {
@@ -665,14 +649,12 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function filterDiagnostics(diagnostics: ScanDiagnostic[], includeDebug: boolean): ScanDiagnostic[] {
-  return includeDebug
-    ? diagnostics
-    : diagnostics.filter((diagnostic) => diagnostic.severity !== "debug");
+function filterDiagnostics(diagnostics: ScanDiagnostic[]): ScanDiagnostic[] {
+  return diagnostics.filter((diagnostic) => diagnostic.severity !== "debug");
 }
 
-function filterFindings(findings: Finding[], includeDebug: boolean): Finding[] {
-  return includeDebug ? findings : findings.filter((finding) => finding.severity !== "debug");
+function filterFindings(findings: Finding[]): Finding[] {
+  return findings.filter((finding) => finding.severity !== "debug");
 }
 
 function withoutDebugCounts(summary: ScanProjectResult["summary"]): ScanProjectResult["summary"] {

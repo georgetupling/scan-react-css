@@ -77,14 +77,60 @@ export function attachMatchedReachability(input: {
 function serializeContextRecord(
   contextRecord: SelectorAnalysisTarget["reachabilityContexts"][number],
 ): string {
-  return JSON.stringify(contextRecord);
+  const context = contextRecord.context;
+  if (context.kind === "source-file") {
+    return `${context.kind}:${context.filePath}:${contextRecord.availability}`;
+  }
+
+  if (context.kind === "component") {
+    return `${context.kind}:${context.filePath}:${context.componentName}:${contextRecord.availability}`;
+  }
+
+  if (context.kind === "render-subtree-root") {
+    return [
+      context.kind,
+      context.filePath,
+      context.componentName ?? "",
+      context.rootAnchor.startLine,
+      context.rootAnchor.startColumn,
+      context.rootAnchor.endLine ?? "",
+      context.rootAnchor.endColumn ?? "",
+      contextRecord.availability,
+    ].join(":");
+  }
+
+  return [
+    context.kind,
+    context.filePath,
+    context.componentName ?? "",
+    context.regionKind,
+    context.sourceAnchor.startLine,
+    context.sourceAnchor.startColumn,
+    context.sourceAnchor.endLine ?? "",
+    context.sourceAnchor.endColumn ?? "",
+    contextRecord.availability,
+  ].join(":");
 }
 
 function mergeTraces(traces: AnalysisTrace[]): AnalysisTrace[] {
   const tracesByKey = new Map<string, AnalysisTrace>();
   for (const trace of traces) {
-    tracesByKey.set(JSON.stringify(trace), trace);
+    tracesByKey.set(serializeTraceKey(trace), trace);
   }
 
   return [...tracesByKey.values()];
+}
+
+function serializeTraceKey(trace: AnalysisTrace): string {
+  const anchor = trace.anchor
+    ? [
+        trace.anchor.filePath,
+        trace.anchor.startLine,
+        trace.anchor.startColumn,
+        trace.anchor.endLine ?? "",
+        trace.anchor.endColumn ?? "",
+      ].join(":")
+    : "";
+
+  return `${trace.traceId}:${trace.category}:${anchor}`;
 }

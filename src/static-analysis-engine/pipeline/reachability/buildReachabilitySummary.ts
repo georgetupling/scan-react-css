@@ -1148,10 +1148,14 @@ function areTracesEqual(left: AnalysisTrace[], right: AnalysisTrace[]): boolean 
     return false;
   }
 
-  const sortedLeft = [...left].sort((a, b) => serializeTrace(a).localeCompare(serializeTrace(b)));
-  const sortedRight = [...right].sort((a, b) => serializeTrace(a).localeCompare(serializeTrace(b)));
+  const sortedLeft = [...left].sort((a, b) =>
+    serializeTraceKey(a).localeCompare(serializeTraceKey(b)),
+  );
+  const sortedRight = [...right].sort((a, b) =>
+    serializeTraceKey(a).localeCompare(serializeTraceKey(b)),
+  );
   return sortedLeft.every(
-    (trace, index) => serializeTrace(trace) === serializeTrace(sortedRight[index]),
+    (trace, index) => serializeTraceKey(trace) === serializeTraceKey(sortedRight[index]),
   );
 }
 
@@ -1367,16 +1371,26 @@ function getReachabilityContextAnchor(
 function mergeTraces(left: AnalysisTrace[], right: AnalysisTrace[]): AnalysisTrace[] {
   const tracesByKey = new Map<string, AnalysisTrace>();
   for (const trace of [...left, ...right]) {
-    tracesByKey.set(serializeTrace(trace), trace);
+    tracesByKey.set(serializeTraceKey(trace), trace);
   }
 
   return [...tracesByKey.values()].sort((a, b) =>
-    serializeTrace(a).localeCompare(serializeTrace(b)),
+    serializeTraceKey(a).localeCompare(serializeTraceKey(b)),
   );
 }
 
-function serializeTrace(trace: AnalysisTrace): string {
-  return JSON.stringify(trace);
+function serializeTraceKey(trace: AnalysisTrace): string {
+  const anchor = trace.anchor
+    ? [
+        trace.anchor.filePath,
+        trace.anchor.startLine,
+        trace.anchor.startColumn,
+        trace.anchor.endLine ?? "",
+        trace.anchor.endColumn ?? "",
+      ].join(":")
+    : "";
+
+  return `${trace.traceId}:${trace.category}:${anchor}`;
 }
 
 function mergeAvailability(

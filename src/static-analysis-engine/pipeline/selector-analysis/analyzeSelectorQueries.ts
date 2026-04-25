@@ -33,11 +33,13 @@ export function analyzeSelectorQueries(input: {
   renderSubtrees: RenderSubtree[];
   reachabilitySummary?: ReachabilitySummary;
 }): SelectorQueryResult[] {
+  const reachabilityTargetCache = new Map<string, SelectorAnalysisTarget[]>();
   return input.selectorQueries.map((selectorQuery) =>
     analyzeSelectorQuery({
       selectorQuery,
       renderSubtrees: input.renderSubtrees,
       reachabilitySummary: input.reachabilitySummary,
+      reachabilityTargetCache,
     }),
   );
 }
@@ -46,6 +48,7 @@ function analyzeSelectorQuery(input: {
   selectorQuery: ParsedSelectorQuery;
   renderSubtrees: RenderSubtree[];
   reachabilitySummary?: ReachabilitySummary;
+  reachabilityTargetCache: Map<string, SelectorAnalysisTarget[]>;
 }): SelectorQueryResult {
   const { constraint } = input.selectorQuery;
   let analysisTargets: SelectorAnalysisTarget[] = input.renderSubtrees.map((renderSubtree) => ({
@@ -129,6 +132,7 @@ function resolveQueryReachability(input: {
   selectorQuery: ParsedSelectorQuery;
   renderSubtrees: RenderSubtree[];
   reachabilitySummary?: ReachabilitySummary;
+  reachabilityTargetCache: Map<string, SelectorAnalysisTarget[]>;
 }):
   | {
       result: SelectorQueryResult;
@@ -149,6 +153,14 @@ function resolveQueryReachability(input: {
   }
 
   const cssFilePath = input.selectorQuery.source.selectorAnchor?.filePath;
+  const cacheKey = cssFilePath ? normalizeProjectPath(cssFilePath) : undefined;
+  const cachedAnalysisTargets = cacheKey ? input.reachabilityTargetCache.get(cacheKey) : undefined;
+  if (cachedAnalysisTargets) {
+    return {
+      analysisTargets: cachedAnalysisTargets,
+    };
+  }
+
   const reachabilityRecord = input.reachabilitySummary?.stylesheets.find(
     (stylesheet) => stylesheet.cssFilePath === cssFilePath,
   );
@@ -262,14 +274,20 @@ function resolveQueryReachability(input: {
     };
   }
 
+  const analysisTargets = input.renderSubtrees
+    .flatMap((subtree) => resolveReachableAnalysisSubtrees(subtree, reachabilityRecord))
+    .map((analysisSubtree) => ({
+      renderSubtree: analysisSubtree.subtree,
+      reachabilityAvailability: analysisSubtree.availability,
+      reachabilityContexts: analysisSubtree.contexts,
+    }));
+
+  if (cacheKey) {
+    input.reachabilityTargetCache.set(cacheKey, analysisTargets);
+  }
+
   return {
-    analysisTargets: input.renderSubtrees
-      .flatMap((subtree) => resolveReachableAnalysisSubtrees(subtree, reachabilityRecord))
-      .map((analysisSubtree) => ({
-        renderSubtree: analysisSubtree.subtree,
-        reachabilityAvailability: analysisSubtree.availability,
-        reachabilityContexts: analysisSubtree.contexts,
-      })),
+    analysisTargets,
   };
 }
 
@@ -434,4 +452,8 @@ function deduplicateAnalysisSubtrees(
   }
 
   return [...deduplicated.values()];
+}
+
+function normalizeProjectPath(filePath: string): string {
+  return filePath.replace(/\\/g, "/");
 }

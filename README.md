@@ -55,19 +55,13 @@ Write a JSON report file:
 npx scan-react-css --json
 ```
 
-By default this creates `scan-react-css-output.json`, or the next available suffixed path if that
-file already exists.
-
-Include debug findings and trace detail:
-
-```bash
-npx scan-react-css --json --debug
-```
+By default this creates `scan-react-css-reports/scan-react-css-output.json`, or the next available
+suffixed path if that file already exists.
 
 ## CLI Usage
 
 ```bash
-scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output] [--trace]
+scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output]
 ```
 
 Supported flags:
@@ -77,8 +71,6 @@ Supported flags:
 - `--json`
 - `--output-file path/to/report.json`
 - `--overwrite-output`
-- `--trace`
-- `--debug` alias for `--trace`
 - `--help`
 
 `rootDir` must be a directory. File paths and missing paths fail with a clear diagnostic.
@@ -122,8 +114,8 @@ It does not dump the JSON payload to the terminal.
 
 Default behavior:
 
-- writes to `scan-react-css-output.json`
-- preserves existing reports by writing `scan-react-css-output-1.json`, then `-2`, and so on
+- writes to `scan-react-css-reports/scan-react-css-output.json`
+- preserves existing reports by writing `scan-react-css-output-1.json`, then `-2`, in that reports directory
 - exits non-zero after writing the report if the scan failed
 
 Custom output:
@@ -224,7 +216,7 @@ Default rules:
 - `dynamic-class-reference` defaults to `info`
 - `unsupported-syntax-affecting-analysis` defaults to `debug`
 
-Findings carry both severity and confidence. Debug findings are hidden from normal CLI output unless `--debug` or `--trace` is used.
+Findings carry both severity and confidence. Debug findings are hidden from CLI output.
 
 ## Node API
 

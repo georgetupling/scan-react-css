@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
@@ -20,7 +20,9 @@ test("CLI writes JSON output to the default report file", async () => {
 
   try {
     const { stdout } = await runCli(["--json"], { cwd: project.rootDir });
-    const output = await readJsonFile(project.filePath("scan-react-css-output.json"));
+    const output = await readJsonFile(
+      project.filePath("scan-react-css-reports/scan-react-css-output.json"),
+    );
 
     assert.equal(output.rootDir, project.rootDir);
     assert.equal(output.failed, false);
@@ -41,11 +43,21 @@ test("CLI suffixes JSON output files instead of overwriting", async () => {
   const project = await new TestProjectBuilder().build();
 
   try {
-    await writeFile(project.filePath("scan-react-css-output.json"), "existing\n", "utf8");
+    await mkdir(project.filePath("scan-react-css-reports"), { recursive: true });
+    await writeFile(
+      project.filePath("scan-react-css-reports/scan-react-css-output.json"),
+      "existing\n",
+      "utf8",
+    );
 
     const { stdout } = await runCli(["--json"], { cwd: project.rootDir });
-    const originalContent = await readFile(project.filePath("scan-react-css-output.json"), "utf8");
-    const output = await readJsonFile(project.filePath("scan-react-css-output-1.json"));
+    const originalContent = await readFile(
+      project.filePath("scan-react-css-reports/scan-react-css-output.json"),
+      "utf8",
+    );
+    const output = await readJsonFile(
+      project.filePath("scan-react-css-reports/scan-react-css-output-1.json"),
+    );
 
     assert.equal(originalContent, "existing\n");
     assert.equal(output.rootDir, project.rootDir);
@@ -268,7 +280,7 @@ test("CLI exit code follows configured fail threshold", async () => {
   }
 });
 
-test("CLI hides debug findings unless debug output is requested", async () => {
+test("CLI hides debug findings in CLI output", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
       "src/App.tsx",
@@ -283,15 +295,18 @@ test("CLI hides debug findings unless debug output is requested", async () => {
     assert.deepEqual(defaultOutput.findings, []);
     assert.equal(defaultOutput.summary.findingCount, 0);
     assert.equal(defaultOutput.summary.findingsBySeverity.debug, 0);
-
-    const debugOutputPath = project.filePath("debug-report.json");
-    await runCli([project.rootDir, "--json", "--output-file", debugOutputPath, "--debug"]);
-    const debugOutput = await readJsonFile(debugOutputPath);
-    assert.equal(debugOutput.findings[0].ruleId, "unsupported-syntax-affecting-analysis");
-    assert.equal(debugOutput.findings[0].severity, "debug");
-    assert.equal(debugOutput.summary.findingsBySeverity.debug, 1);
   } finally {
     await project.cleanup();
+  }
+});
+
+test("CLI rejects removed debug and trace flags", async () => {
+  for (const flag of ["--debug", "--trace"]) {
+    const error = await captureRejectedCliRun([".", flag]);
+
+    assert.equal(error.code, 2);
+    assert.match(error.stderr, new RegExp(`Unknown option: ${flag}`));
+    assert.equal(error.stdout, "");
   }
 });
 

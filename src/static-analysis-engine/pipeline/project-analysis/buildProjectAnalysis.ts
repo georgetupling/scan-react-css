@@ -2282,10 +2282,24 @@ function pushUniqueMapValue<TKey, TValue>(
 function mergeTraces(traces: AnalysisTrace[]): AnalysisTrace[] {
   const tracesByKey = new Map<string, AnalysisTrace>();
   for (const trace of traces) {
-    tracesByKey.set(JSON.stringify(trace), trace);
+    tracesByKey.set(serializeTraceKey(trace), trace);
   }
 
   return [...tracesByKey.values()].sort((left, right) => left.traceId.localeCompare(right.traceId));
+}
+
+function serializeTraceKey(trace: AnalysisTrace): string {
+  const anchor = trace.anchor
+    ? [
+        trace.anchor.filePath,
+        trace.anchor.startLine,
+        trace.anchor.startColumn,
+        trace.anchor.endLine ?? "",
+        trace.anchor.endColumn ?? "",
+      ].join(":")
+    : "";
+
+  return `${trace.traceId}:${trace.category}:${anchor}`;
 }
 
 function sortIndexValues(map: Map<string, string[]>): void {
