@@ -121,7 +121,14 @@ function mergeTraces(traces: AnalysisTrace[]): AnalysisTrace[] {
   return [...tracesByKey.values()];
 }
 
+const traceKeyCache = new WeakMap<AnalysisTrace, string>();
+
 function serializeTraceKey(trace: AnalysisTrace): string {
+  const cachedKey = traceKeyCache.get(trace);
+  if (cachedKey) {
+    return cachedKey;
+  }
+
   const anchor = trace.anchor
     ? [
         trace.anchor.filePath,
@@ -132,5 +139,7 @@ function serializeTraceKey(trace: AnalysisTrace): string {
       ].join(":")
     : "";
 
-  return `${trace.traceId}:${trace.category}:${anchor}`;
+  const key = `${trace.traceId}:${trace.category}:${anchor}`;
+  traceKeyCache.set(trace, key);
+  return key;
 }
