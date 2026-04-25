@@ -15,6 +15,13 @@ import {
 } from "../resolution/resolveBindings.js";
 import { resolveExactTruthyExpression } from "../resolution/resolveExactValues.js";
 
+const MAX_EXACT_ARRAY_RESOLUTION_DEPTH = 100;
+
+type ExactArrayResolutionState = {
+  activeExpressions: Set<string>;
+  depth: number;
+};
+
 export function buildArrayRenderNode(input: {
   node: ts.ArrayLiteralExpression;
   context: BuildContext;
@@ -177,105 +184,139 @@ export function tryBuildFoundArrayRenderNode(input: {
 function resolveExactArrayElements(
   expression: ts.Expression,
   context: BuildContext,
+  state: ExactArrayResolutionState = {
+    activeExpressions: new Set(),
+    depth: 0,
+  },
 ): ts.Expression[] | undefined {
-  const helperResolution = ts.isCallExpression(expression)
-    ? resolveHelperCallContext(expression, context)
-    : undefined;
-  if (helperResolution) {
-    return resolveExactArrayElements(helperResolution.expression, helperResolution.context);
+  if (state.depth > MAX_EXACT_ARRAY_RESOLUTION_DEPTH) {
+    return undefined;
   }
 
-  const boundExpression = resolveBoundExpression(expression, context);
-  if (boundExpression) {
-    return resolveExactArrayElements(boundExpression, context);
+  const expressionKey = getExpressionResolutionKey(expression, context);
+  if (state.activeExpressions.has(expressionKey)) {
+    return undefined;
   }
 
-  if (
-    ts.isCallExpression(expression) &&
-    ts.isPropertyAccessExpression(expression.expression) &&
-    expression.expression.name.text === "filter"
-  ) {
-    const sourceElements = resolveExactArrayElements(expression.expression.expression, context);
-    if (!sourceElements || expression.arguments.length !== 1) {
-      return undefined;
+  state.activeExpressions.add(expressionKey);
+  try {
+    const helperResolution = ts.isCallExpression(expression)
+      ? resolveHelperCallContext(expression, context)
+      : undefined;
+    if (helperResolution) {
+      return resolveExactArrayElements(
+        helperResolution.expression,
+        helperResolution.context,
+        nextExactArrayResolutionState(state),
+      );
     }
 
-    const callback = unwrapExpression(expression.arguments[0]);
-    if (ts.isIdentifier(callback) && callback.text === "Boolean") {
-      const truthyElements: ts.Expression[] = [];
-      for (const elementExpression of sourceElements) {
-        const isTruthy = resolveExactTruthyExpression(elementExpression, context);
-        if (isTruthy === undefined) {
-          return undefined;
-        }
-
-        if (isTruthy) {
-          truthyElements.push(elementExpression);
-        }
-      }
-
-      return truthyElements;
+    const boundExpression = resolveBoundExpression(expression, context);
+    if (boundExpression) {
+      return resolveExactArrayElements(
+        boundExpression,
+        context,
+        nextExactArrayResolutionState(state),
+      );
     }
 
     if (
-      (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) ||
-      !hasSupportedArrayCallbackParameters(callback)
+      ts.isCallExpression(expression) &&
+      ts.isPropertyAccessExpression(expression.expression) &&
+      expression.expression.name.text === "filter"
     ) {
-      return undefined;
-    }
-
-    const callbackBodyExpression = summarizeArrayCallbackBody(callback.body);
-    if (!callbackBodyExpression) {
-      return undefined;
-    }
-
-    const filteredElements: ts.Expression[] = [];
-    for (let index = 0; index < sourceElements.length; index += 1) {
-      const callbackContext = buildArrayCallbackContext({
+      const sourceElements = resolveExactArrayElements(
+        expression.expression.expression,
         context,
-        callback,
-        elementExpression: sourceElements[index],
-        index,
-      });
-      const shouldInclude = resolveExactTruthyExpression(callbackBodyExpression, callbackContext);
-      if (shouldInclude === undefined) {
+        nextExactArrayResolutionState(state),
+      );
+      if (!sourceElements || expression.arguments.length !== 1) {
         return undefined;
       }
 
-      if (shouldInclude) {
-        filteredElements.push(sourceElements[index]);
+      const callback = unwrapExpression(expression.arguments[0]);
+      if (ts.isIdentifier(callback) && callback.text === "Boolean") {
+        const truthyElements: ts.Expression[] = [];
+        for (const elementExpression of sourceElements) {
+          const isTruthy = resolveExactTruthyExpression(elementExpression, context);
+          if (isTruthy === undefined) {
+            return undefined;
+          }
+
+          if (isTruthy) {
+            truthyElements.push(elementExpression);
+          }
+        }
+
+        return truthyElements;
       }
-    }
 
-    return filteredElements;
-  }
-
-  if (ts.isArrayLiteralExpression(expression)) {
-    const elements: ts.Expression[] = [];
-    for (const element of expression.elements) {
-      if (ts.isOmittedExpression(element)) {
-        continue;
-      }
-
-      if (ts.isSpreadElement(element)) {
+      if (
+        (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) ||
+        !hasSupportedArrayCallbackParameters(callback)
+      ) {
         return undefined;
       }
 
-      elements.push(element);
+      const callbackBodyExpression = summarizeArrayCallbackBody(callback.body);
+      if (!callbackBodyExpression) {
+        return undefined;
+      }
+
+      const filteredElements: ts.Expression[] = [];
+      for (let index = 0; index < sourceElements.length; index += 1) {
+        const callbackContext = buildArrayCallbackContext({
+          context,
+          callback,
+          elementExpression: sourceElements[index],
+          index,
+        });
+        const shouldInclude = resolveExactTruthyExpression(callbackBodyExpression, callbackContext);
+        if (shouldInclude === undefined) {
+          return undefined;
+        }
+
+        if (shouldInclude) {
+          filteredElements.push(sourceElements[index]);
+        }
+      }
+
+      return filteredElements;
     }
 
-    return elements;
-  }
+    if (ts.isArrayLiteralExpression(expression)) {
+      const elements: ts.Expression[] = [];
+      for (const element of expression.elements) {
+        if (ts.isOmittedExpression(element)) {
+          continue;
+        }
 
-  if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isSatisfiesExpression(expression)
-  ) {
-    return resolveExactArrayElements(expression.expression, context);
-  }
+        if (ts.isSpreadElement(element)) {
+          return undefined;
+        }
 
-  return undefined;
+        elements.push(element);
+      }
+
+      return elements;
+    }
+
+    if (
+      ts.isParenthesizedExpression(expression) ||
+      ts.isAsExpression(expression) ||
+      ts.isSatisfiesExpression(expression)
+    ) {
+      return resolveExactArrayElements(
+        expression.expression,
+        context,
+        nextExactArrayResolutionState(state),
+      );
+    }
+
+    return undefined;
+  } finally {
+    state.activeExpressions.delete(expressionKey);
+  }
 }
 
 function resolveExactFoundArrayElement(
@@ -380,4 +421,17 @@ function buildArrayCallbackContext(input: {
     ...input.context,
     expressionBindings: mergeExpressionBindings(input.context.expressionBindings, callbackBindings),
   };
+}
+
+function nextExactArrayResolutionState(
+  state: ExactArrayResolutionState,
+): ExactArrayResolutionState {
+  return {
+    activeExpressions: state.activeExpressions,
+    depth: state.depth + 1,
+  };
+}
+
+function getExpressionResolutionKey(expression: ts.Expression, context: BuildContext): string {
+  return `${context.filePath}:${expression.pos}:${expression.end}:${expression.kind}`;
 }

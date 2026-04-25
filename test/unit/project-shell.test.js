@@ -119,6 +119,69 @@ test("scanProject returns deterministic public summary from discovered files", a
   }
 });
 
+test("scanProject degrades recursive array render sources without overflowing the stack", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import "./App.css";',
+        "export function App() {",
+        "  const items = items.filter(Boolean);",
+        '  return <>{items.map((item) => <span className="item">{item}</span>)}</>;',
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/App.css", ".item { display: inline-block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx"],
+      cssFilePaths: ["src/App.css"],
+    });
+
+    assert.equal(result.summary.sourceFileCount, 1);
+    assert.equal(result.summary.cssFileCount, 1);
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "missing-css-class"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject degrades recursive exact-array predicates without overflowing the stack", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        "export function App() {",
+        "  const items = items.filter(Boolean);",
+        '  return items.some(Boolean) && <span className="item">Item</span>;',
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/App.css", ".item { display: inline-block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx"],
+      cssFilePaths: ["src/App.css"],
+    });
+
+    assert.equal(result.summary.sourceFileCount, 1);
+    assert.equal(result.summary.cssFileCount, 1);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("scanProject reports unreachable matching classes without exposing ProjectAnalysis", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

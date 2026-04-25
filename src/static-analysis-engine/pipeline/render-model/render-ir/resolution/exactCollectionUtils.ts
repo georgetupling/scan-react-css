@@ -8,6 +8,13 @@ import {
   resolveHelperCallContext,
 } from "./resolveBindings.js";
 
+const MAX_EXACT_ARRAY_RESOLUTION_DEPTH = 100;
+
+type ExactArrayResolutionState = {
+  activeExpressions: Set<string>;
+  depth: number;
+};
+
 export function resolveExactArrayElements(
   expression: ts.Expression,
   context: BuildContext,
@@ -16,114 +23,155 @@ export function resolveExactArrayElements(
     context: BuildContext,
   ) => boolean | undefined,
 ): ts.Expression[] | undefined {
-  const helperResolution = ts.isCallExpression(expression)
-    ? resolveHelperCallContext(expression, context)
-    : undefined;
-  if (helperResolution) {
-    return resolveExactArrayElements(
-      helperResolution.expression,
-      helperResolution.context,
-      resolveExactTruthyExpression,
-    );
+  return resolveExactArrayElementsInternal(expression, context, resolveExactTruthyExpression, {
+    activeExpressions: new Set(),
+    depth: 0,
+  });
+}
+
+function resolveExactArrayElementsInternal(
+  expression: ts.Expression,
+  context: BuildContext,
+  resolveExactTruthyExpression: (
+    expression: ts.Expression,
+    context: BuildContext,
+  ) => boolean | undefined,
+  state: ExactArrayResolutionState,
+): ts.Expression[] | undefined {
+  if (state.depth > MAX_EXACT_ARRAY_RESOLUTION_DEPTH) {
+    return undefined;
   }
 
-  const boundExpression = resolveBoundExpression(expression, context);
-  if (boundExpression) {
-    return resolveExactArrayElements(boundExpression, context, resolveExactTruthyExpression);
+  const expressionKey = getExpressionResolutionKey(expression, context);
+  if (state.activeExpressions.has(expressionKey)) {
+    return undefined;
   }
 
-  if (
-    ts.isCallExpression(expression) &&
-    ts.isPropertyAccessExpression(expression.expression) &&
-    expression.expression.name.text === "filter" &&
-    expression.arguments.length === 1
-  ) {
-    const sourceElements = resolveExactArrayElements(
-      expression.expression.expression,
-      context,
-      resolveExactTruthyExpression,
-    );
-    if (!sourceElements) {
-      return undefined;
+  state.activeExpressions.add(expressionKey);
+  try {
+    const helperResolution = ts.isCallExpression(expression)
+      ? resolveHelperCallContext(expression, context)
+      : undefined;
+    if (helperResolution) {
+      return resolveExactArrayElementsInternal(
+        helperResolution.expression,
+        helperResolution.context,
+        resolveExactTruthyExpression,
+        nextExactArrayResolutionState(state),
+      );
     }
 
-    const callback = unwrapExpression(expression.arguments[0]);
-    if (ts.isIdentifier(callback) && callback.text === "Boolean") {
-      const truthyElements: ts.Expression[] = [];
-      for (const elementExpression of sourceElements) {
-        const isTruthy = resolveExactTruthyExpression(elementExpression, context);
-        if (isTruthy === undefined) {
-          return undefined;
-        }
-
-        if (isTruthy) {
-          truthyElements.push(elementExpression);
-        }
-      }
-
-      return truthyElements;
+    const boundExpression = resolveBoundExpression(expression, context);
+    if (boundExpression) {
+      return resolveExactArrayElementsInternal(
+        boundExpression,
+        context,
+        resolveExactTruthyExpression,
+        nextExactArrayResolutionState(state),
+      );
     }
 
     if (
-      (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) ||
-      callback.parameters.length > 2 ||
-      callback.parameters.some((parameter) => !ts.isIdentifier(parameter.name))
+      ts.isCallExpression(expression) &&
+      ts.isPropertyAccessExpression(expression.expression) &&
+      expression.expression.name.text === "filter" &&
+      expression.arguments.length === 1
     ) {
-      return undefined;
-    }
-
-    const callbackBodyExpression = summarizeArrayCallbackBody(callback.body);
-    if (!callbackBodyExpression) {
-      return undefined;
-    }
-
-    const filteredElements: ts.Expression[] = [];
-    for (let index = 0; index < sourceElements.length; index += 1) {
-      const callbackContext = buildArrayCallbackContext({
+      const sourceElements = resolveExactArrayElementsInternal(
+        expression.expression.expression,
         context,
-        callback,
-        elementExpression: sourceElements[index],
-        index,
-      });
-      const shouldInclude = resolveExactTruthyExpression(callbackBodyExpression, callbackContext);
-      if (shouldInclude === undefined) {
+        resolveExactTruthyExpression,
+        nextExactArrayResolutionState(state),
+      );
+      if (!sourceElements) {
         return undefined;
       }
 
-      if (shouldInclude) {
-        filteredElements.push(sourceElements[index]);
+      const callback = unwrapExpression(expression.arguments[0]);
+      if (ts.isIdentifier(callback) && callback.text === "Boolean") {
+        const truthyElements: ts.Expression[] = [];
+        for (const elementExpression of sourceElements) {
+          const isTruthy = resolveExactTruthyExpression(elementExpression, context);
+          if (isTruthy === undefined) {
+            return undefined;
+          }
+
+          if (isTruthy) {
+            truthyElements.push(elementExpression);
+          }
+        }
+
+        return truthyElements;
       }
-    }
 
-    return filteredElements;
-  }
-
-  if (ts.isArrayLiteralExpression(expression)) {
-    const elements: ts.Expression[] = [];
-    for (const element of expression.elements) {
-      if (ts.isOmittedExpression(element)) {
-        continue;
-      }
-
-      if (ts.isSpreadElement(element)) {
+      if (
+        (!ts.isArrowFunction(callback) && !ts.isFunctionExpression(callback)) ||
+        callback.parameters.length > 2 ||
+        callback.parameters.some((parameter) => !ts.isIdentifier(parameter.name))
+      ) {
         return undefined;
       }
 
-      elements.push(element);
+      const callbackBodyExpression = summarizeArrayCallbackBody(callback.body);
+      if (!callbackBodyExpression) {
+        return undefined;
+      }
+
+      const filteredElements: ts.Expression[] = [];
+      for (let index = 0; index < sourceElements.length; index += 1) {
+        const callbackContext = buildArrayCallbackContext({
+          context,
+          callback,
+          elementExpression: sourceElements[index],
+          index,
+        });
+        const shouldInclude = resolveExactTruthyExpression(callbackBodyExpression, callbackContext);
+        if (shouldInclude === undefined) {
+          return undefined;
+        }
+
+        if (shouldInclude) {
+          filteredElements.push(sourceElements[index]);
+        }
+      }
+
+      return filteredElements;
     }
 
-    return elements;
-  }
+    if (ts.isArrayLiteralExpression(expression)) {
+      const elements: ts.Expression[] = [];
+      for (const element of expression.elements) {
+        if (ts.isOmittedExpression(element)) {
+          continue;
+        }
 
-  if (
-    ts.isParenthesizedExpression(expression) ||
-    ts.isAsExpression(expression) ||
-    ts.isSatisfiesExpression(expression)
-  ) {
-    return resolveExactArrayElements(expression.expression, context, resolveExactTruthyExpression);
-  }
+        if (ts.isSpreadElement(element)) {
+          return undefined;
+        }
 
-  return undefined;
+        elements.push(element);
+      }
+
+      return elements;
+    }
+
+    if (
+      ts.isParenthesizedExpression(expression) ||
+      ts.isAsExpression(expression) ||
+      ts.isSatisfiesExpression(expression)
+    ) {
+      return resolveExactArrayElementsInternal(
+        expression.expression,
+        context,
+        resolveExactTruthyExpression,
+        nextExactArrayResolutionState(state),
+      );
+    }
+
+    return undefined;
+  } finally {
+    state.activeExpressions.delete(expressionKey);
+  }
 }
 
 export function summarizeArrayCallbackBody(body: ts.ConciseBody): ts.Expression | undefined {
@@ -161,4 +209,17 @@ export function buildArrayCallbackContext(input: {
     ...input.context,
     expressionBindings: mergeExpressionBindings(input.context.expressionBindings, callbackBindings),
   };
+}
+
+function nextExactArrayResolutionState(
+  state: ExactArrayResolutionState,
+): ExactArrayResolutionState {
+  return {
+    activeExpressions: state.activeExpressions,
+    depth: state.depth + 1,
+  };
+}
+
+function getExpressionResolutionKey(expression: ts.Expression, context: BuildContext): string {
+  return `${context.filePath}:${expression.pos}:${expression.end}:${expression.kind}`;
 }
