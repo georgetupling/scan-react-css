@@ -49,11 +49,14 @@ Focus reported findings on a subtree while still analyzing the full project cont
 npx scan-react-css ./packages/web --focus src/features/payments
 ```
 
-Emit JSON to stdout:
+Write a JSON report file:
 
 ```bash
 npx scan-react-css --json
 ```
+
+By default this creates `scan-react-css-output.json`, or the next available suffixed path if that
+file already exists.
 
 Include debug findings and trace detail:
 
@@ -64,7 +67,7 @@ npx scan-react-css --json --debug
 ## CLI Usage
 
 ```bash
-scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--trace]
+scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output] [--trace]
 ```
 
 Supported flags:
@@ -72,6 +75,8 @@ Supported flags:
 - `--config path/to/scan-react-css.json`
 - `--focus path-or-glob`
 - `--json`
+- `--output-file path/to/report.json`
+- `--overwrite-output`
 - `--trace`
 - `--debug` alias for `--trace`
 - `--help`
@@ -104,13 +109,29 @@ npx scan-react-css --focus "src/features/**/components"
 
 These historical flags are recognized but not supported in this build yet:
 
-- `--output-file`
-- `--overwrite-output`
 - `--print-config`
 - `--verbosity`
 - `--output-min-severity`
 
-Today, `--json` prints the JSON payload to stdout. Planned compatibility work will restore file output behavior.
+`--output-file` and `--overwrite-output` require `--json`.
+
+### JSON Reports
+
+`--json` writes a deterministic JSON report to a file and prints a short confirmation to stdout.
+It does not dump the JSON payload to the terminal.
+
+Default behavior:
+
+- writes to `scan-react-css-output.json`
+- preserves existing reports by writing `scan-react-css-output-1.json`, then `-2`, and so on
+- exits non-zero after writing the report if the scan failed
+
+Custom output:
+
+```bash
+npx scan-react-css --json --output-file ./reports/scan-react-css.json
+npx scan-react-css --json --output-file ./reports/scan-react-css.json --overwrite-output
+```
 
 ## Config
 

@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { constants } from "node:fs";
+import { access, mkdir, writeFile } from "node:fs/promises";
+import path from "node:path";
 import { scanProject } from "./project/index.js";
 import type { AnalysisTrace } from "./static-analysis-engine/index.js";
 import type { Finding, RuleSeverity } from "./rules/index.js";
@@ -9,6 +12,8 @@ type CliArgs = {
   rootDir?: string;
   configPath?: string;
   focusPaths: string[];
+  outputFile?: string;
+  overwriteOutput: boolean;
   json: boolean;
   trace: boolean;
   help: boolean;
@@ -22,8 +27,6 @@ class CliUsageError extends Error {
 }
 
 const PLANNED_BUT_UNSUPPORTED_FLAGS = new Set([
-  "--output-file",
-  "--overwrite-output",
   "--print-config",
   "--verbosity",
   "--output-min-severity",
@@ -55,7 +58,19 @@ const result = await scanProject({
 const focusedResult = applyFocusFilter(result, args.focusPaths);
 
 if (args.json) {
-  console.log(JSON.stringify(formatJsonResult(focusedResult, args.trace), null, 2));
+  try {
+    const outputPath = await writeJsonReport({
+      result: focusedResult,
+      includeDebug: args.trace,
+      outputFile: args.outputFile,
+      overwriteOutput: args.overwriteOutput,
+    });
+    console.log(`JSON report written to ${outputPath}`);
+    console.log(`Failed: ${focusedResult.failed ? "yes" : "no"}`);
+  } catch (error) {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  }
 } else {
   const visibleDiagnostics = filterDiagnostics(focusedResult.diagnostics, args.trace);
   const visibleFindings = filterFindings(focusedResult.findings, args.trace);
@@ -96,6 +111,7 @@ process.exit(focusedResult.failed ? 1 : 0);
 function parseArgs(rawArgs: string[]): CliArgs {
   const args: CliArgs = {
     focusPaths: [],
+    overwriteOutput: false,
     json: false,
     trace: false,
     help: false,
@@ -131,6 +147,22 @@ function parseArgs(rawArgs: string[]): CliArgs {
       continue;
     }
 
+    if (arg === "--output-file") {
+      const value = rawArgs[index + 1];
+      if (!value || value.startsWith("-")) {
+        throw new CliUsageError("--output-file requires a path value.");
+      }
+
+      args.outputFile = value;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--overwrite-output") {
+      args.overwriteOutput = true;
+      continue;
+    }
+
     if (arg === "--trace" || arg === "--debug") {
       args.trace = true;
       continue;
@@ -157,13 +189,69 @@ function parseArgs(rawArgs: string[]): CliArgs {
     throw new CliUsageError(`Unexpected positional argument: ${arg}`);
   }
 
+  if ((args.outputFile || args.overwriteOutput) && !args.json) {
+    throw new CliUsageError("--output-file and --overwrite-output require --json.");
+  }
+
   return args;
 }
 
 function printHelp(stream: NodeJS.WriteStream = process.stdout): void {
   stream.write(
-    `Usage: scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--trace]\n`,
+    `Usage: scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output] [--trace]\n`,
   );
+}
+
+async function writeJsonReport(input: {
+  result: ScanProjectResult;
+  includeDebug: boolean;
+  outputFile?: string;
+  overwriteOutput: boolean;
+}): Promise<string> {
+  const requestedPath = path.resolve(input.outputFile ?? "scan-react-css-output.json");
+  const outputPath = input.overwriteOutput
+    ? requestedPath
+    : await findAvailableOutputPath(requestedPath);
+  const outputDirectory = path.dirname(outputPath);
+  const json = `${JSON.stringify(formatJsonResult(input.result, input.includeDebug), null, 2)}\n`;
+
+  try {
+    await mkdir(outputDirectory, { recursive: true });
+    await writeFile(outputPath, json, {
+      flag: input.overwriteOutput ? "w" : "wx",
+    });
+  } catch (error) {
+    throw new Error(
+      `Failed to write JSON report to ${outputPath}: ${
+        error instanceof Error ? error.message : String(error)
+      }`,
+    );
+  }
+
+  return outputPath;
+}
+
+async function findAvailableOutputPath(requestedPath: string): Promise<string> {
+  if (!(await pathExists(requestedPath))) {
+    return requestedPath;
+  }
+
+  const parsed = path.parse(requestedPath);
+  for (let index = 1; ; index += 1) {
+    const candidate = path.join(parsed.dir, `${parsed.name}-${index}${parsed.ext}`);
+    if (!(await pathExists(candidate))) {
+      return candidate;
+    }
+  }
+}
+
+async function pathExists(filePath: string): Promise<boolean> {
+  try {
+    await access(filePath, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function formatJsonResult(result: ScanProjectResult, includeDebug: boolean): object {

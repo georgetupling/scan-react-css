@@ -73,26 +73,27 @@ Supported flags:
 - `--config`
 - `--focus`
 - `--json`
+- `--output-file`
+- `--overwrite-output`
 - `--trace`
 - `--debug`
 - `--help`
 
 Currently unsupported historical flags are recognized and fail fast:
 
-- `--output-file`
-- `--overwrite-output`
 - `--print-config`
 - `--verbosity`
 - `--output-min-severity`
 
 Current behavior:
 
-- `--json` prints JSON to stdout.
+- `--json` writes a JSON report file and prints a short confirmation to stdout.
+- `--output-file` selects the JSON report path and requires `--json`.
+- `--overwrite-output` replaces the chosen JSON report path and requires `--json`.
+- Without `--overwrite-output`, existing JSON reports are preserved with suffixed paths.
 - `--focus` filters reported findings after full-project analysis.
 - `rootDir` must be a directory.
 - Debug findings are hidden unless `--debug` or `--trace` is used.
-
-Planned compatibility work may restore JSON output-file behavior. Do not document it as active until the implementation and tests exist.
 
 ### Reachability And Render Context
 

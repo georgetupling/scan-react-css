@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
+import { readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import test from "node:test";
@@ -8,7 +9,7 @@ import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
 const execFileAsync = promisify(execFile);
 const CLI_PATH = path.resolve("dist/cli.js");
 
-test("CLI emits human-readable JSON without raw analysis", async () => {
+test("CLI writes JSON output to the default report file", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
       "src/App.tsx",
@@ -18,8 +19,8 @@ test("CLI emits human-readable JSON without raw analysis", async () => {
     .build();
 
   try {
-    const { stdout } = await runCli([project.rootDir, "--json"]);
-    const output = JSON.parse(stdout);
+    const { stdout } = await runCli(["--json"], { cwd: project.rootDir });
+    const output = await readJsonFile(project.filePath("scan-react-css-output.json"));
 
     assert.equal(output.rootDir, project.rootDir);
     assert.equal(output.failed, false);
@@ -29,6 +30,84 @@ test("CLI emits human-readable JSON without raw analysis", async () => {
     assert.equal(output.summary.classDefinitionCount, 1);
     assert.deepEqual(output.findings, []);
     assert.equal("analysis" in output, false);
+    assert.match(stdout, /JSON report written to /);
+    assert.doesNotMatch(stdout.trimStart(), /^\{/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI suffixes JSON output files instead of overwriting", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    await writeFile(project.filePath("scan-react-css-output.json"), "existing\n", "utf8");
+
+    const { stdout } = await runCli(["--json"], { cwd: project.rootDir });
+    const originalContent = await readFile(project.filePath("scan-react-css-output.json"), "utf8");
+    const output = await readJsonFile(project.filePath("scan-react-css-output-1.json"));
+
+    assert.equal(originalContent, "existing\n");
+    assert.equal(output.rootDir, project.rootDir);
+    assert.match(stdout, /scan-react-css-output-1\.json/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI writes JSON output to a custom output file", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const outputPath = project.filePath("reports/custom-report.json");
+    const { stdout } = await runCli([project.rootDir, "--json", "--output-file", outputPath]);
+    const output = await readJsonFile(outputPath);
+
+    assert.equal(output.rootDir, project.rootDir);
+    assert.match(stdout, /custom-report\.json/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI overwrites JSON output when requested", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const outputPath = project.filePath("report.json");
+    await writeFile(outputPath, "existing\n", "utf8");
+
+    const { stdout } = await runCli([
+      project.rootDir,
+      "--json",
+      "--output-file",
+      outputPath,
+      "--overwrite-output",
+    ]);
+    const output = await readJsonFile(outputPath);
+
+    assert.equal(output.rootDir, project.rootDir);
+    assert.match(stdout, /report\.json/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI reports JSON output write failures clearly", async () => {
+  const project = await new TestProjectBuilder().build();
+
+  try {
+    const error = await captureRejectedCliRun([
+      project.rootDir,
+      "--json",
+      "--output-file",
+      project.rootDir,
+      "--overwrite-output",
+    ]);
+
+    assert.equal(error.code, 1);
+    assert.equal(error.stdout, "");
+    assert.match(error.stderr, /Failed to write JSON report to /);
   } finally {
     await project.cleanup();
   }
@@ -49,13 +128,20 @@ test("CLI exit code follows configured fail threshold", async () => {
     .build();
 
   try {
-    const error = await captureRejectedCliRun([project.rootDir, "--json"]);
+    const outputPath = project.filePath("report.json");
+    const error = await captureRejectedCliRun([
+      project.rootDir,
+      "--json",
+      "--output-file",
+      outputPath,
+    ]);
     assert.equal(error.code, 1);
 
-    const output = JSON.parse(error.stdout);
+    const output = await readJsonFile(outputPath);
     assert.equal(output.failed, true);
     assert.equal(output.summary.findingsBySeverity.warn, 1);
     assert.equal(output.findings[0].severity, "warn");
+    assert.match(error.stdout, /JSON report written to /);
   } finally {
     await project.cleanup();
   }
@@ -70,14 +156,16 @@ test("CLI hides debug findings unless debug output is requested", async () => {
     .build();
 
   try {
-    const defaultRun = await runCli([project.rootDir, "--json"]);
-    const defaultOutput = JSON.parse(defaultRun.stdout);
+    const defaultOutputPath = project.filePath("default-report.json");
+    await runCli([project.rootDir, "--json", "--output-file", defaultOutputPath]);
+    const defaultOutput = await readJsonFile(defaultOutputPath);
     assert.deepEqual(defaultOutput.findings, []);
     assert.equal(defaultOutput.summary.findingCount, 0);
     assert.equal(defaultOutput.summary.findingsBySeverity.debug, 0);
 
-    const debugRun = await runCli([project.rootDir, "--json", "--debug"]);
-    const debugOutput = JSON.parse(debugRun.stdout);
+    const debugOutputPath = project.filePath("debug-report.json");
+    await runCli([project.rootDir, "--json", "--output-file", debugOutputPath, "--debug"]);
+    const debugOutput = await readJsonFile(debugOutputPath);
     assert.equal(debugOutput.findings[0].ruleId, "unsupported-syntax-affecting-analysis");
     assert.equal(debugOutput.findings[0].severity, "debug");
     assert.equal(debugOutput.summary.findingsBySeverity.debug, 1);
@@ -97,8 +185,6 @@ test("CLI rejects unknown options before scanning", async () => {
 
 test("CLI rejects historical options that are recognized but not yet restored", async () => {
   const historicalOptions = [
-    ["--output-file", "report.json"],
-    ["--overwrite-output"],
     ["--print-config", "on"],
     ["--verbosity", "high"],
     ["--output-min-severity", "warn"],
@@ -116,6 +202,27 @@ test("CLI rejects historical options that are recognized but not yet restored", 
     );
     assert.equal(error.stdout, "");
   }
+});
+
+test("CLI rejects output-file options without JSON mode", async () => {
+  for (const args of [
+    [".", "--output-file", "report.json"],
+    [".", "--overwrite-output"],
+  ]) {
+    const error = await captureRejectedCliRun(args);
+
+    assert.equal(error.code, 2);
+    assert.match(error.stderr, /--output-file and --overwrite-output require --json\./);
+    assert.equal(error.stdout, "");
+  }
+});
+
+test("CLI rejects --output-file without a value", async () => {
+  const error = await captureRejectedCliRun([".", "--json", "--output-file"]);
+
+  assert.equal(error.code, 2);
+  assert.match(error.stderr, /--output-file requires a path value\./);
+  assert.equal(error.stdout, "");
 });
 
 test("CLI --focus filters findings after full project analysis", async () => {
@@ -140,8 +247,16 @@ test("CLI --focus filters findings after full project analysis", async () => {
     .build();
 
   try {
-    const focusedRun = await runCli([project.rootDir, "--focus", "src/components", "--json"]);
-    const focusedOutput = JSON.parse(focusedRun.stdout);
+    const focusedOutputPath = project.filePath("focused-report.json");
+    await runCli([
+      project.rootDir,
+      "--focus",
+      "src/components",
+      "--json",
+      "--output-file",
+      focusedOutputPath,
+    ]);
+    const focusedOutput = await readJsonFile(focusedOutputPath);
 
     assert.equal(focusedOutput.failed, false);
     assert.equal(focusedOutput.summary.sourceFileCount, 3);
@@ -153,8 +268,10 @@ test("CLI --focus filters findings after full project analysis", async () => {
       "--focus",
       "src/pages",
       "--json",
+      "--output-file",
+      project.filePath("page-report.json"),
     ]);
-    const pageOutput = JSON.parse(pageError.stdout);
+    const pageOutput = await readJsonFile(project.filePath("page-report.json"));
 
     assert.equal(pageError.code, 1);
     assert.equal(pageOutput.failed, true);
@@ -190,8 +307,10 @@ test("CLI --focus accepts comma-separated and repeated focus values", async () =
       "--focus",
       "src/layout",
       "--json",
+      "--output-file",
+      project.filePath("report.json"),
     ]);
-    const output = JSON.parse(error.stdout);
+    const output = await readJsonFile(project.filePath("report.json"));
     const classNames = output.findings.map((finding) => finding.data.className).sort();
 
     assert.equal(error.code, 1);
@@ -221,8 +340,14 @@ test("CLI reports file roots cleanly in JSON mode", async () => {
   const project = await new TestProjectBuilder().build();
 
   try {
-    const error = await captureRejectedCliRun([project.filePath("src/App.tsx"), "--json"]);
-    const output = JSON.parse(error.stdout);
+    const outputPath = project.filePath("report.json");
+    const error = await captureRejectedCliRun([
+      project.filePath("src/App.tsx"),
+      "--json",
+      "--output-file",
+      outputPath,
+    ]);
+    const output = await readJsonFile(outputPath);
 
     assert.equal(error.code, 1);
     assert.equal(error.stderr, "");
@@ -238,8 +363,14 @@ test("CLI reports missing roots cleanly in JSON mode", async () => {
   const project = await new TestProjectBuilder().build();
 
   try {
-    const error = await captureRejectedCliRun([project.filePath("missing-root"), "--json"]);
-    const output = JSON.parse(error.stdout);
+    const outputPath = project.filePath("report.json");
+    const error = await captureRejectedCliRun([
+      project.filePath("missing-root"),
+      "--json",
+      "--output-file",
+      outputPath,
+    ]);
+    const output = await readJsonFile(outputPath);
 
     assert.equal(error.code, 1);
     assert.equal(error.stderr, "");
@@ -251,8 +382,9 @@ test("CLI reports missing roots cleanly in JSON mode", async () => {
   }
 });
 
-function runCli(args) {
+function runCli(args, options = {}) {
   return execFileAsync(process.execPath, [CLI_PATH, ...args], {
+    cwd: options.cwd,
     windowsHide: true,
   });
 }
@@ -269,4 +401,8 @@ async function captureRejectedCliRun(args) {
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+async function readJsonFile(filePath) {
+  return JSON.parse(await readFile(filePath, "utf8"));
 }
