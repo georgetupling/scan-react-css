@@ -302,26 +302,31 @@ function applyStylesheetPackageImportReachability(input: {
         continue;
       }
 
-      const before = serializeStylesheetReachabilityRecord(imported);
       const contextRecordsByKey = new Map<string, StylesheetReachabilityContextRecord>();
       for (const context of imported.contexts) {
         addContextRecord(contextRecordsByKey, context, input.includeTraces);
       }
+      let importedContextsChanged = false;
       for (const context of importer.contexts) {
-        addContextRecord(
-          contextRecordsByKey,
-          {
-            context: context.context,
-            availability: context.availability,
-            reasons: [
-              `stylesheet is imported by reachable stylesheet ${importRecord.importerFilePath}`,
-              ...context.reasons,
-            ],
-            derivations: [...context.derivations],
-            traces: input.includeTraces ? [...context.traces] : [],
-          },
-          input.includeTraces,
-        );
+        importedContextsChanged =
+          addContextRecord(
+            contextRecordsByKey,
+            {
+              context: context.context,
+              availability: context.availability,
+              reasons: [
+                `stylesheet is imported by reachable stylesheet ${importRecord.importerFilePath}`,
+                ...context.reasons,
+              ],
+              derivations: [...context.derivations],
+              traces: input.includeTraces ? [...context.traces] : [],
+            },
+            input.includeTraces,
+          ) || importedContextsChanged;
+      }
+
+      if (!importedContextsChanged) {
+        continue;
       }
 
       const contexts = [...contextRecordsByKey.values()].sort(compareContextRecords);
@@ -339,9 +344,7 @@ function applyStylesheetPackageImportReachability(input: {
       });
 
       Object.assign(imported, nextRecord);
-      if (serializeStylesheetReachabilityRecord(imported) !== before) {
-        changed = true;
-      }
+      changed = true;
     }
   }
 
@@ -351,10 +354,12 @@ function applyStylesheetPackageImportReachability(input: {
 }
 
 type ReachabilityGraphContext = {
+  componentKeys: string[];
   renderRegionsByComponentKey: Map<string, RenderRegion[]>;
   renderRegionsByPathKeyByComponentKey: Map<string, Map<string, RenderRegion[]>>;
   renderSubtreesByComponentKey: Map<string, RenderSubtree>;
   unknownBarriersByComponentKey: Map<string, UnknownReachabilityBarrier[]>;
+  placedChildRenderRegionsByComponentKey: Map<string, PlacedChildRenderRegion[]>;
   renderGraphNodesByKey: Map<
     string,
     import("../render-model/render-graph/types.js").RenderGraphNode
@@ -368,6 +373,11 @@ type ReachabilityGraphContext = {
     import("../render-model/render-graph/types.js").RenderGraphEdge[]
   >;
   componentKeysByFilePath: Map<string, string[]>;
+};
+
+type PlacedChildRenderRegion = {
+  edge: import("../render-model/render-graph/types.js").RenderGraphEdge;
+  renderRegions: RenderRegion[];
 };
 
 type ComponentAvailabilityRecord = {
@@ -472,16 +482,68 @@ function buildReachabilityGraphContext(input: {
     componentKeys.sort((left, right) => left.localeCompare(right));
   }
 
+  const placedChildRenderRegionsByComponentKey = buildPlacedChildRenderRegionsByComponentKey({
+    renderSubtreesByComponentKey,
+    renderRegionsByComponentKey,
+    renderRegionsByPathKeyByComponentKey,
+    outgoingEdgesByComponentKey,
+  });
+
   return {
+    componentKeys: [...renderGraphNodesByKey.keys()].sort((left, right) =>
+      left.localeCompare(right),
+    ),
     renderRegionsByComponentKey,
     renderRegionsByPathKeyByComponentKey,
     renderSubtreesByComponentKey,
     unknownBarriersByComponentKey,
+    placedChildRenderRegionsByComponentKey,
     renderGraphNodesByKey,
     outgoingEdgesByComponentKey,
     incomingEdgesByComponentKey,
     componentKeysByFilePath,
   };
+}
+
+function buildPlacedChildRenderRegionsByComponentKey(input: {
+  renderSubtreesByComponentKey: Map<string, RenderSubtree>;
+  renderRegionsByComponentKey: Map<string, RenderRegion[]>;
+  renderRegionsByPathKeyByComponentKey: Map<string, Map<string, RenderRegion[]>>;
+  outgoingEdgesByComponentKey: Map<
+    string,
+    import("../render-model/render-graph/types.js").RenderGraphEdge[]
+  >;
+}): Map<string, PlacedChildRenderRegion[]> {
+  const placementsByComponentKey = new Map<string, PlacedChildRenderRegion[]>();
+
+  for (const [componentKey, outgoingEdges] of input.outgoingEdgesByComponentKey.entries()) {
+    const renderSubtree = input.renderSubtreesByComponentKey.get(componentKey);
+    const renderRegions = input.renderRegionsByComponentKey.get(componentKey) ?? [];
+    const renderRegionsByPathKey =
+      input.renderRegionsByPathKeyByComponentKey.get(componentKey) ?? new Map();
+    const placements: PlacedChildRenderRegion[] = [];
+
+    for (const edge of outgoingEdges) {
+      const containingRenderRegions = findContainingRenderRegionsForEdge({
+        renderSubtree,
+        renderRegions,
+        renderRegionsByPathKey,
+        sourceAnchor: edge.sourceAnchor,
+      });
+      if (containingRenderRegions.length > 0) {
+        placements.push({
+          edge,
+          renderRegions: containingRenderRegions,
+        });
+      }
+    }
+
+    if (placements.length > 0) {
+      placementsByComponentKey.set(componentKey, placements);
+    }
+  }
+
+  return placementsByComponentKey;
 }
 
 function computeBatchedComponentAvailability(input: {
@@ -504,9 +566,7 @@ function computeBatchedComponentAvailability(input: {
   const directDefiniteBitsByComponentKey = new Map<string, bigint>();
   const definiteBitsByComponentKey = new Map<string, bigint>();
   const possibleBitsByComponentKey = new Map<string, bigint>();
-  const sortedComponentKeys = [...input.reachabilityGraphContext.renderGraphNodesByKey.keys()].sort(
-    (left, right) => left.localeCompare(right),
-  );
+  const sortedComponentKeys = input.reachabilityGraphContext.componentKeys;
 
   for (const [
     stylesheetPath,
@@ -593,19 +653,19 @@ function computeBatchedComponentAvailability(input: {
     const stylesheetBit = 1n << BigInt(stylesheetIndex);
     const componentAvailabilityByKey = new Map<string, ComponentAvailabilityRecord>();
     for (const componentKey of sortedComponentKeys) {
-      componentAvailabilityByKey.set(
+      const availabilityRecord = buildComponentAvailabilityRecordForStylesheet({
         componentKey,
-        buildComponentAvailabilityRecordForStylesheet({
-          componentKey,
-          stylesheetBit,
-          directDefiniteBitsByComponentKey,
-          definiteBitsByComponentKey,
-          possibleBitsByComponentKey,
-          incomingEdges:
-            input.reachabilityGraphContext.incomingEdgesByComponentKey.get(componentKey) ?? [],
-          includeTraces: input.includeTraces,
-        }),
-      );
+        stylesheetBit,
+        directDefiniteBitsByComponentKey,
+        definiteBitsByComponentKey,
+        possibleBitsByComponentKey,
+        incomingEdges:
+          input.reachabilityGraphContext.incomingEdgesByComponentKey.get(componentKey) ?? [],
+        includeTraces: input.includeTraces,
+      });
+      if (availabilityRecord) {
+        componentAvailabilityByKey.set(componentKey, availabilityRecord);
+      }
     }
     componentAvailabilityByStylesheetPath.set(stylesheetPath, componentAvailabilityByKey);
   }
@@ -625,7 +685,7 @@ function buildComponentAvailabilityRecordForStylesheet(input: {
   possibleBitsByComponentKey: Map<string, bigint>;
   incomingEdges: import("../render-model/render-graph/types.js").RenderGraphEdge[];
   includeTraces: boolean;
-}): ComponentAvailabilityRecord {
+}): ComponentAvailabilityRecord | undefined {
   const directBits = input.directDefiniteBitsByComponentKey.get(input.componentKey) ?? 0n;
   if ((directBits & input.stylesheetBit) !== 0n) {
     return {
@@ -648,12 +708,7 @@ function buildComponentAvailabilityRecordForStylesheet(input: {
 
   const possibleBits = input.possibleBitsByComponentKey.get(input.componentKey) ?? 0n;
   if ((possibleBits & input.stylesheetBit) === 0n) {
-    return {
-      availability: "unavailable",
-      reasons: [],
-      derivations: [],
-      traces: [],
-    };
+    return undefined;
   }
 
   const availableParentEdges = input.incomingEdges.filter((edge) => {
@@ -716,6 +771,7 @@ function buildContextRecords(input: {
   const importingComponentKeys = [...importingComponentKeySet].sort((left, right) =>
     left.localeCompare(right),
   );
+  const availableComponentKeys = new Set(input.componentAvailabilityByKey.keys());
 
   for (const componentKey of importingComponentKeys) {
     const node = input.reachabilityGraphContext.renderGraphNodesByKey.get(componentKey);
@@ -739,7 +795,7 @@ function buildContextRecords(input: {
     );
   }
 
-  for (const [componentKey, availabilityRecord] of input.componentAvailabilityByKey.entries()) {
+  for (const componentKey of input.componentAvailabilityByKey.keys()) {
     const node = input.reachabilityGraphContext.renderGraphNodesByKey.get(componentKey);
     if (!node) {
       continue;
@@ -751,7 +807,7 @@ function buildContextRecords(input: {
       includeTraces: input.includeTraces,
     });
 
-    if (wholeComponentRegionAvailability && !importingComponentKeys.includes(componentKey)) {
+    if (wholeComponentRegionAvailability && !importingComponentKeySet.has(componentKey)) {
       addContextRecord(
         contextRecordsByKey,
         {
@@ -799,22 +855,19 @@ function buildContextRecords(input: {
         predicate: () => true,
       });
     }
+  }
 
+  for (const componentKey of input.reachabilityGraphContext.componentKeys) {
     addPlacedChildRenderRegionContexts({
       contextRecordsByKey,
-      renderSubtree: input.reachabilityGraphContext.renderSubtreesByComponentKey.get(componentKey),
-      renderRegions:
-        input.reachabilityGraphContext.renderRegionsByComponentKey.get(componentKey) ?? [],
-      renderRegionsByPathKey:
-        input.reachabilityGraphContext.renderRegionsByPathKeyByComponentKey.get(componentKey) ??
-        new Map(),
-      outgoingEdges:
-        input.reachabilityGraphContext.outgoingEdgesByComponentKey.get(componentKey) ?? [],
+      placedChildRenderRegions:
+        input.reachabilityGraphContext.placedChildRenderRegionsByComponentKey.get(componentKey) ??
+        [],
       componentAvailabilityByKey: input.componentAvailabilityByKey,
       includeTraces: input.includeTraces,
     });
 
-    if (availabilityRecord.availability === "unavailable") {
+    if (!availableComponentKeys.has(componentKey)) {
       addUnknownBarrierContexts({
         contextRecordsByKey,
         renderSubtree:
@@ -873,10 +926,7 @@ function resolveWholeComponentRegionAvailability(input: {
 
 function addPlacedChildRenderRegionContexts(input: {
   contextRecordsByKey: Map<string, StylesheetReachabilityContextRecord>;
-  renderSubtree?: RenderSubtree;
-  renderRegions: RenderRegion[];
-  renderRegionsByPathKey: Map<string, RenderRegion[]>;
-  outgoingEdges: import("../render-model/render-graph/types.js").RenderGraphEdge[];
+  placedChildRenderRegions: PlacedChildRenderRegion[];
   componentAvailabilityByKey: Map<
     string,
     {
@@ -888,7 +938,8 @@ function addPlacedChildRenderRegionContexts(input: {
   >;
   includeTraces: boolean;
 }): void {
-  for (const edge of input.outgoingEdges) {
+  for (const placement of input.placedChildRenderRegions) {
+    const { edge } = placement;
     const childAvailability = input.componentAvailabilityByKey.get(
       createComponentKey(edge.toFilePath ?? "", edge.toComponentName),
     );
@@ -921,12 +972,7 @@ function addPlacedChildRenderRegionContexts(input: {
       },
     ];
 
-    for (const renderRegion of findContainingRenderRegionsForEdge({
-      renderSubtree: input.renderSubtree,
-      renderRegions: input.renderRegions,
-      renderRegionsByPathKey: input.renderRegionsByPathKey,
-      sourceAnchor: edge.sourceAnchor,
-    })) {
+    for (const renderRegion of placement.renderRegions) {
       addContextRecord(
         input.contextRecordsByKey,
         {
@@ -1406,7 +1452,7 @@ function addContextRecord(
     traces?: AnalysisTrace[];
   },
   includeTraces = true,
-): void {
+): boolean {
   const normalizedContextRecord = withContextRecordTraces(contextRecord, includeTraces);
   const contextKey = serializeContextKey(normalizedContextRecord);
   const existingContextRecord = contextRecordsByKey.get(contextKey);
@@ -1418,7 +1464,7 @@ function addContextRecord(
       ),
       derivations: [...normalizedContextRecord.derivations].sort(compareDerivations),
     });
-    return;
+    return true;
   }
 
   const mergedReasons = new Set([
@@ -1432,16 +1478,32 @@ function addContextRecord(
   for (const derivation of normalizedContextRecord.derivations) {
     derivationsByKey.set(serializeDerivation(derivation), derivation);
   }
+  const nextAvailability = mergeAvailability(
+    existingContextRecord.availability,
+    normalizedContextRecord.availability,
+  );
+  const nextReasons = [...mergedReasons].sort((left, right) => left.localeCompare(right));
+  const nextDerivations = [...derivationsByKey.values()].sort(compareDerivations);
+  const nextTraces = includeTraces
+    ? mergeTraces(existingContextRecord.traces, normalizedContextRecord.traces)
+    : [];
+  if (
+    existingContextRecord.availability === nextAvailability &&
+    stringArraysEqual(existingContextRecord.reasons, nextReasons) &&
+    derivationArraysEqual(existingContextRecord.derivations, nextDerivations) &&
+    traceArraysEqual(existingContextRecord.traces, nextTraces)
+  ) {
+    return false;
+  }
+
   contextRecordsByKey.set(contextKey, {
     ...existingContextRecord,
-    availability: mergeAvailability(
-      existingContextRecord.availability,
-      normalizedContextRecord.availability,
-    ),
-    reasons: [...mergedReasons].sort((left, right) => left.localeCompare(right)),
-    derivations: [...derivationsByKey.values()].sort(compareDerivations),
-    traces: mergeTraces(existingContextRecord.traces, normalizedContextRecord.traces),
+    availability: nextAvailability,
+    reasons: nextReasons,
+    derivations: nextDerivations,
+    traces: nextTraces,
   });
+  return true;
 }
 
 function withContextRecordTraces(
@@ -1609,6 +1671,27 @@ function serializeTraceKey(trace: AnalysisTrace): string {
   return key;
 }
 
+function stringArraysEqual(left: string[], right: string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function derivationArraysEqual(
+  left: ReachabilityDerivation[],
+  right: ReachabilityDerivation[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => serializeDerivation(value) === serializeDerivation(right[index]))
+  );
+}
+
+function traceArraysEqual(left: AnalysisTrace[], right: AnalysisTrace[]): boolean {
+  return (
+    left.length === right.length &&
+    left.every((value, index) => serializeTraceKey(value) === serializeTraceKey(right[index]))
+  );
+}
+
 function mergeAvailability(
   left: StylesheetReachabilityContextRecord["availability"],
   right: StylesheetReachabilityContextRecord["availability"],
@@ -1636,15 +1719,6 @@ function getAvailabilityFromContexts(
     return "unknown";
   }
   return "unavailable";
-}
-
-function serializeStylesheetReachabilityRecord(record: StylesheetReachabilityRecord): string {
-  return JSON.stringify({
-    cssFilePath: record.cssFilePath,
-    availability: record.availability,
-    contexts: record.contexts,
-    reasons: record.reasons,
-  });
 }
 
 function serializeContextKey(contextRecord: StylesheetReachabilityContextRecord): string {
