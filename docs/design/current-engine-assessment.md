@@ -337,9 +337,9 @@ Remaining decisions:
 - how much path-convention behavior should become configurable
 - whether broader directory or feature ownership should be modeled beyond component-level evidence
 
-The first implemented rule is `single-component-style-not-colocated`; broader boundary and shared
-ownership rules should continue to consume `ProjectAnalysis` ownership records rather than rebuilding
-import/reference maps.
+The initial ownership rules are implemented as `single-component-style-not-colocated`,
+`style-used-outside-owner`, and `style-shared-without-shared-owner`; broader policy work should
+continue to consume `ProjectAnalysis` ownership records rather than rebuilding import/reference maps.
 
 ### 5. How far should bounded render analysis go?
 

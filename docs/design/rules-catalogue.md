@@ -201,7 +201,8 @@ Config:
 
 Default severity: `info`
 
-Triggers when a class is used broadly across unrelated components but is not defined in a configured shared, global, utility, or design-system location.
+Triggers when a class is used by multiple components, has no high-confidence single importing
+component owner, and is not defined in a path that looks intentionally broad.
 
 Meaning:
 
@@ -210,9 +211,10 @@ Meaning:
 
 Config:
 
-- requires shared/global path conventions
-- may support a minimum consumer count
-- may support feature-boundary grouping
+- currently uses built-in broad path signals such as `shared`, `global`, `common`, `utilities`,
+  `design-system`, `theme`, and `tokens`
+- may later support configured broad path conventions
+- may later support feature-boundary grouping
 
 #### `global-style-only-used-locally`
 

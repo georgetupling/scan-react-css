@@ -1,5 +1,6 @@
 import type { AnalysisTrace } from "../../static-analysis-engine/index.js";
 import type { RuleContext, RuleDefinition, UnresolvedFinding } from "../types.js";
+import { isIntentionallyBroadStylesheetPath } from "./ownershipRuleUtils.js";
 
 export const styleUsedOutsideOwnerRule: RuleDefinition = {
   id: "style-used-outside-owner",
@@ -20,7 +21,8 @@ function runStyleUsedOutsideOwnerRule(context: RuleContext): UnresolvedFinding[]
       !definition ||
       !stylesheet ||
       definition.isCssModule ||
-      stylesheet.origin !== "project-css"
+      stylesheet.origin !== "project-css" ||
+      isIntentionallyBroadStylesheetPath(stylesheet.filePath)
     ) {
       continue;
     }

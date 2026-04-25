@@ -148,3 +148,116 @@ test("style-used-outside-owner does not report without a single importing compon
     await project.cleanup();
   }
 });
+
+test("style-used-outside-owner does not report intentionally broad stylesheets", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import "./styles/global.css";',
+        'import { Card } from "./components/Card";',
+        "export function App() { return <main><Card /></main>; }",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      ['export function Card() { return <span className="shell">Again</span>; }', ""].join("\n"),
+    )
+    .withCssFile("src/styles/global.css", ".shell { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx", "src/components/Card.tsx"],
+      cssFilePaths: ["src/styles/global.css"],
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-used-outside-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-shared-without-shared-owner reports multi-component styles without broad owner evidence", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button/Button.tsx",
+      [
+        'import "./Button.css";',
+        'export function Button() { return <button className="surface">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Card/Card.tsx",
+      [
+        'import "../Button/Button.css";',
+        'export function Card() { return <article className="surface">Again</article>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/components/Button/Button.css", ".surface { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/components/Button/Button.tsx", "src/components/Card/Card.tsx"],
+      cssFilePaths: ["src/components/Button/Button.css"],
+    });
+
+    const findings = result.findings.filter(
+      (finding) => finding.ruleId === "style-shared-without-shared-owner",
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].severity, "info");
+    assert.equal(findings[0].confidence, "medium");
+    assert.equal(findings[0].subject.kind, "class-definition");
+    assert.equal(findings[0].data?.className, "surface");
+    assert.deepEqual(findings[0].data?.componentNames, ["Button", "Card"]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-shared-without-shared-owner does not report intentionally broad stylesheets", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import "../shared/surfaces.css";',
+        'export function Button() { return <button className="surface">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      [
+        'import "../shared/surfaces.css";',
+        'export function Card() { return <article className="surface">Again</article>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/shared/surfaces.css", ".surface { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/components/Button.tsx", "src/components/Card.tsx"],
+      cssFilePaths: ["src/shared/surfaces.css"],
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
