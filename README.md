@@ -201,9 +201,11 @@ parsed, and treated as project-wide reachable. JavaScript and TypeScript package
 parsed, and treated as external imports. Provider declarations are only activated by configured
 external stylesheet evidence such as HTML/CDN links, not by package CSS imports. Package CSS loaded
 through CSS `@import` is also resolved under `node_modules`, parsed, and treated as reachable through
-the importing stylesheet. Remote stylesheet links are fetched only when `fetch-remote` is present in
-`externalCss.modes`; fetched CSS is parsed into concrete classes, uses `remoteTimeoutMs`, and fetch
-failures are reported as warning diagnostics.
+the importing stylesheet. Package CSS resolution searches upward from the scan root for the nearest
+usable `node_modules` directory, so subdirectory scans can still resolve workspace-level packages.
+Remote stylesheet links are fetched only when `fetch-remote` is present in `externalCss.modes`;
+fetched CSS is parsed into concrete classes, uses `remoteTimeoutMs`, and fetch failures are reported
+as warning diagnostics.
 
 ## Rules
 

@@ -541,6 +541,8 @@ Design rules:
   project CSS
 - JavaScript and TypeScript package CSS imports are resolved under `node_modules`, loaded, parsed,
   classified as external imports, and treated as reachable from the importing source file
+- package CSS resolution searches upward from the scan root for the nearest usable `node_modules`
+  directory, falling back to the nearest package root for deterministic missing-file diagnostics
 - package CSS imports do not activate declared providers; provider declarations are an alternative to
   fetching externally linked stylesheets such as CDNs, not a substitute for parsed package CSS
 - CSS `@import` package entries are resolved under `node_modules`, loaded, parsed, classified as

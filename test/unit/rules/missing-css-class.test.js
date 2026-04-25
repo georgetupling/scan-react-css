@@ -87,6 +87,35 @@ test("missing-css-class accepts classes from imported package CSS", async () => 
   }
 });
 
+test("missing-css-class resolves package CSS from ancestor node_modules", async () => {
+  const project = await new TestProjectBuilder()
+    .withFile("package.json", '{ "name": "workspace-root" }\n')
+    .withSourceFile(
+      "app/src/App.tsx",
+      'import "library/styles.css";\nexport function App() { return <main className="library-btn">Hello</main>; }\n',
+    )
+    .withNodeModuleFile("library/styles.css", ".library-btn { display: inline-flex; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.filePath("app"),
+      sourceFilePaths: ["src/App.tsx"],
+      cssFilePaths: [],
+    });
+
+    assert.deepEqual(
+      result.findings.filter(
+        (finding) =>
+          finding.ruleId === "missing-css-class" || finding.ruleId === "css-class-unreachable",
+      ),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("missing-css-class emits diagnostics for missing imported package CSS", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
 import { normalizeProjectPath } from "./pathUtils.js";
@@ -22,16 +22,22 @@ export async function loadPackageCssImports(input: {
   cssSources: Array<{ filePath: string; cssText: string }>;
   diagnostics: ScanDiagnostic[];
 }): Promise<LoadedPackageCssImports> {
+  const nodeModulesRoot = await findNearestNodeModulesRoot(input.rootDir);
   const importsByKey = new Map<string, PackageCssImportRecord>();
   const cssSourcesByPath = new Map(
     input.cssSources.map((cssSource) => [cssSource.filePath, cssSource]),
   );
-  const pendingImports = collectSourcePackageCssImportRecords(input);
+  const pendingImports = collectSourcePackageCssImportRecords({
+    rootDir: input.rootDir,
+    nodeModulesRoot,
+    sourceFiles: input.sourceFiles,
+  });
   const loadedPackageCssSources: Array<{ filePath: string; cssText: string }> = [];
   const attemptedFilePaths = new Set<string>();
 
   for (const importRecord of collectStylesheetPackageCssImportRecords({
     rootDir: input.rootDir,
+    nodeModulesRoot,
     cssSources: [...cssSourcesByPath.values()],
   })) {
     pendingImports.push(importRecord);
@@ -63,6 +69,7 @@ export async function loadPackageCssImports(input: {
     pendingImports.push(
       ...collectStylesheetPackageCssImportRecords({
         rootDir: input.rootDir,
+        nodeModulesRoot,
         cssSources: [cssSource],
       }),
     );
@@ -84,6 +91,7 @@ export async function loadPackageCssImports(input: {
 
 function collectSourcePackageCssImportRecords(input: {
   rootDir: string;
+  nodeModulesRoot?: string;
   sourceFiles: Array<{ filePath: string; sourceText: string }>;
 }): PackageCssImportRecord[] {
   const imports: PackageCssImportRecord[] = [];
@@ -105,6 +113,7 @@ function collectSourcePackageCssImportRecords(input: {
       const specifier = statement.moduleSpecifier.text;
       const resolvedFilePath = resolvePackageCssImport({
         rootDir: input.rootDir,
+        nodeModulesRoot: input.nodeModulesRoot,
         specifier,
       });
       if (!resolvedFilePath) {
@@ -125,6 +134,7 @@ function collectSourcePackageCssImportRecords(input: {
 
 function collectStylesheetPackageCssImportRecords(input: {
   rootDir: string;
+  nodeModulesRoot?: string;
   cssSources: Array<{ filePath: string; cssText: string }>;
 }): PackageCssImportRecord[] {
   const imports: PackageCssImportRecord[] = [];
@@ -133,6 +143,7 @@ function collectStylesheetPackageCssImportRecords(input: {
     for (const specifier of extractCssImportSpecifiers(cssSource.cssText)) {
       const resolvedFilePath = resolvePackageCssImport({
         rootDir: input.rootDir,
+        nodeModulesRoot: input.nodeModulesRoot,
         specifier,
       });
       if (!resolvedFilePath) {
@@ -176,6 +187,7 @@ async function readPackageCssSource(input: {
 
 function resolvePackageCssImport(input: {
   rootDir: string;
+  nodeModulesRoot?: string;
   specifier: string;
 }): string | undefined {
   const normalizedSpecifier = input.specifier.replace(/\\/g, "/");
@@ -183,13 +195,52 @@ function resolvePackageCssImport(input: {
     return undefined;
   }
 
-  const absolutePath = path.resolve(input.rootDir, "node_modules", normalizedSpecifier);
-  const nodeModulesRoot = path.resolve(input.rootDir, "node_modules");
+  const nodeModulesRoot = input.nodeModulesRoot ?? path.resolve(input.rootDir, "node_modules");
+  const absolutePath = path.resolve(nodeModulesRoot, normalizedSpecifier);
   if (!isPathInsideRoot(nodeModulesRoot, absolutePath)) {
     return undefined;
   }
 
   return normalizeProjectPath(path.relative(input.rootDir, absolutePath));
+}
+
+async function findNearestNodeModulesRoot(rootDir: string): Promise<string | undefined> {
+  let currentDir = path.resolve(rootDir);
+  let nearestPackageJsonDir: string | undefined;
+
+  while (true) {
+    if (!nearestPackageJsonDir && (await isFile(path.join(currentDir, "package.json")))) {
+      nearestPackageJsonDir = currentDir;
+    }
+
+    const candidate = path.join(currentDir, "node_modules");
+    if (await isDirectory(candidate)) {
+      return candidate;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      return nearestPackageJsonDir ? path.join(nearestPackageJsonDir, "node_modules") : undefined;
+    }
+
+    currentDir = parentDir;
+  }
+}
+
+async function isFile(absolutePath: string): Promise<boolean> {
+  try {
+    return (await stat(absolutePath)).isFile();
+  } catch {
+    return false;
+  }
+}
+
+async function isDirectory(absolutePath: string): Promise<boolean> {
+  try {
+    return (await stat(absolutePath)).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 function isPackageCssImportSpecifier(specifier: string): boolean {
