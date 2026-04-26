@@ -297,6 +297,9 @@ type ClassReferenceAnalysis = {
   id: string;
   sourceFileId: string;
   componentId?: string;
+  suppliedByComponentId?: string;
+  emittedByComponentId?: string;
+  classNameComponentIds?: Record<string, string>;
   location: SourceLocation;
   origin: "render-ir" | "runtime-dom" | "unknown";
   expressionKind: "exact-string" | "string-set" | "dynamic" | "unsupported";
@@ -309,9 +312,16 @@ type ClassReferenceAnalysis = {
 };
 ```
 
-`componentId` identifies the component that emitted the class expression. When a parent render tree
-expands a child component, class references from the child's implementation are attributed to the
-child component, while placement and render-subtree fields preserve the parent render context.
+`componentId` identifies the component that supplied/authored the class expression for ownership
+rules. When a parent render tree expands a child component, class references from the child's
+implementation are supplied by and emitted by the child component, while placement and render-subtree
+fields preserve the parent render context. When a caller passes a class string into a primitive
+component, `componentId` and `suppliedByComponentId` point at the caller that authored the class
+expression, while `emittedByComponentId` points at the primitive whose intrinsic DOM applies it.
+When one emitted `className` expression combines local primitive classes with caller-supplied
+classes, `classNameComponentIds` records per-token supplier ownership.
+Selector and render matching continue to use render placement/emission context rather than
+architectural ownership attribution.
 
 `runtime-dom` references come from recognized non-JSX DOM APIs. The current adapter recognizes static
 ProseMirror `EditorView` `attributes.class` / `attributes.className` strings as usage evidence. These

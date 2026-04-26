@@ -30,6 +30,7 @@ export type ClassExpressionSummary = {
   sourceAnchor: SourceAnchor;
   value: AbstractValue;
   classes: AbstractClassSet;
+  classNameSourceAnchors?: Record<string, SourceAnchor>;
   sourceText: string;
   traces: AnalysisTrace[];
 };

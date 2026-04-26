@@ -384,12 +384,15 @@ function buildClassReferences(input: {
     const filePath = normalizeProjectPath(classExpression.sourceAnchor.filePath);
     const sourceFileId =
       input.indexes.sourceFileIdByPath.get(filePath) ?? createPathId("source", filePath);
-    const componentId = entry.componentId;
+    const componentId = entry.suppliedByComponentId ?? entry.emittedByComponentId;
     const id = createAnchorId("class-reference", classExpression.sourceAnchor, index);
     const reference: ClassReferenceAnalysis = {
       id,
       sourceFileId,
       componentId,
+      suppliedByComponentId: entry.suppliedByComponentId,
+      emittedByComponentId: entry.emittedByComponentId,
+      classNameComponentIds: entry.classNameComponentIds,
       renderSubtreeId,
       location: normalizeAnchor(classExpression.sourceAnchor),
       emittedElementLocation,
@@ -642,7 +645,9 @@ function buildCssModuleMemberReferences(input: {
 
 type RenderClassExpressionEntry = {
   classExpression: ClassExpressionSummary;
-  componentId?: ProjectAnalysisId;
+  suppliedByComponentId?: ProjectAnalysisId;
+  emittedByComponentId?: ProjectAnalysisId;
+  classNameComponentIds?: Record<string, ProjectAnalysisId>;
   renderSubtreeId: ProjectAnalysisId;
   emittedElementLocation: SourceAnchor;
   placementLocation?: SourceAnchor;
@@ -663,11 +668,27 @@ function collectRenderClassExpressions(
         return;
       }
 
+      const emittedByComponentId = resolveEffectiveComponentId({
+        renderSubtree: input,
+        inheritedExpansion,
+        indexes,
+      });
+
       entries.push({
         classExpression: node.className,
-        componentId: resolveEffectiveComponentId({
+        suppliedByComponentId: resolveSupplierComponentId({
           renderSubtree: input,
           inheritedExpansion,
+          classExpression: node.className,
+          emittedByComponentId,
+          indexes,
+        }),
+        emittedByComponentId,
+        classNameComponentIds: buildClassNameComponentIds({
+          renderSubtree: input,
+          inheritedExpansion,
+          classExpression: node.className,
+          emittedByComponentId,
           indexes,
         }),
         renderSubtreeId: input.id,
@@ -713,7 +734,11 @@ function createRenderClassExpressionDedupeKey(entry: RenderClassExpressionEntry)
     classExpression.classes.definite.join(" "),
     classExpression.classes.possible.join(" "),
     classExpression.classes.unknownDynamic ? "dynamic" : "static",
-    entry.componentId ?? "",
+    entry.suppliedByComponentId ?? "",
+    entry.emittedByComponentId ?? "",
+    Object.entries(entry.classNameComponentIds ?? {})
+      .map(([className, componentId]) => `${className}=${componentId}`)
+      .join(","),
   ].join(":");
 }
 
@@ -731,6 +756,9 @@ function compareRenderClassExpressionEntries(
         : right.placementLocation
           ? 1
           : 0) ||
+    (left.suppliedByComponentId ?? "").localeCompare(right.suppliedByComponentId ?? "") ||
+    (left.emittedByComponentId ?? "").localeCompare(right.emittedByComponentId ?? "") ||
+    compareStringRecords(left.classNameComponentIds, right.classNameComponentIds) ||
     left.renderSubtreeId.localeCompare(right.renderSubtreeId)
   );
 }
@@ -754,6 +782,96 @@ function resolveEffectiveComponentId(input: {
   );
 }
 
+function resolveSupplierComponentId(input: {
+  renderSubtree: RenderSubtreeAnalysis;
+  inheritedExpansion?: NonNullable<RenderNode["expandedFromComponentReference"]>;
+  classExpression: ClassExpressionSummary;
+  emittedByComponentId?: ProjectAnalysisId;
+  indexes: ProjectAnalysisIndexes;
+}): ProjectAnalysisId | undefined {
+  const sourceFilePath = normalizeProjectPath(input.classExpression.sourceAnchor.filePath);
+  if (sourceFilePath === input.renderSubtree.filePath) {
+    return input.renderSubtree.componentId;
+  }
+
+  if (
+    input.inheritedExpansion &&
+    sourceFilePath === normalizeProjectPath(input.inheritedExpansion.filePath)
+  ) {
+    return input.emittedByComponentId;
+  }
+
+  const componentIdsForSource = [...input.indexes.componentIdByFilePathAndName.entries()]
+    .filter(([key]) => key.startsWith(`${sourceFilePath}::`))
+    .map(([, componentId]) => componentId);
+
+  if (componentIdsForSource.length === 1) {
+    return componentIdsForSource[0];
+  }
+
+  return input.emittedByComponentId;
+}
+
+function buildClassNameComponentIds(input: {
+  renderSubtree: RenderSubtreeAnalysis;
+  inheritedExpansion?: NonNullable<RenderNode["expandedFromComponentReference"]>;
+  classExpression: ClassExpressionSummary;
+  emittedByComponentId?: ProjectAnalysisId;
+  indexes: ProjectAnalysisIndexes;
+}): Record<string, ProjectAnalysisId> | undefined {
+  if (!input.classExpression.classNameSourceAnchors) {
+    return undefined;
+  }
+
+  const componentIdsByClassName: Record<string, ProjectAnalysisId> = {};
+  for (const [className, sourceAnchor] of Object.entries(
+    input.classExpression.classNameSourceAnchors,
+  )) {
+    const componentId = resolveSupplierComponentIdForSourceAnchor({
+      renderSubtree: input.renderSubtree,
+      inheritedExpansion: input.inheritedExpansion,
+      sourceAnchor,
+      emittedByComponentId: input.emittedByComponentId,
+      indexes: input.indexes,
+    });
+    if (componentId) {
+      componentIdsByClassName[className] = componentId;
+    }
+  }
+
+  return Object.keys(componentIdsByClassName).length > 0 ? componentIdsByClassName : undefined;
+}
+
+function resolveSupplierComponentIdForSourceAnchor(input: {
+  renderSubtree: RenderSubtreeAnalysis;
+  inheritedExpansion?: NonNullable<RenderNode["expandedFromComponentReference"]>;
+  sourceAnchor: SourceAnchor;
+  emittedByComponentId?: ProjectAnalysisId;
+  indexes: ProjectAnalysisIndexes;
+}): ProjectAnalysisId | undefined {
+  const sourceFilePath = normalizeProjectPath(input.sourceAnchor.filePath);
+  if (sourceFilePath === input.renderSubtree.filePath) {
+    return input.renderSubtree.componentId;
+  }
+
+  if (
+    input.inheritedExpansion &&
+    sourceFilePath === normalizeProjectPath(input.inheritedExpansion.filePath)
+  ) {
+    return input.emittedByComponentId;
+  }
+
+  const componentIdsForSource = [...input.indexes.componentIdByFilePathAndName.entries()]
+    .filter(([key]) => key.startsWith(`${sourceFilePath}::`))
+    .map(([, componentId]) => componentId);
+
+  if (componentIdsForSource.length === 1) {
+    return componentIdsForSource[0];
+  }
+
+  return input.emittedByComponentId;
+}
+
 function buildClassReferenceTraces(entry: RenderClassExpressionEntry): AnalysisTrace[] {
   return [
     {
@@ -764,7 +882,10 @@ function buildClassReferenceTraces(entry: RenderClassExpressionEntry): AnalysisT
       children: [...entry.classExpression.traces],
       metadata: {
         renderSubtreeId: entry.renderSubtreeId,
-        componentId: entry.componentId,
+        componentId: entry.suppliedByComponentId ?? entry.emittedByComponentId,
+        suppliedByComponentId: entry.suppliedByComponentId,
+        emittedByComponentId: entry.emittedByComponentId,
+        classNameComponentIds: entry.classNameComponentIds,
         sourceFilePath: normalizeProjectPath(entry.classExpression.sourceAnchor.filePath),
         emittedElementFilePath: normalizeProjectPath(entry.emittedElementLocation.filePath),
         placementFilePath: entry.placementLocation
@@ -1254,8 +1375,11 @@ function buildClassConsumerSummary(input: {
     classDefinitionId: input.definition.id,
     className: input.definition.className,
     consumerComponentIds: uniqueSorted(
-      references
-        .map((reference) => reference.componentId)
+      matches
+        .map((match) => {
+          const reference = input.referencesById.get(match.referenceId);
+          return reference?.classNameComponentIds?.[match.className] ?? reference?.componentId;
+        })
         .filter((id): id is string => Boolean(id)),
     ),
     consumerSourceFileIds: uniqueSorted(references.map((reference) => reference.sourceFileId)),
@@ -2507,6 +2631,30 @@ function compareAnchors(left: SourceAnchor, right: SourceAnchor): number {
     (left.endLine ?? 0) - (right.endLine ?? 0) ||
     (left.endColumn ?? 0) - (right.endColumn ?? 0)
   );
+}
+
+function compareStringRecords(
+  left: Record<string, string> | undefined,
+  right: Record<string, string> | undefined,
+): number {
+  if (!left && !right) {
+    return 0;
+  }
+  if (!left) {
+    return 1;
+  }
+  if (!right) {
+    return -1;
+  }
+
+  return serializeStringRecord(left).localeCompare(serializeStringRecord(right));
+}
+
+function serializeStringRecord(record: Record<string, string>): string {
+  return Object.entries(record)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, value]) => `${key}=${value}`)
+    .join(",");
 }
 
 function stableHash(value: string): string {

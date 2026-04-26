@@ -149,3 +149,85 @@ test("ProjectAnalysis exposes ownership evidence for class definitions", () => {
   assert.ok(ownership.ownerCandidates[0].reasons.includes("single-importing-component"));
   assert.ok(ownership.ownerCandidates[0].reasons.includes("single-consuming-component"));
 });
+
+test("ProjectAnalysis records supplier and emitter for forwarded class props", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/pages/MembersPage.tsx",
+        sourceText: [
+          'import { Select } from "../components/Select";',
+          'export function MembersPage() { return <Select className="members-page__select" />; }',
+          "",
+        ].join("\n"),
+      },
+      {
+        filePath: "src/components/Select.tsx",
+        sourceText:
+          "export function Select({ className }) { return <div className={className} />; }\n",
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/pages/MembersPage.css",
+        cssText: ".members-page__select { display: block; }\n",
+      },
+    ],
+  });
+
+  const reference = result.projectAnalysis.entities.classReferences.find((candidate) =>
+    candidate.definiteClassNames.includes("members-page__select"),
+  );
+
+  assert.ok(reference);
+  assert.equal(reference.componentId, "component:src/pages/MembersPage.tsx:MembersPage");
+  assert.equal(reference.suppliedByComponentId, "component:src/pages/MembersPage.tsx:MembersPage");
+  assert.equal(reference.emittedByComponentId, "component:src/components/Select.tsx:Select");
+});
+
+test("ProjectAnalysis records per-class suppliers for merged forwarded class props", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/pages/MembersPage.tsx",
+        sourceText: [
+          'import { Select } from "../components/Select";',
+          'export function MembersPage() { return <Select className="members-page__select" />; }',
+          "",
+        ].join("\n"),
+      },
+      {
+        filePath: "src/components/Select.tsx",
+        sourceText:
+          'export function Select({ className }) { return <div className={["select", className].join(" ")} />; }\n',
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/pages/MembersPage.css",
+        cssText: ".members-page__select { display: block; }\n",
+      },
+      {
+        filePath: "src/components/Select.css",
+        cssText: ".select { display: block; }\n",
+      },
+    ],
+  });
+
+  const reference = result.projectAnalysis.entities.classReferences.find((candidate) =>
+    candidate.definiteClassNames.includes("members-page__select"),
+  );
+
+  assert.ok(reference);
+  assert.equal(reference.componentId, "component:src/components/Select.tsx:Select");
+  assert.equal(reference.suppliedByComponentId, "component:src/components/Select.tsx:Select");
+  assert.equal(reference.emittedByComponentId, "component:src/components/Select.tsx:Select");
+  assert.equal(
+    reference.classNameComponentIds?.["members-page__select"],
+    "component:src/pages/MembersPage.tsx:MembersPage",
+  );
+  assert.equal(
+    reference.classNameComponentIds?.select,
+    "component:src/components/Select.tsx:Select",
+  );
+});

@@ -95,6 +95,9 @@ export type ClassReferenceAnalysis = {
   id: ProjectAnalysisId;
   sourceFileId: ProjectAnalysisId;
   componentId?: ProjectAnalysisId;
+  suppliedByComponentId?: ProjectAnalysisId;
+  emittedByComponentId?: ProjectAnalysisId;
+  classNameComponentIds?: Record<string, ProjectAnalysisId>;
   renderSubtreeId?: ProjectAnalysisId;
   location: SourceAnchor;
   emittedElementLocation?: SourceAnchor;

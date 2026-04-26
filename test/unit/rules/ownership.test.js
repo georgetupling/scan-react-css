@@ -192,6 +192,165 @@ test("style-used-outside-owner attributes child component classes to the child, 
   }
 });
 
+test("style-used-outside-owner attributes forwarded class props to the supplying component", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/pages/MembersPage.tsx",
+      [
+        'import "./MembersPage.css";',
+        'import { Select } from "../components/Select";',
+        'export function MembersPage() { return <Select className="members-page__select" />; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Select.tsx",
+      "export function Select({ className }) { return <div className={className} />; }\n",
+    )
+    .withCssFile("src/pages/MembersPage.css", ".members-page__select { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/pages/MembersPage.tsx", "src/components/Select.tsx"],
+      cssFilePaths: ["src/pages/MembersPage.css"],
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-used-outside-owner"),
+      [],
+    );
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-used-outside-owner attributes custom forwarded class props to the supplying component", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/pages/GalleryPage.tsx",
+      [
+        'import "./GalleryPage.css";',
+        'import { Modal } from "../components/Modal";',
+        'export function GalleryPage() { return <Modal bodyClassName="gallery-page__body" />; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Modal.tsx",
+      "export function Modal({ bodyClassName }) { return <section className={bodyClassName} />; }\n",
+    )
+    .withCssFile("src/pages/GalleryPage.css", ".gallery-page__body { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/pages/GalleryPage.tsx", "src/components/Modal.tsx"],
+      cssFilePaths: ["src/pages/GalleryPage.css"],
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-used-outside-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-used-outside-owner attributes merged forwarded class props to the supplying component", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/pages/MembersPage.tsx",
+      [
+        'import "./MembersPage.css";',
+        'import { Select } from "../components/Select";',
+        'export function MembersPage() { return <Select className="members-page__select" />; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Select.tsx",
+      [
+        'import "./Select.css";',
+        'export function Select({ className }) { return <div className={["select", className].join(" ")} />; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/pages/MembersPage.css", ".members-page__select { display: block; }\n")
+    .withCssFile("src/components/Select.css", ".select { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/pages/MembersPage.tsx", "src/components/Select.tsx"],
+      cssFilePaths: ["src/pages/MembersPage.css", "src/components/Select.css"],
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-used-outside-owner"),
+      [],
+    );
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-used-outside-owner attributes helper-merged forwarded class props to the supplying component", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/pages/MembersPage.tsx",
+      [
+        'import "./MembersPage.css";',
+        'import { Select } from "../components/Select";',
+        'export function MembersPage() { return <Select className="members-page__select" />; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Select.tsx",
+      [
+        'import "./Select.css";',
+        'function joinClasses(...classes) { return classes.filter(Boolean).join(" "); }',
+        'export function Select({ className }) { return <div className={joinClasses("select", className)} />; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/pages/MembersPage.css", ".members-page__select { display: block; }\n")
+    .withCssFile("src/components/Select.css", ".select { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/pages/MembersPage.tsx", "src/components/Select.tsx"],
+      cssFilePaths: ["src/pages/MembersPage.css", "src/components/Select.css"],
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-used-outside-owner"),
+      [],
+    );
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("style-used-outside-owner does not report without a single importing component owner", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

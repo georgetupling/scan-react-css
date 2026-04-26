@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 import type { ClassExpressionSummary } from "../../abstract-values/types.js";
+import type { SourceAnchor } from "../../../../types/core.js";
 import {
   buildClassExpressionTraces,
   mergeClassNameValues,
@@ -118,6 +119,7 @@ function summarizeClassAttribute(
       sourceAnchor,
       value: summary.value,
       classes: toAbstractClassSet(summary.value, sourceAnchor),
+      classNameSourceAnchors: collectClassNameSourceAnchors(expression, context),
       sourceText,
       traces: buildClassExpressionTraces({
         sourceAnchor,
@@ -399,6 +401,252 @@ function summarizeJoinedClassArrayExpression(
     ),
     sourceExpression: expression,
   };
+}
+
+function collectClassNameSourceAnchors(
+  expression: ts.Expression,
+  context: BuildContext,
+  state: ClassNameResolutionState = {
+    activeExpressions: new Set(),
+    depth: 0,
+  },
+): Record<string, SourceAnchor> | undefined {
+  if (state.depth > MAX_CLASS_NAME_RESOLUTION_DEPTH) {
+    return undefined;
+  }
+
+  expression = unwrapExpression(expression);
+  const expressionKey = getExpressionResolutionKey(expression, context);
+  if (state.activeExpressions.has(expressionKey)) {
+    return undefined;
+  }
+
+  state.activeExpressions.add(expressionKey);
+  try {
+    if (ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)) {
+      return buildTokenAnchors(
+        tokenizeSourceClassNames(expression.text),
+        toSourceAnchor(expression, expression.getSourceFile(), expression.getSourceFile().fileName),
+      );
+    }
+
+    const foundExpression = ts.isCallExpression(expression)
+      ? resolveExactFoundClassExpression(expression, context)
+      : undefined;
+    if (foundExpression === null) {
+      return {};
+    }
+    if (foundExpression) {
+      return collectClassNameSourceAnchors(
+        foundExpression,
+        context,
+        nextClassNameResolutionState(state),
+      );
+    }
+
+    const joinedClassArrayElements = ts.isCallExpression(expression)
+      ? getJoinedClassArrayElements(expression, context)
+      : undefined;
+    if (joinedClassArrayElements) {
+      return mergeClassNameSourceAnchors(
+        joinedClassArrayElements.map((element) =>
+          collectClassNameSourceAnchors(element, context, nextClassNameResolutionState(state)),
+        ),
+      );
+    }
+
+    if (ts.isCallExpression(expression) && isClassNamesHelperExpression(expression.expression)) {
+      return mergeClassNameSourceAnchors(
+        expression.arguments.map((argument) =>
+          collectClassNameSourceAnchors(argument, context, nextClassNameResolutionState(state)),
+        ),
+      );
+    }
+
+    const helperResolution = ts.isCallExpression(expression)
+      ? resolveHelperCallContext(expression, context)
+      : undefined;
+    if (helperResolution) {
+      return collectClassNameSourceAnchors(
+        helperResolution.expression,
+        helperResolution.context,
+        nextClassNameResolutionState(state),
+      );
+    }
+
+    const boundExpression = resolveBoundExpression(expression, context);
+    if (boundExpression) {
+      return collectClassNameSourceAnchors(
+        boundExpression,
+        context,
+        nextClassNameResolutionState(state),
+      );
+    }
+
+    if (ts.isIdentifier(expression)) {
+      const stringValues = context.stringSetBindings.get(expression.text);
+      if (stringValues) {
+        const sourceAnchor = toSourceAnchor(
+          expression,
+          expression.getSourceFile(),
+          expression.getSourceFile().fileName,
+        );
+        return buildTokenAnchors(
+          stringValues.flatMap((value) => tokenizeSourceClassNames(value)),
+          sourceAnchor,
+        );
+      }
+    }
+
+    if (ts.isArrayLiteralExpression(expression)) {
+      return mergeClassNameSourceAnchors(
+        expression.elements.map((element) =>
+          collectClassNameSourceAnchors(element, context, nextClassNameResolutionState(state)),
+        ),
+      );
+    }
+
+    if (ts.isObjectLiteralExpression(expression)) {
+      const entries: Record<string, SourceAnchor> = {};
+      for (const property of expression.properties) {
+        if (
+          !ts.isPropertyAssignment(property) ||
+          resolveExactTruthyExpression(property.initializer, context) === false
+        ) {
+          continue;
+        }
+
+        const key = getStaticPropertyNameText(property.name);
+        if (!key) {
+          continue;
+        }
+
+        Object.assign(
+          entries,
+          buildTokenAnchors(
+            tokenizeSourceClassNames(key),
+            toSourceAnchor(
+              property.name,
+              property.name.getSourceFile(),
+              property.name.getSourceFile().fileName,
+            ),
+          ),
+        );
+      }
+      return entries;
+    }
+
+    if (ts.isConditionalExpression(expression)) {
+      return mergeClassNameSourceAnchors([
+        collectClassNameSourceAnchors(
+          expression.whenTrue,
+          context,
+          nextClassNameResolutionState(state),
+        ),
+        collectClassNameSourceAnchors(
+          expression.whenFalse,
+          context,
+          nextClassNameResolutionState(state),
+        ),
+      ]);
+    }
+
+    if (ts.isBinaryExpression(expression)) {
+      if (expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken) {
+        return collectClassNameSourceAnchors(
+          expression.right,
+          context,
+          nextClassNameResolutionState(state),
+        );
+      }
+
+      if (expression.operatorToken.kind === ts.SyntaxKind.BarBarToken) {
+        return mergeClassNameSourceAnchors([
+          collectClassNameSourceAnchors(
+            expression.left,
+            context,
+            nextClassNameResolutionState(state),
+          ),
+          collectClassNameSourceAnchors(
+            expression.right,
+            context,
+            nextClassNameResolutionState(state),
+          ),
+        ]);
+      }
+    }
+
+    return undefined;
+  } finally {
+    state.activeExpressions.delete(expressionKey);
+  }
+}
+
+function buildTokenAnchors(
+  tokens: string[],
+  sourceAnchor: SourceAnchor,
+): Record<string, SourceAnchor> {
+  const anchors: Record<string, SourceAnchor> = {};
+  for (const token of tokens) {
+    anchors[token] = sourceAnchor;
+  }
+  return anchors;
+}
+
+function mergeClassNameSourceAnchors(
+  entries: Array<Record<string, SourceAnchor> | undefined>,
+): Record<string, SourceAnchor> | undefined {
+  const merged: Record<string, SourceAnchor> = {};
+  for (const entry of entries) {
+    if (!entry) {
+      continue;
+    }
+
+    for (const [className, sourceAnchor] of Object.entries(entry)) {
+      merged[className] ??= sourceAnchor;
+    }
+  }
+
+  return Object.keys(merged).length > 0 ? merged : undefined;
+}
+
+function tokenizeSourceClassNames(value: string): string[] {
+  return value
+    .split(/\s+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function getJoinedClassArrayElements(
+  expression: ts.CallExpression,
+  context: BuildContext,
+): ts.Expression[] | undefined {
+  if (
+    !ts.isPropertyAccessExpression(expression.expression) ||
+    expression.expression.name.text !== "join" ||
+    expression.arguments.length > 1
+  ) {
+    return undefined;
+  }
+
+  return resolveExactClassArrayElements(expression.expression.expression, context);
+}
+
+function isClassNamesHelperExpression(expression: ts.Expression): boolean {
+  return (
+    ts.isIdentifier(expression) &&
+    (expression.text === "clsx" ||
+      expression.text === "classnames" ||
+      expression.text === "classNames")
+  );
+}
+
+function getStaticPropertyNameText(name: ts.PropertyName): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+
+  return undefined;
 }
 
 function resolveExactFoundClassExpression(
