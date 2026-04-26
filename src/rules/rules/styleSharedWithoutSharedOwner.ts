@@ -42,6 +42,7 @@ function runStyleSharedWithoutSharedOwnerRule(context: RuleContext): UnresolvedF
       isIntentionallySharedStylesheetForConsumers({
         stylesheetFilePath: stylesheet.filePath,
         consumerComponentNames: consumerComponents.map((component) => component.componentName),
+        sharedCssPatterns: context.config.ownership.sharedCss,
       })
     ) {
       continue;

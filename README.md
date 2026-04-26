@@ -189,6 +189,9 @@ Current config shape:
         "classNames": ["ci"]
       }
     ]
+  },
+  "ownership": {
+    "sharedCss": ["src/styles/**/*.css", "src/**/Card.css"]
   }
 }
 ```
@@ -222,6 +225,11 @@ resolve workspace-level packages.
 Remote stylesheet links are fetched only when `externalCss.fetchRemote` is `true`; fetched CSS is
 parsed into concrete classes, uses `remoteTimeoutMs`, and fetch failures are reported as warning
 diagnostics. Default scans perform no network requests.
+
+Ownership config lets projects explicitly mark project CSS paths as intentionally shared. Patterns
+in `ownership.sharedCss` are project-relative globs and extend the built-in broad stylesheet
+conventions. Matching stylesheets are not reported by ownership rules as private component CSS or as
+shared-without-owner CSS.
 
 The scanner also recognizes a small set of usage-only runtime DOM class APIs. ProseMirror
 `new EditorView(..., { attributes: { class: "..." } })` static class strings are indexed as
@@ -260,7 +268,8 @@ evidence for `missing-css-class` but are not indexed as ordinary definitions for
 Ownership rules are conservative about private CSS. A single importing component is not enough to
 prove private ownership; the scanner looks for stronger mirrored naming or component-folder evidence
 before reporting `style-used-outside-owner`. Generic family stylesheets such as `Card.css` used by
-`ArticleCard` and `TopicCard` are treated as intentionally shared.
+`ArticleCard` and `TopicCard` are treated as intentionally shared. Projects can also mark shared
+paths explicitly with `ownership.sharedCss`.
 
 ## Node API
 

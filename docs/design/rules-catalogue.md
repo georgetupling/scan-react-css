@@ -179,6 +179,8 @@ Config:
 - requires or benefits from component-to-stylesheet naming conventions
 - may support path conventions such as `Button.tsx` and `Button.css`
 - may support component directory conventions such as `Button/index.tsx` and `Button/styles.css`
+- ignores stylesheets matched by `ownership.sharedCss` because those files are intentionally shared
+  rather than component-colocated
 
 #### `style-used-outside-owner`
 
@@ -196,6 +198,7 @@ Config:
 
 - requires private ownership evidence such as mirrored component/stylesheet names or component-folder
   conventions; a single importer alone is not enough
+- ignores stylesheets matched by `ownership.sharedCss`
 - may later support feature root patterns
 - may later support allowed cross-owner dependency lists
 
@@ -215,9 +218,9 @@ Config:
 
 - currently uses built-in broad path signals such as `shared`, `global`, `common`, `utilities`,
   `design-system`, `theme`, and `tokens`
+- supports configured broad/shared stylesheet paths through `ownership.sharedCss`
 - treats generic family stylesheets such as `Card.css` consumed by `ArticleCard` and `TopicCard` as
   intentionally shared
-- may later support configured broad path conventions
 - may later support feature-boundary grouping
 
 #### `global-style-only-used-locally`

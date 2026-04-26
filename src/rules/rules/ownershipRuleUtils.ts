@@ -32,6 +32,29 @@ export function isIntentionallyBroadStylesheetPath(filePath: string | undefined)
   );
 }
 
+export function isConfiguredSharedStylesheetPath(input: {
+  filePath: string | undefined;
+  sharedCssPatterns: string[];
+}): boolean {
+  if (!input.filePath || input.sharedCssPatterns.length === 0) {
+    return false;
+  }
+
+  const normalizedFilePath = normalizeProjectPath(input.filePath);
+  return input.sharedCssPatterns.some((pattern) =>
+    globToRegExp(normalizeProjectPath(pattern)).test(normalizedFilePath),
+  );
+}
+
+export function isIntentionallySharedStylesheetPath(input: {
+  filePath: string | undefined;
+  sharedCssPatterns: string[];
+}): boolean {
+  return (
+    isIntentionallyBroadStylesheetPath(input.filePath) || isConfiguredSharedStylesheetPath(input)
+  );
+}
+
 export function hasPrivateComponentOwnerEvidence(input: {
   ownerCandidates: Array<{
     kind: string;
@@ -69,8 +92,14 @@ export function findPrivateComponentOwnerCandidate<
 export function isIntentionallySharedStylesheetForConsumers(input: {
   stylesheetFilePath: string | undefined;
   consumerComponentNames: string[];
+  sharedCssPatterns: string[];
 }): boolean {
-  if (isIntentionallyBroadStylesheetPath(input.stylesheetFilePath)) {
+  if (
+    isIntentionallySharedStylesheetPath({
+      filePath: input.stylesheetFilePath,
+      sharedCssPatterns: input.sharedCssPatterns,
+    })
+  ) {
     return true;
   }
 
@@ -92,6 +121,55 @@ export function isIntentionallySharedStylesheetForConsumers(input: {
     consumerNames.every((consumerName) => consumerName.endsWith(stylesheetBaseName)) &&
     consumerNames.some((consumerName) => consumerName !== stylesheetBaseName)
   );
+}
+
+function normalizeProjectPath(filePath: string): string {
+  return filePath
+    .split("\\")
+    .join("/")
+    .replace(/\/+/g, "/")
+    .replace(/^\.\//, "")
+    .replace(/\/+$/, "");
+}
+
+function globToRegExp(glob: string): RegExp {
+  let source = "^";
+  for (let index = 0; index < glob.length; index += 1) {
+    const char = glob[index];
+    const nextChar = glob[index + 1];
+
+    if (char === "*" && nextChar === "*") {
+      const afterGlobstar = glob[index + 2];
+      if (afterGlobstar === "/") {
+        source += "(?:.*/)?";
+        index += 2;
+        continue;
+      }
+
+      source += ".*";
+      index += 1;
+      continue;
+    }
+
+    if (char === "*") {
+      source += "[^/]*";
+      continue;
+    }
+
+    if (char === "?") {
+      source += "[^/]";
+      continue;
+    }
+
+    source += escapeRegExp(char);
+  }
+
+  source += "$";
+  return new RegExp(source);
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getBaseNameWithoutExtension(filePath: string): string {

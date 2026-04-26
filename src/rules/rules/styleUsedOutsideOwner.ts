@@ -2,7 +2,7 @@ import type { AnalysisTrace } from "../../static-analysis-engine/index.js";
 import type { RuleContext, RuleDefinition, UnresolvedFinding } from "../types.js";
 import {
   findPrivateComponentOwnerCandidate,
-  isIntentionallyBroadStylesheetPath,
+  isIntentionallySharedStylesheetPath,
 } from "./ownershipRuleUtils.js";
 
 export const styleUsedOutsideOwnerRule: RuleDefinition = {
@@ -25,7 +25,10 @@ function runStyleUsedOutsideOwnerRule(context: RuleContext): UnresolvedFinding[]
       !stylesheet ||
       definition.isCssModule ||
       stylesheet.origin !== "project-css" ||
-      isIntentionallyBroadStylesheetPath(stylesheet.filePath)
+      isIntentionallySharedStylesheetPath({
+        filePath: stylesheet.filePath,
+        sharedCssPatterns: context.config.ownership.sharedCss,
+      })
     ) {
       continue;
     }

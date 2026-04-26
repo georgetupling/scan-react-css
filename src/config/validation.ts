@@ -15,9 +15,16 @@ const CSS_MODULE_LOCALS_CONVENTIONS = new Set<CssModuleLocalsConvention>([
   "camelCase",
   "camelCaseOnly",
 ]);
-const TOP_LEVEL_CONFIG_KEYS = new Set(["failOnSeverity", "rules", "cssModules", "externalCss"]);
+const TOP_LEVEL_CONFIG_KEYS = new Set([
+  "failOnSeverity",
+  "rules",
+  "cssModules",
+  "externalCss",
+  "ownership",
+]);
 const CSS_MODULES_CONFIG_KEYS = new Set(["localsConvention"]);
 const EXTERNAL_CSS_CONFIG_KEYS = new Set(["fetchRemote", "globals", "remoteTimeoutMs"]);
+const OWNERSHIP_CONFIG_KEYS = new Set(["sharedCss"]);
 const EXTERNAL_CSS_GLOBAL_CONFIG_KEYS = new Set([
   "provider",
   "match",
@@ -109,6 +116,9 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
     globals: cloneExternalCssGlobals(DEFAULT_EXTERNAL_CSS_GLOBALS),
     remoteTimeoutMs: 5_000,
   },
+  ownership: {
+    sharedCss: [],
+  },
 };
 
 export function parseConfig(
@@ -158,6 +168,7 @@ export function parseConfig(
     },
     cssModules: parseCssModules(parsed.cssModules, filePath, diagnostics),
     externalCss: parseExternalCss(parsed.externalCss, filePath, diagnostics),
+    ownership: parseOwnership(parsed.ownership, filePath, diagnostics),
   };
 }
 
@@ -167,6 +178,7 @@ export function cloneScannerConfig(config: ScannerConfig): ScannerConfig {
     rules: { ...config.rules },
     cssModules: { ...config.cssModules },
     externalCss: cloneExternalCssConfig(config.externalCss),
+    ownership: cloneOwnershipConfig(config.ownership),
   };
 }
 
@@ -346,6 +358,48 @@ function parseExternalCss(
   };
 }
 
+function parseOwnership(
+  value: unknown,
+  filePath: string,
+  diagnostics: ScanDiagnostic[],
+): ScannerConfig["ownership"] {
+  if (value === undefined) {
+    return cloneOwnershipConfig(DEFAULT_SCANNER_CONFIG.ownership);
+  }
+
+  if (!isRecord(value)) {
+    diagnostics.push({
+      code: "config.invalid-ownership",
+      severity: "error",
+      phase: "config",
+      filePath,
+      message: "ownership must be an object",
+    });
+    return cloneOwnershipConfig(DEFAULT_SCANNER_CONFIG.ownership);
+  }
+
+  reportUnknownKeys({
+    value,
+    allowedKeys: OWNERSHIP_CONFIG_KEYS,
+    filePath,
+    diagnostics,
+    objectName: "ownership",
+    code: "config.unknown-ownership-key",
+  });
+
+  return {
+    sharedCss: parseStringArray({
+      value: value.sharedCss,
+      fallback: DEFAULT_SCANNER_CONFIG.ownership.sharedCss,
+      filePath,
+      diagnostics,
+      code: "config.invalid-ownership-shared-css",
+      message: "ownership.sharedCss must be an array of non-empty strings",
+      requireNonEmpty: true,
+    }),
+  };
+}
+
 function parseExternalCssGlobals(
   value: unknown,
   filePath: string,
@@ -501,12 +555,18 @@ function parseStringArray(input: {
   diagnostics: ScanDiagnostic[];
   code: string;
   message: string;
+  requireNonEmpty?: boolean;
 }): string[] {
   if (input.value === undefined) {
     return input.fallback;
   }
 
-  if (Array.isArray(input.value) && input.value.every((entry) => typeof entry === "string")) {
+  if (
+    Array.isArray(input.value) &&
+    input.value.every(
+      (entry) => typeof entry === "string" && (!input.requireNonEmpty || entry.trim().length > 0),
+    )
+  ) {
     return input.value;
   }
 
@@ -579,6 +639,12 @@ function cloneExternalCssConfig(
     fetchRemote: config.fetchRemote,
     globals: cloneExternalCssGlobals(config.globals),
     remoteTimeoutMs: config.remoteTimeoutMs,
+  };
+}
+
+function cloneOwnershipConfig(config: ScannerConfig["ownership"]): ScannerConfig["ownership"] {
+  return {
+    sharedCss: [...config.sharedCss],
   };
 }
 

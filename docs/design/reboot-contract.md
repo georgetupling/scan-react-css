@@ -544,6 +544,9 @@ type ScanConfig = {
     }>;
     remoteTimeoutMs?: number;
   };
+  ownership?: {
+    sharedCss?: string[];
+  };
 };
 ```
 
@@ -581,14 +584,16 @@ Design rules:
 - remote HTML stylesheet links are fetched only when `externalCss.fetchRemote` is `true`; fetched CSS is
   parsed into concrete class definitions, uses `remoteTimeoutMs`, is treated as project-wide
   external CSS, and fetch failures emit warning diagnostics
+- `ownership.sharedCss` is an array of project-relative stylesheet path/glob patterns that extends
+  built-in broad/shared stylesheet conventions for ownership rules
 - default rule severities come from `docs/design/rules-catalogue.md` and the rule catalogue code
 - rule ids follow the reboot catalogue; old scanner rule ids are not part of the clean contract
 - missing config should resolve to built-in defaults
 - unsupported or unknown config keys should produce error diagnostics rather than silently changing behavior
 - unknown rule IDs should produce error diagnostics rather than being ignored
 
-Additional include/exclude behavior and ownership conventions can be added once the public result
-shape and CLI output are stable.
+Additional include/exclude behavior can be added once the public result shape and CLI output are
+stable.
 
 ## CLI JSON Contract
 

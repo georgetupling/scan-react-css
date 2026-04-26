@@ -5,6 +5,7 @@ import type {
   ProjectAnalysisId,
   SourceAnchor,
 } from "../static-analysis-engine/index.js";
+import type { ScannerConfig } from "../config/index.js";
 
 export type RuleSeverity = "debug" | "info" | "warn" | "error";
 
@@ -54,6 +55,7 @@ export type UnresolvedFinding = Omit<Finding, "severity">;
 
 export type RuleContext = {
   analysis: ProjectAnalysis;
+  config: ScannerConfig;
   includeTraces?: boolean;
 };
 

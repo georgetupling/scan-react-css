@@ -245,6 +245,7 @@ test("scanProject returns deterministic public summary from discovered files", a
     assert.ok(
       result.config.externalCss.globals.some((provider) => provider.provider === "font-awesome"),
     );
+    assert.deepEqual(result.config.ownership.sharedCss, []);
     assert.equal(result.failed, false);
     assert.deepEqual(result.findings, []);
     assert.equal("analysis" in result, false);
@@ -526,6 +527,74 @@ test("scanProject fails on unknown cssModules config keys", async () => {
     assert.equal(result.failed, true);
     assert.equal(result.diagnostics[0].code, "config.unknown-css-modules-key");
     assert.match(result.diagnostics[0].message, /unknown cssModules key "namedExports"/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject accepts ownership shared CSS config", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharedCss: ["src/styles/**/*.css", "src/**/Card.css"],
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.equal(result.failed, false);
+    assert.deepEqual(result.config.ownership.sharedCss, ["src/styles/**/*.css", "src/**/Card.css"]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject fails on unknown ownership config keys", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        globalCss: ["src/styles/**/*.css"],
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.equal(result.failed, true);
+    assert.equal(result.diagnostics[0].code, "config.unknown-ownership-key");
+    assert.match(result.diagnostics[0].message, /unknown ownership key "globalCss"/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject fails on invalid ownership shared CSS config", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharedCss: ["src/styles/**/*.css", ""],
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.equal(result.failed, true);
+    assert.equal(result.diagnostics[0].code, "config.invalid-ownership-shared-css");
+    assert.match(result.diagnostics[0].message, /ownership\.sharedCss must be an array/);
   } finally {
     await project.cleanup();
   }

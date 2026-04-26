@@ -263,6 +263,46 @@ test("style-used-outside-owner does not report intentionally broad stylesheets",
   }
 });
 
+test("style-used-outside-owner does not report configured shared CSS", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharedCss: ["src/components/Button/Button.css"],
+      },
+    })
+    .withSourceFile(
+      "src/components/Button/Button.tsx",
+      [
+        'import "./Button.css";',
+        'export function Button() { return <button className="button">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      [
+        'import { Button } from "./Button/Button";',
+        'export function Card() { return <div><Button /><span className="button">Again</span></div>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/components/Button/Button.css", ".button { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-used-outside-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("style-shared-without-shared-owner reports multi-component styles without broad owner evidence", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
@@ -335,6 +375,80 @@ test("style-shared-without-shared-owner does not report intentionally broad styl
 
     assert.deepEqual(
       result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-shared-without-shared-owner does not report configured shared CSS globs", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharedCss: ["src/styles/**/*.css"],
+      },
+    })
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import "../styles/surfaces.css";',
+        'export function Button() { return <button className="surface">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      [
+        'import "../styles/surfaces.css";',
+        'export function Card() { return <article className="surface">Again</article>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/styles/surfaces.css", ".surface { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("single-component-style-not-colocated does not report configured shared CSS", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharedCss: ["src/styles/**/*.css"],
+      },
+    })
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import "../styles/layouts.css";',
+        'export function Button() { return <button className="stack">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/styles/layouts.css", ".stack { display: grid; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.deepEqual(
+      result.findings.filter(
+        (finding) => finding.ruleId === "single-component-style-not-colocated",
+      ),
       [],
     );
   } finally {

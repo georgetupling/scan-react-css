@@ -1,5 +1,6 @@
 import type { AnalysisTrace } from "../../static-analysis-engine/index.js";
 import type { RuleContext, RuleDefinition, UnresolvedFinding } from "../types.js";
+import { isIntentionallySharedStylesheetPath } from "./ownershipRuleUtils.js";
 
 const COLOCATION_REASONS = new Set([
   "same-directory",
@@ -28,6 +29,10 @@ function runSingleComponentStyleNotColocatedRule(context: RuleContext): Unresolv
       !stylesheet ||
       definition.isCssModule ||
       stylesheet.origin !== "project-css" ||
+      isIntentionallySharedStylesheetPath({
+        filePath: stylesheet.filePath,
+        sharedCssPatterns: context.config.ownership.sharedCss,
+      }) ||
       ownership.consumerSummary.consumerComponentIds.length !== 1
     ) {
       continue;

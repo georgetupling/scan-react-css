@@ -21,11 +21,16 @@ export type ExternalCssConfig = {
   remoteTimeoutMs: number;
 };
 
+export type OwnershipConfig = {
+  sharedCss: string[];
+};
+
 export type ScannerConfig = {
   failOnSeverity: RuleSeverity;
   rules: Record<string, RuleConfigSeverity>;
   cssModules: CssModulesConfig;
   externalCss: ExternalCssConfig;
+  ownership: OwnershipConfig;
 };
 
 export type ResolvedScannerConfig = ScannerConfig & {
