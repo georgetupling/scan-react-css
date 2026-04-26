@@ -109,28 +109,35 @@ function summarizeClassAttribute(
       return undefined;
     }
 
-    const summary = summarizeBoundClassNameExpression(expression, context);
-    const sourceExpression = summary.sourceExpression ?? expression;
-    const sourceFile = sourceExpression.getSourceFile();
-    const sourceAnchor = toSourceAnchor(sourceExpression, sourceFile, sourceFile.fileName);
-    const sourceText = sourceExpression.getText(sourceFile);
-
-    return {
-      sourceAnchor,
-      value: summary.value,
-      classes: toAbstractClassSet(summary.value, sourceAnchor),
-      classNameSourceAnchors: collectClassNameSourceAnchors(expression, context),
-      sourceText,
-      traces: buildClassExpressionTraces({
-        sourceAnchor,
-        sourceText,
-        value: summary.value,
-        includeTraces: context.includeTraces,
-      }),
-    };
+    return summarizeClassNameExpressionForRender(expression, context);
   }
 
   return undefined;
+}
+
+export function summarizeClassNameExpressionForRender(
+  expression: ts.Expression,
+  context: BuildContext,
+): ClassExpressionSummary {
+  const summary = summarizeBoundClassNameExpression(expression, context);
+  const sourceExpression = summary.sourceExpression ?? expression;
+  const sourceFile = sourceExpression.getSourceFile();
+  const sourceAnchor = toSourceAnchor(sourceExpression, sourceFile, sourceFile.fileName);
+  const sourceText = sourceExpression.getText(sourceFile);
+
+  return {
+    sourceAnchor,
+    value: summary.value,
+    classes: toAbstractClassSet(summary.value, sourceAnchor),
+    classNameSourceAnchors: collectClassNameSourceAnchors(expression, context),
+    sourceText,
+    traces: buildClassExpressionTraces({
+      sourceAnchor,
+      sourceText,
+      value: summary.value,
+      includeTraces: context.includeTraces,
+    }),
+  };
 }
 
 function unwrapJsxAttributeInitializer(
