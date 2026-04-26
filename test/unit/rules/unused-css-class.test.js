@@ -29,6 +29,74 @@ test("unused-css-class reports unreferenced local CSS classes", async () => {
   }
 });
 
+test("unused-css-class aggregates repeated definitions for the same class", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile("src/App.tsx", "export function App() { return <main>Hello</main>; }\n")
+    .withCssFile(
+      "src/Tag.css",
+      [
+        ".tag { display: inline-flex; }",
+        "span.tag { cursor: default; }",
+        "a.tag,",
+        "button.tag { cursor: pointer; }",
+        "a.tag:hover,",
+        "button.tag:focus-visible { color: blue; }",
+        ".tag--large { font-size: 1rem; }",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx"],
+      cssFilePaths: ["src/Tag.css"],
+    });
+    const findings = result.findings.filter(
+      (finding) => finding.ruleId === "unused-css-class" && finding.data?.className === "tag",
+    );
+
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].data?.definitionCount, 6);
+    assert.deepEqual(findings[0].data?.definitionLocations, [
+      {
+        filePath: "src/Tag.css",
+        startLine: 1,
+        selectorText: ".tag",
+      },
+      {
+        filePath: "src/Tag.css",
+        startLine: 2,
+        selectorText: "span.tag",
+      },
+      {
+        filePath: "src/Tag.css",
+        startLine: 3,
+        selectorText: "a.tag",
+      },
+      {
+        filePath: "src/Tag.css",
+        startLine: 3,
+        selectorText: "button.tag",
+      },
+      {
+        filePath: "src/Tag.css",
+        startLine: 5,
+        selectorText: "a.tag:hover",
+      },
+      {
+        filePath: "src/Tag.css",
+        startLine: 5,
+        selectorText: "button.tag:focus-visible",
+      },
+    ]);
+    assert.match(findings[0].message, /defined 6 times/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("unused-css-class does not report referenced classes", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

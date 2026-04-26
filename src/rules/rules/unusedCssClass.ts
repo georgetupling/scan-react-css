@@ -9,7 +9,15 @@ export const unusedCssClassRule: RuleDefinition = {
 };
 
 function runUnusedCssClassRule(context: RuleContext): UnresolvedFinding[] {
-  const findings: UnresolvedFinding[] = [];
+  const definitionsByClassAndStylesheet = new Map<
+    string,
+    Array<{
+      definition: RuleContext["analysis"]["entities"]["classDefinitions"][number];
+      stylesheet: NonNullable<
+        ReturnType<RuleContext["analysis"]["indexes"]["stylesheetsById"]["get"]>
+      >;
+    }>
+  >();
   const hasUnknownDynamicReferences = context.analysis.entities.classReferences.some(
     (reference) => reference.unknownDynamic,
   );
@@ -25,46 +33,156 @@ function runUnusedCssClassRule(context: RuleContext): UnresolvedFinding[] {
       continue;
     }
 
-    findings.push({
-      id: `unused-css-class:${definition.id}`,
-      ruleId: "unused-css-class",
-      confidence: hasUnknownDynamicReferences ? "medium" : "high",
-      message: `Class "${definition.className}" is defined but no known React class reference uses it.`,
-      subject: {
-        kind: "class-definition",
-        id: definition.id,
-      },
-      location: stylesheet.filePath
-        ? {
-            filePath: stylesheet.filePath,
-            startLine: definition.line,
-            startColumn: 1,
-          }
-        : undefined,
-      evidence: [
-        {
-          kind: "stylesheet",
-          id: definition.stylesheetId,
-        },
-      ],
-      traces:
-        context.includeTraces === false
-          ? []
-          : buildUnusedClassTraces({
-              context,
-              definition,
-              stylesheetFilePath: stylesheet.filePath,
+    const key = `${definition.stylesheetId}:${definition.className}`;
+    const definitions = definitionsByClassAndStylesheet.get(key);
+    if (definitions) {
+      definitions.push({ definition, stylesheet });
+    } else {
+      definitionsByClassAndStylesheet.set(key, [{ definition, stylesheet }]);
+    }
+  }
+
+  return [...definitionsByClassAndStylesheet.values()]
+    .map((definitions) =>
+      buildUnusedClassFinding({
+        context,
+        definitions,
+        hasUnknownDynamicReferences,
+      }),
+    )
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+function buildUnusedClassFinding(input: {
+  context: RuleContext;
+  definitions: Array<{
+    definition: RuleContext["analysis"]["entities"]["classDefinitions"][number];
+    stylesheet: NonNullable<
+      ReturnType<RuleContext["analysis"]["indexes"]["stylesheetsById"]["get"]>
+    >;
+  }>;
+  hasUnknownDynamicReferences: boolean;
+}): UnresolvedFinding {
+  const definitions = input.definitions.sort(
+    (left, right) => left.definition.line - right.definition.line,
+  );
+  const first = definitions[0];
+  const className = first.definition.className;
+  const stylesheet = first.stylesheet;
+  const definitionLocations = buildDefinitionLocations(definitions);
+  const selectorTexts = [
+    ...new Set(definitions.map((entry) => entry.definition.selectorText)),
+  ].sort((left, right) => left.localeCompare(right));
+
+  return {
+    id: `unused-css-class:${first.definition.stylesheetId}:${className}`,
+    ruleId: "unused-css-class",
+    confidence: input.hasUnknownDynamicReferences ? "medium" : "high",
+    message: buildUnusedClassMessage(className, definitions.length),
+    subject: {
+      kind: "class-definition",
+      id: first.definition.id,
+    },
+    location: stylesheet.filePath
+      ? {
+          filePath: stylesheet.filePath,
+          startLine: first.definition.line,
+          startColumn: 1,
+        }
+      : undefined,
+    evidence: buildUnusedClassEvidence(definitions),
+    traces:
+      input.context.includeTraces === false
+        ? []
+        : definitions.flatMap((entry) =>
+            buildUnusedClassTraces({
+              context: input.context,
+              definition: entry.definition,
+              stylesheetFilePath: entry.stylesheet.filePath,
             }),
-      data: {
-        className: definition.className,
-        selectorText: definition.selectorText,
-        stylesheetId: definition.stylesheetId,
-        stylesheetFilePath: stylesheet.filePath,
-      },
+          ),
+    data: {
+      className,
+      selectorText: first.definition.selectorText,
+      selectorTexts,
+      definitionCount: definitions.length,
+      definitionLocations,
+      stylesheetId: first.definition.stylesheetId,
+      stylesheetFilePath: stylesheet.filePath,
+    },
+  };
+}
+
+function buildUnusedClassMessage(className: string, definitionCount: number): string {
+  const definitionText =
+    definitionCount === 1 ? "is defined" : `is defined ${definitionCount} times`;
+  return `Class "${className}" ${definitionText} but no known React class reference uses it.`;
+}
+
+function buildUnusedClassEvidence(
+  definitions: Array<{
+    definition: RuleContext["analysis"]["entities"]["classDefinitions"][number];
+    stylesheet: NonNullable<
+      ReturnType<RuleContext["analysis"]["indexes"]["stylesheetsById"]["get"]>
+    >;
+  }>,
+): UnresolvedFinding["evidence"] {
+  const evidenceByKey = new Map<string, UnresolvedFinding["evidence"][number]>();
+
+  for (const { definition } of definitions) {
+    evidenceByKey.set(`stylesheet:${definition.stylesheetId}`, {
+      kind: "stylesheet",
+      id: definition.stylesheetId,
+    });
+    evidenceByKey.set(`class-definition:${definition.id}`, {
+      kind: "class-definition",
+      id: definition.id,
     });
   }
 
-  return findings.sort((left, right) => left.id.localeCompare(right.id));
+  return [...evidenceByKey.values()];
+}
+
+function buildDefinitionLocations(
+  definitions: Array<{
+    definition: RuleContext["analysis"]["entities"]["classDefinitions"][number];
+    stylesheet: NonNullable<
+      ReturnType<RuleContext["analysis"]["indexes"]["stylesheetsById"]["get"]>
+    >;
+  }>,
+): Array<{
+  filePath: string;
+  startLine: number;
+  selectorText: string;
+}> {
+  const locationsByKey = new Map<
+    string,
+    {
+      filePath: string;
+      startLine: number;
+      selectorText: string;
+    }
+  >();
+
+  for (const { definition, stylesheet } of definitions) {
+    if (!stylesheet.filePath) {
+      continue;
+    }
+
+    const key = [stylesheet.filePath, definition.line, definition.selectorText].join(":");
+    locationsByKey.set(key, {
+      filePath: stylesheet.filePath,
+      startLine: definition.line,
+      selectorText: definition.selectorText,
+    });
+  }
+
+  return [...locationsByKey.values()].sort(
+    (left, right) =>
+      left.filePath.localeCompare(right.filePath) ||
+      left.startLine - right.startLine ||
+      left.selectorText.localeCompare(right.selectorText),
+  );
 }
 
 function buildUnusedClassTraces(input: {

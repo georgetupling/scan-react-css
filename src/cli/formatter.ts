@@ -255,6 +255,11 @@ function formatFindingDataLines(data: Finding["data"]): string[] {
     "componentNames",
     "ownerComponentName",
     "consumerComponentName",
+    "usageCount",
+    "usageLocations",
+    "definitionCount",
+    "definitionLocations",
+    "selectorTexts",
   ];
   const keys = preferredKeys.filter((key) => Object.hasOwn(data, key));
 

@@ -770,13 +770,78 @@ test("missing-css-class deduplicates repeated render IR class references", async
       cssFilePaths: [],
     });
 
-    assert.equal(
-      result.findings.filter(
-        (finding) =>
-          finding.ruleId === "missing-css-class" && finding.data?.className === "repeated",
-      ).length,
-      1,
+    const findings = result.findings.filter(
+      (finding) => finding.ruleId === "missing-css-class" && finding.data?.className === "repeated",
     );
+
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].data?.usageCount, 1);
+    assert.deepEqual(findings[0].data?.usageLocations, [
+      {
+        filePath: "src/App.tsx",
+        startLine: 2,
+        startColumn: 63,
+        rawExpressionText: '"repeated"',
+      },
+    ]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("missing-css-class aggregates multiple references for the same missing class", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        "export function App() {",
+        "  return (",
+        "    <>",
+        '      <div className="skeleton skeleton--block" />',
+        '      <span className="skeleton skeleton--block" />',
+        '      <section className="skeleton skeleton--block" />',
+        "    </>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx"],
+      cssFilePaths: [],
+    });
+    const findings = result.findings.filter(
+      (finding) =>
+        finding.ruleId === "missing-css-class" && finding.data?.className === "skeleton--block",
+    );
+
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].data?.usageCount, 3);
+    assert.deepEqual(findings[0].data?.usageLocations, [
+      {
+        filePath: "src/App.tsx",
+        startLine: 4,
+        startColumn: 22,
+        rawExpressionText: '"skeleton skeleton--block"',
+      },
+      {
+        filePath: "src/App.tsx",
+        startLine: 5,
+        startColumn: 23,
+        rawExpressionText: '"skeleton skeleton--block"',
+      },
+      {
+        filePath: "src/App.tsx",
+        startLine: 6,
+        startColumn: 26,
+        rawExpressionText: '"skeleton skeleton--block"',
+      },
+    ]);
+    assert.match(findings[0].message, /referenced 3 times/);
   } finally {
     await project.cleanup();
   }

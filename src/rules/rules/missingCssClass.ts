@@ -9,7 +9,13 @@ export const missingCssClassRule: RuleDefinition = {
 };
 
 function runMissingCssClassRule(context: RuleContext): UnresolvedFinding[] {
-  const findings: UnresolvedFinding[] = [];
+  const findingInputsByClassName = new Map<
+    string,
+    Array<{
+      reference: RuleContext["analysis"]["entities"]["classReferences"][number];
+      className: string;
+    }>
+  >();
 
   for (const reference of context.analysis.entities.classReferences) {
     for (const className of reference.definiteClassNames) {
@@ -29,43 +35,145 @@ function runMissingCssClassRule(context: RuleContext): UnresolvedFinding[] {
         continue;
       }
 
-      findings.push({
-        id: `missing-css-class:${reference.id}:${className}`,
-        ruleId: "missing-css-class",
-        confidence: "high",
-        message: `Class "${className}" is referenced but no matching CSS definition, selector context, or declared provider was found.`,
-        subject: {
-          kind: "class-reference",
-          id: reference.id,
-        },
-        location: reference.location,
-        evidence: [
-          {
-            kind: "source-file",
-            id: reference.sourceFileId,
-          },
-        ],
-        traces:
-          context.includeTraces === false
-            ? []
-            : buildMissingClassTraces({
-                reference,
-                className,
-              }),
-        data: {
-          className,
-          rawExpressionText: reference.rawExpressionText,
-          expressionKind: reference.expressionKind,
-        },
-      });
+      const inputs = findingInputsByClassName.get(className);
+      if (inputs) {
+        inputs.push({ reference, className });
+      } else {
+        findingInputsByClassName.set(className, [{ reference, className }]);
+      }
     }
   }
 
-  return findings.sort((left, right) => left.id.localeCompare(right.id));
+  return [...findingInputsByClassName.entries()]
+    .map(([className, inputs]) => buildMissingClassFinding(context, className, inputs))
+    .sort((left, right) => left.id.localeCompare(right.id));
 }
 
 function createReferenceClassKey(referenceId: string, className: string): string {
   return `${referenceId}:${className}`;
+}
+
+function buildMissingClassFinding(
+  context: RuleContext,
+  className: string,
+  inputs: Array<{
+    reference: RuleContext["analysis"]["entities"]["classReferences"][number];
+    className: string;
+  }>,
+): UnresolvedFinding {
+  const references = inputs
+    .map((input) => input.reference)
+    .sort(
+      (left, right) => compareReferenceLocations(left, right) || left.id.localeCompare(right.id),
+    );
+  const firstReference = references[0];
+  const usageLocations = dedupeUsageLocations(references);
+
+  return {
+    id: `missing-css-class:${className}`,
+    ruleId: "missing-css-class",
+    confidence: "high",
+    message: buildMissingClassMessage(className, references.length),
+    subject: {
+      kind: "class-reference",
+      id: firstReference.id,
+    },
+    location: firstReference.location,
+    evidence: buildMissingClassEvidence(references),
+    traces:
+      context.includeTraces === false
+        ? []
+        : references.flatMap((reference) =>
+            buildMissingClassTraces({
+              reference,
+              className,
+            }),
+          ),
+    data: {
+      className,
+      rawExpressionText: firstReference.rawExpressionText,
+      expressionKind: firstReference.expressionKind,
+      usageCount: references.length,
+      usageLocations,
+    },
+  };
+}
+
+function buildMissingClassMessage(className: string, usageCount: number): string {
+  const referenceText = usageCount === 1 ? "is referenced" : `is referenced ${usageCount} times`;
+  return `Class "${className}" ${referenceText} but no matching CSS definition, selector context, or declared provider was found.`;
+}
+
+function buildMissingClassEvidence(
+  references: RuleContext["analysis"]["entities"]["classReferences"],
+): UnresolvedFinding["evidence"] {
+  const evidenceByKey = new Map<string, UnresolvedFinding["evidence"][number]>();
+
+  for (const reference of references) {
+    evidenceByKey.set(`source-file:${reference.sourceFileId}`, {
+      kind: "source-file",
+      id: reference.sourceFileId,
+    });
+    evidenceByKey.set(`class-reference:${reference.id}`, {
+      kind: "class-reference",
+      id: reference.id,
+    });
+  }
+
+  return [...evidenceByKey.values()];
+}
+
+function dedupeUsageLocations(
+  references: RuleContext["analysis"]["entities"]["classReferences"],
+): Array<{
+  filePath: string;
+  startLine: number;
+  startColumn: number;
+  rawExpressionText: string;
+}> {
+  const locationsByKey = new Map<
+    string,
+    {
+      filePath: string;
+      startLine: number;
+      startColumn: number;
+      rawExpressionText: string;
+    }
+  >();
+
+  for (const reference of references) {
+    const key = [
+      reference.location.filePath,
+      reference.location.startLine,
+      reference.location.startColumn,
+      reference.rawExpressionText,
+    ].join(":");
+    locationsByKey.set(key, {
+      filePath: reference.location.filePath,
+      startLine: reference.location.startLine,
+      startColumn: reference.location.startColumn,
+      rawExpressionText: reference.rawExpressionText,
+    });
+  }
+
+  return [...locationsByKey.values()].sort(
+    (left, right) =>
+      left.filePath.localeCompare(right.filePath) ||
+      left.startLine - right.startLine ||
+      left.startColumn - right.startColumn ||
+      left.rawExpressionText.localeCompare(right.rawExpressionText),
+  );
+}
+
+function compareReferenceLocations(
+  left: RuleContext["analysis"]["entities"]["classReferences"][number],
+  right: RuleContext["analysis"]["entities"]["classReferences"][number],
+): number {
+  return (
+    left.location.filePath.localeCompare(right.location.filePath) ||
+    left.location.startLine - right.location.startLine ||
+    left.location.startColumn - right.location.startColumn
+  );
 }
 
 function buildMissingClassTraces(input: {
