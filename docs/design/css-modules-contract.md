@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the supported CSS Modules surface for the reboot analysis track.
+This document defines the supported CSS Modules surface for the analysis track.
 
 CSS Module syntax and binding discovery belongs in `cssModuleAnalysisStage` and
 `pipeline/css-modules`. `ProjectAnalysis` assigns stable ids, connects records to source files and

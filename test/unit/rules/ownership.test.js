@@ -38,6 +38,48 @@ test("single-component-style-not-colocated reports one-component styles outside 
   }
 });
 
+test("single-component-style-not-colocated consolidates repeated definitions", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import "../styles/button.css";',
+        'export function Button() { return <button className="button">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/styles/button.css",
+      [
+        ".button { display: block; }",
+        "@media (min-width: 40rem) {",
+        "  .button { gap: 0.5rem; }",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/components/Button.tsx"],
+      cssFilePaths: ["src/styles/button.css"],
+    });
+
+    const findings = result.findings.filter(
+      (finding) => finding.ruleId === "single-component-style-not-colocated",
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].data?.className, "button");
+    assert.equal(findings[0].data?.definitionCount, 2);
+    assert.equal(Array.isArray(findings[0].data?.definitionLocations), true);
+    assert.match(findings[0].message, /defined in 2 matching selector blocks/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("single-component-style-not-colocated does not report colocated sibling styles", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
@@ -548,6 +590,70 @@ test("style-used-outside-owner reports private owner leaks even when the path lo
   }
 });
 
+test("style-used-outside-owner consolidates outside consumers and repeated definitions", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button/Button.tsx",
+      [
+        'import "./Button.css";',
+        'export function Button() { return <button className="button">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      [
+        'import { Button } from "./Button/Button";',
+        'export function Card() { return <div><Button /><span className="button">Again</span></div>; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Dialog.tsx",
+      [
+        'import { Button } from "./Button/Button";',
+        'export function Dialog() { return <section><Button /><span className="button">Again</span></section>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/components/Button/Button.css",
+      [
+        ".button { display: block; }",
+        "@media (min-width: 40rem) {",
+        "  .button { gap: 0.5rem; }",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: [
+        "src/components/Button/Button.tsx",
+        "src/components/Card.tsx",
+        "src/components/Dialog.tsx",
+      ],
+      cssFilePaths: ["src/components/Button/Button.css"],
+    });
+
+    const findings = result.findings.filter(
+      (finding) => finding.ruleId === "style-used-outside-owner",
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].data?.className, "button");
+    assert.equal(findings[0].data?.outsideConsumerComponentCount, 2);
+    assert.deepEqual(findings[0].data?.outsideConsumerComponentNames, ["Card", "Dialog"]);
+    assert.equal(findings[0].data?.definitionCount, 2);
+    assert.match(findings[0].message, /used outside that owner by 2 components: Card, Dialog/);
+    assert.match(findings[0].message, /defined in 2 matching selector blocks/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("style-shared-without-shared-owner reports multi-component styles without broad owner evidence", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
@@ -585,6 +691,57 @@ test("style-shared-without-shared-owner reports multi-component styles without b
     assert.equal(findings[0].subject.kind, "class-definition");
     assert.equal(findings[0].data?.className, "surface");
     assert.deepEqual(findings[0].data?.componentNames, ["Button", "Card"]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-shared-without-shared-owner consolidates repeated definitions", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import "../styles/surface.css";',
+        'export function Button() { return <button className="surface">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      [
+        'import "../styles/surface.css";',
+        'export function Card() { return <article className="surface">Again</article>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/styles/surface.css",
+      [
+        ".surface { display: block; }",
+        "@media (min-width: 40rem) {",
+        "  .surface { gap: 0.5rem; }",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/components/Button.tsx", "src/components/Card.tsx"],
+      cssFilePaths: ["src/styles/surface.css"],
+    });
+
+    const findings = result.findings.filter(
+      (finding) => finding.ruleId === "style-shared-without-shared-owner",
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].data?.className, "surface");
+    assert.deepEqual(findings[0].data?.componentNames, ["Button", "Card"]);
+    assert.equal(findings[0].data?.definitionCount, 2);
+    assert.match(findings[0].message, /used by 2 components/);
+    assert.match(findings[0].message, /defined in 2 matching selector blocks/);
   } finally {
     await project.cleanup();
   }

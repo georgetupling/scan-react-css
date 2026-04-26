@@ -9,14 +9,14 @@ It focuses on:
 - package and build state
 - Node API and CLI state
 - deleted functionality that now needs rebuilding around the engine
-- product-level scope trims that are safe during the reboot
+- product-level scope trims that are safe during the rebuild
 - ambiguities in intended product behavior
 
 This document is intentionally separate from the engine assessment.
 
 ## Current State Summary
 
-The product shell has been rebooted into a small working slice.
+The product shell has been rebuilt into a small working slice.
 
 Implemented areas include:
 
@@ -35,7 +35,7 @@ The shell is no longer trying to preserve the deleted scanner architecture. It n
 runs rules outside the engine, and returns rule findings as product-layer output.
 
 The main remaining issue is that the shell is still thin. The current implementation is enough to
-validate the reboot direction, but it is not yet a polished publishable CLI contract.
+validate the product direction, but it is not yet a polished publishable CLI contract.
 
 ## Functionality That Still Needs To Be Built Around The Engine
 
@@ -158,9 +158,9 @@ Need to rebuild:
 - rule docs
 - current project status docs
 
-## Product Functionality That Is Safe To Trim During The Reboot
+## Product Functionality That Is Safe To Trim During The Rebuild
 
-The reboot should intentionally keep scope small until the new contract settles.
+The product should intentionally keep scope small until the new contract settles.
 
 ### Safe trims
 
@@ -241,16 +241,16 @@ Questions still open:
 - remote fetching
 - HTML-linked remote stylesheets
 
-The reboot should choose a minimal v1 instead of carrying all historical possibilities.
+The product should choose a minimal v1 instead of carrying all historical possibilities.
 
 ### 6. Do we preserve old rule names?
 
 Current decision:
 
-- prefer the reboot catalogue names
+- prefer the rule catalogue names
 - keep semantics documented in `docs/design/rules-catalogue.md`
 - do not treat old scanner parity as the main contract
-- do not preserve old rule ids as migration aliases in the clean reboot contract
+- do not preserve old rule ids as migration aliases in the clean product contract
 
 Still open:
 

@@ -276,7 +276,7 @@ test("CLI groups human-readable findings by file and prints summary last", async
     const output = error.stdout;
 
     assert.equal(error.code, 1);
-    assert.match(output, /scan-react-css reboot scan/);
+    assert.match(output, /scan-react-css scan/);
     assert.ok(output.includes("src/App.css\n  [warn] unused-css-class at src/App.css:1"));
     assert.ok(output.includes("src/App.tsx\n  [error] missing-css-class at src/App.tsx:2"));
     assert.match(output, /src\/App\.css[\s\S]*\n\nsrc\/App\.tsx/);

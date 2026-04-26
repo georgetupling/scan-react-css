@@ -37,7 +37,7 @@ Implemented areas include:
 - CSS Module member-to-export match relations projected and indexed through `ProjectAnalysis`
 - render-model internals grouped under the render-model pipeline stage
 
-The pipeline in `entry/scan.ts` is coherent enough to act as the nucleus of the reboot.
+The pipeline in `entry/scan.ts` is coherent enough to act as the nucleus of the product.
 
 The biggest problem is not that the engine has no structure. The biggest remaining problem is that
 the new project analysis contract is still a first slice and does not yet cover every product
@@ -122,7 +122,7 @@ The module graph is useful, but it is still limited in ways that matter for a pr
 - no explicit monorepo workspace resolution contract
 - CSS import handling is still based on basic specifier classification
 
-This is acceptable for a reboot, but it is a real functional limit.
+This is acceptable for a rebuild, but it is a real functional limit.
 
 ### 5. Selector analysis only covers a bounded subset
 
@@ -198,7 +198,7 @@ The main architectural leak is that rules are still doing analysis work.
 
 ### 1. Rules should not rebuild project-wide indexes
 
-The reboot moved rules above the engine and made them consume `ProjectAnalysis`.
+The product moved rules above the engine and made them consume `ProjectAnalysis`.
 
 Current rules are mostly reading:
 

@@ -1,4 +1,4 @@
-# Reboot Contract
+# Product Contract
 
 ## Purpose
 
@@ -12,7 +12,7 @@ The main design goal is to stop the project from drifting into repeated refactor
 
 ## Layering
 
-The reboot should enforce four layers.
+The product should enforce four layers.
 
 ### 1. Project loading
 
@@ -447,7 +447,7 @@ Recommended intent:
 - debug information should be surfaced through diagnostics, traces, and stable summary fields rather than by dumping engine internals
 - JSON output should be human-readable, deterministic, and close to the public result shape
 
-The first reboot shell exposes a narrower interim contract:
+The first product shell exposes a narrower interim contract:
 
 ```ts
 type ScanProjectInput = {
@@ -555,7 +555,7 @@ Ignore semantics:
 
 ## Minimal Config Contract
 
-The first stable reboot config should stay intentionally small.
+The first stable config should stay intentionally small.
 
 ```ts
 type ScanConfig = {
@@ -621,12 +621,16 @@ Design rules:
 - ownership-style rules apply stylesheet intent in this order: strong private component owner
   evidence, then configured `ownership.sharedCss` patterns, then built-in broad/shared stylesheet
   conventions, then relational ownership evidence
+- `style-used-outside-owner` is a conservative private-owner warning: same-directory owner-family
+  consumers, generic state tokens, and scoped primitive overrides are not treated as leaks
+- ownership-style findings consolidate repeated selector/media definition evidence and expose
+  aggregate counts and definition locations in finding data
 - `ownership.sharedCss` is an array of project-relative stylesheet path/glob patterns that extends
   built-in broad/shared stylesheet conventions for ownership rules
 - `ignore.classNames` and `ignore.filePaths` are arrays of non-empty suppression patterns, not CSS
   evidence declarations
 - default rule severities come from `docs/design/rules-catalogue.md` and the rule catalogue code
-- rule ids follow the reboot catalogue; old scanner rule ids are not part of the clean contract
+- rule ids follow the rule catalogue; old scanner rule ids are not part of the clean contract
 - missing config should resolve to built-in defaults
 - unsupported or unknown config keys should produce error diagnostics rather than silently changing behavior
 - unknown rule IDs should produce error diagnostics rather than being ignored
@@ -713,7 +717,7 @@ The following deleted product capabilities need to be rebuilt outside the engine
 - tests
 - user docs
 
-## Safe Trims For The Reboot
+## Safe Trims For The Product
 
 The following should be treated as optional until the new contract is stable. The first two have already been removed from `src/static-analysis-engine`:
 
@@ -740,7 +744,7 @@ The following should be treated as optional until the new contract is stable. Th
 
 ## Success Criteria
 
-The reboot is on track when:
+The product is on track when:
 
 - rules are mostly short and read from normalized analysis data
 - analysis owns the expensive grouping and matching logic

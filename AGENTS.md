@@ -4,7 +4,7 @@
 
 `scan-react-css` is a standalone npm tool for auditing how React code uses CSS.
 
-The active rebooted product includes:
+The active product includes:
 
 - a CLI and Node API
 - JSON config discovery and validation
@@ -27,7 +27,7 @@ Treat `src/`, tests, and the durable design docs as the source of truth. Extend 
 Start here:
 
 - [README.md](./README.md)
-- [docs/design/reboot-contract.md](./docs/design/reboot-contract.md)
+- [docs/design/product-contract.md](./docs/design/product-contract.md)
 - [docs/design/rules-catalogue.md](./docs/design/rules-catalogue.md)
 - [docs/design/css-modules-contract.md](./docs/design/css-modules-contract.md)
 - [docs/design/current-product-assessment.md](./docs/design/current-product-assessment.md)
@@ -37,14 +37,14 @@ Observation and planning notes:
 
 - [docs/observations/scan-react-css-observations-0.1.4.md](./docs/observations/scan-react-css-observations-0.1.4.md)
 - [docs/temp/0.1.4-observation-remediation-plan.md](./docs/temp/0.1.4-observation-remediation-plan.md)
-- [docs/temp/reboot-progress-and-outstanding-work.md](./docs/temp/reboot-progress-and-outstanding-work.md)
+- [docs/temp/product-progress-and-outstanding-work.md](./docs/temp/product-progress-and-outstanding-work.md)
 
 ## Source Of Truth Hierarchy
 
 When working on product behavior, use this priority order:
 
 1. `src/` and the tests
-2. [docs/design/reboot-contract.md](./docs/design/reboot-contract.md)
+2. [docs/design/product-contract.md](./docs/design/product-contract.md)
 3. [docs/design/rules-catalogue.md](./docs/design/rules-catalogue.md)
 4. [docs/design/css-modules-contract.md](./docs/design/css-modules-contract.md)
 5. assessment docs under `docs/design`
@@ -119,7 +119,7 @@ Do not quietly introduce broad new heuristics into the main analysis path withou
 
 ### Ownership Model
 
-The reboot uses relational ownership evidence rather than fixed ownership buckets. Ownership rules ask where classes are defined, where they are consumed, and what owner path/name conventions imply.
+The product uses relational ownership evidence rather than fixed ownership buckets. Ownership rules ask where classes are defined, where they are consumed, and what owner path/name conventions imply.
 
 Class references from expanded child components should be attributed to the child component that emitted the class expression, while render-subtree and placement metadata preserve the parent context.
 

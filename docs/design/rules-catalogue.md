@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines the target reboot rule catalogue.
+This document defines the target rule catalogue.
 
 The catalogue should stay centered on what this project can uniquely analyze:
 
@@ -163,7 +163,7 @@ Config:
 
 Ownership rules should be convention-aware and conservative by default.
 
-The reboot should prefer relational ownership over the old fixed bucket model. Instead of first asking whether a stylesheet is `component`, `page`, or `global`, these rules should ask:
+The product should prefer relational ownership over the old fixed bucket model. Instead of first asking whether a stylesheet is `component`, `page`, or `global`, these rules should ask:
 
 - where is this class defined?
 - where is it used?
@@ -172,7 +172,7 @@ The reboot should prefer relational ownership over the old fixed bucket model. I
 
 #### `single-component-style-not-colocated`
 
-Default severity: `debug`
+Default severity: `info`
 
 Triggers when a class is only used by one component, but its definition is not colocated with that component according to configured or inferred conventions.
 
@@ -181,6 +181,8 @@ Meaning:
 - the style behaves like component-local CSS
 - the file location suggests it lives elsewhere
 - this is a maintainability signal rather than a correctness failure
+- repeated selector or media definitions for the same class, stylesheet, and component are
+  consolidated into one finding with all definition locations in finding data
 
 Config:
 
@@ -194,19 +196,26 @@ Config:
 
 Default severity: `warn`
 
-Triggers when a stylesheet class has high-confidence private component ownership evidence, but is
-used by another component.
+Triggers when a stylesheet class has high-confidence private component ownership evidence and is
+used by one or more components outside that owner.
 
 Meaning:
 
 - a local style is leaking across an ownership boundary
 - this may make refactors risky because the defining owner does not match the consumers
+- one finding is emitted per class, stylesheet, and private owner; all outside consumers are
+  summarized in the message and exposed in finding data
 
 Config:
 
 - requires private ownership evidence such as mirrored component/stylesheet names or component-folder
   conventions; a single importer alone is not enough
 - treats strong private component owner evidence as higher priority than broad/shared path naming
+- does not report same-directory owner-family consumers as outside-owner leaks
+- does not report generic state tokens such as `is-*` and `has-*` as private-owner leaks
+- does not report scoped primitive overrides such as `.site-header__account-menu .popover__panel`
+  as private-owner leaks when the contextual owner class belongs to the private owner but the
+  subject class does not
 - may later support feature root patterns
 - may later support allowed cross-owner dependency lists
 
@@ -221,6 +230,8 @@ Meaning:
 
 - the style has become shared in practice
 - its file location still suggests a narrower owner
+- repeated selector or media definitions for the same class, stylesheet, and consumer set are
+  consolidated into one finding with all definition locations in finding data
 
 Config:
 

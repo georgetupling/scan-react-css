@@ -93,7 +93,7 @@ export function extractPathFromEntityId(entityId: string): string | undefined {
 }
 
 function formatTextHeader(result: ScanProjectResult, focusPaths: string[]): string {
-  const lines = [`scan-react-css reboot scan`, `Root: ${result.rootDir}`];
+  const lines = [`scan-react-css scan`, `Root: ${result.rootDir}`];
   if (focusPaths.length > 0) {
     lines.push(`Focus: ${focusPaths.join(", ")}`);
   }

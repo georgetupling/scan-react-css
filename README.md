@@ -2,13 +2,13 @@
 
 `scan-react-css` audits how React source code uses CSS.
 
-It scans React source files, project CSS, and CSS Modules, then reports deterministic findings for local development and CI. The current package is the rebooted product shell around the static analysis engine in `src/static-analysis-engine`.
+It scans React source files, project CSS, and CSS Modules, then reports deterministic findings for local development and CI. The current package is the product shell around the static analysis engine in `src/static-analysis-engine`.
 
 ## Current Status
 
 The active public contract is documented in:
 
-- [Reboot Contract](./docs/design/reboot-contract.md)
+- [Product Contract](./docs/design/product-contract.md)
 - [Rules Catalogue](./docs/design/rules-catalogue.md)
 - [CSS Modules Contract](./docs/design/css-modules-contract.md)
 - [Current Product Assessment](./docs/design/current-product-assessment.md)
@@ -311,6 +311,12 @@ prove private ownership; the scanner looks for stronger mirrored naming or compo
 before reporting `style-used-outside-owner`. Generic family stylesheets such as `Card.css` used by
 `ArticleCard` and `TopicCard` are treated as intentionally shared. Projects can also mark shared
 paths explicitly with `ownership.sharedCss`.
+
+`style-used-outside-owner` does not report same-directory owner-family consumers, generic state
+tokens such as `is-*` and `has-*`, or scoped primitive overrides such as
+`.site-header__account-menu .popover__panel` as private-owner leaks. Repeated ownership evidence
+from grouped selectors or media overrides is consolidated into one finding with definition counts
+and locations in JSON data.
 
 ## Node API
 
