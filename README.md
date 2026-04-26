@@ -61,13 +61,15 @@ By default this creates a timestamped report such as
 ## CLI Usage
 
 ```bash
-scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output] [--output-min-severity severity] [--verbosity low|medium|high] [--timings]
+scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--ignore-class class-or-glob] [--ignore-path path-or-glob] [--json] [--output-file path] [--overwrite-output] [--output-min-severity severity] [--verbosity low|medium|high] [--timings]
 ```
 
 Supported flags:
 
 - `--config path/to/scan-react-css.json`
 - `--focus path-or-glob`
+- `--ignore-class class-name-or-glob`
+- `--ignore-path path-or-glob`
 - `--json`
 - `--output-file path/to/report.json`
 - `--overwrite-output`
@@ -126,6 +128,30 @@ example `Building reachability graph`. JSON mode keeps progress output disabled 
 only the report confirmation on stdout.
 
 Use `--timings` to include stage duration data in text output or in the JSON report.
+
+### Ignores
+
+Ignores suppress findings after analysis and rule evaluation. They are intended for unavoidable false
+positives such as marker-only runtime classes, generated classes, or legacy areas being triaged.
+Ignored classes and paths do not create CSS definitions, provider matches, selector context, or
+reachability evidence.
+
+Details:
+
+- `--ignore-class` can be provided more than once and matches individual class tokens.
+- `--ignore-path` can be provided more than once and matches project-relative `/` paths.
+- Ignore patterns support `*`, `?`, and `**`.
+- CLI ignores are additive with config ignores for one-off local triage.
+- Ignored findings do not contribute to the CLI exit code.
+- Text and JSON summaries include `ignoredFindingCount` for auditability.
+
+Examples:
+
+```bash
+npx scan-react-css --ignore-class ProseMirror
+npx scan-react-css --ignore-class "generated-*"
+npx scan-react-css --ignore-path "src/legacy/**"
+```
 
 ### JSON Reports
 
@@ -192,6 +218,10 @@ Current config shape:
   },
   "ownership": {
     "sharedCss": ["src/styles/**/*.css", "src/**/Card.css"]
+  },
+  "ignore": {
+    "classNames": ["ProseMirror", "generated-*"],
+    "filePaths": ["src/legacy/**"]
   }
 }
 ```
@@ -232,6 +262,11 @@ conventions, including names such as `global.css`, `shared.css`, `layout.css`, a
 Strong private component-owner evidence, such as `Layout.tsx` paired with `Layout.css`, takes
 precedence over configured and built-in shared path signals. Otherwise, matching shared stylesheets
 are not reported as shared-without-owner CSS.
+
+Ignore config suppresses matching findings after rules run. `ignore.classNames` matches individual
+CSS class tokens, while `ignore.filePaths` matches project-relative file paths involved in a
+finding. These entries are suppression only and should not be used to model external stylesheets; use
+real CSS evidence or `externalCss.globals` provider declarations for that.
 
 The scanner also recognizes a small set of usage-only runtime DOM class APIs. ProseMirror
 `new EditorView(..., { attributes: { class: "..." } })` static class strings are indexed as
@@ -298,10 +333,16 @@ type ScanProjectInput = {
   rootDir?: string;
   sourceFilePaths?: string[];
   cssFilePaths?: string[];
+  htmlFilePaths?: string[];
   configPath?: string;
   configBaseDir?: string;
+  ignore?: {
+    classNames?: string[];
+    filePaths?: string[];
+  };
   onProgress?: (event: ScanProgressEvent) => void;
   collectPerformance?: boolean;
+  includeTraces?: boolean;
 };
 ```
 

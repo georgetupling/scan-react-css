@@ -246,6 +246,10 @@ test("scanProject returns deterministic public summary from discovered files", a
       result.config.externalCss.globals.some((provider) => provider.provider === "font-awesome"),
     );
     assert.deepEqual(result.config.ownership.sharedCss, []);
+    assert.deepEqual(result.config.ignore, {
+      classNames: [],
+      filePaths: [],
+    });
     assert.equal(result.failed, false);
     assert.deepEqual(result.findings, []);
     assert.equal("analysis" in result, false);
@@ -253,6 +257,7 @@ test("scanProject returns deterministic public summary from discovered files", a
       sourceFileCount: 1,
       cssFileCount: 1,
       findingCount: 0,
+      ignoredFindingCount: 0,
       findingsBySeverity: {
         debug: 0,
         info: 0,
@@ -595,6 +600,175 @@ test("scanProject fails on invalid ownership shared CSS config", async () => {
     assert.equal(result.failed, true);
     assert.equal(result.diagnostics[0].code, "config.invalid-ownership-shared-css");
     assert.match(result.diagnostics[0].message, /ownership\.sharedCss must be an array/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject accepts ignore config", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ignore: {
+        classNames: ["ProseMirror", "generated-*"],
+        filePaths: ["src/legacy/**"],
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.equal(result.failed, false);
+    assert.deepEqual(result.config.ignore, {
+      classNames: ["ProseMirror", "generated-*"],
+      filePaths: ["src/legacy/**"],
+    });
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject fails on unknown ignore config keys", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ignore: {
+        rules: ["missing-css-class"],
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.equal(result.failed, true);
+    assert.equal(result.diagnostics[0].code, "config.unknown-ignore-key");
+    assert.match(result.diagnostics[0].message, /unknown ignore key "rules"/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject fails on invalid ignore config", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ignore: {
+        classNames: ["ProseMirror", ""],
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.equal(result.failed, true);
+    assert.equal(result.diagnostics[0].code, "config.invalid-ignore-class-names");
+    assert.match(result.diagnostics[0].message, /ignore\.classNames must be an array/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject suppresses ignored class findings without creating CSS evidence", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ignore: {
+        classNames: ["ProseMirror"],
+      },
+    })
+    .withSourceFile(
+      "src/App.tsx",
+      'export function App() { return <main className="ProseMirror still-missing" />; }\n',
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx"],
+      cssFilePaths: [],
+    });
+
+    assert.equal(result.failed, true);
+    assert.equal(result.summary.ignoredFindingCount, 1);
+    assert.deepEqual(
+      result.findings.map((finding) => finding.data.className),
+      ["still-missing"],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject suppresses ignored unused generated classes", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ignore: {
+        classNames: ["generated-*"],
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .withCssFile(
+      "src/App.css",
+      ".generated-token { display: block; }\n.unused { display: block; }\n",
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx"],
+      cssFilePaths: ["src/App.css"],
+    });
+
+    assert.equal(result.summary.ignoredFindingCount, 1);
+    assert.deepEqual(
+      result.findings.map((finding) => finding.data.className),
+      ["unused"],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject suppresses findings by ignored file path", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ignore: {
+        filePaths: ["src/legacy/**"],
+      },
+    })
+    .withSourceFile(
+      "src/legacy/Legacy.tsx",
+      'export function Legacy() { return <main className="legacy-missing" />; }\n',
+    )
+    .withSourceFile(
+      "src/App.tsx",
+      'export function App() { return <main className="app-missing" />; }\n',
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx", "src/legacy/Legacy.tsx"],
+      cssFilePaths: [],
+    });
+
+    assert.equal(result.failed, true);
+    assert.equal(result.summary.ignoredFindingCount, 1);
+    assert.deepEqual(
+      result.findings.map((finding) => finding.data.className),
+      ["app-missing"],
+    );
   } finally {
     await project.cleanup();
   }

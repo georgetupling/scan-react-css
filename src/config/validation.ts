@@ -21,10 +21,12 @@ const TOP_LEVEL_CONFIG_KEYS = new Set([
   "cssModules",
   "externalCss",
   "ownership",
+  "ignore",
 ]);
 const CSS_MODULES_CONFIG_KEYS = new Set(["localsConvention"]);
 const EXTERNAL_CSS_CONFIG_KEYS = new Set(["fetchRemote", "globals", "remoteTimeoutMs"]);
 const OWNERSHIP_CONFIG_KEYS = new Set(["sharedCss"]);
+const IGNORE_CONFIG_KEYS = new Set(["classNames", "filePaths"]);
 const EXTERNAL_CSS_GLOBAL_CONFIG_KEYS = new Set([
   "provider",
   "match",
@@ -119,6 +121,10 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
   ownership: {
     sharedCss: [],
   },
+  ignore: {
+    classNames: [],
+    filePaths: [],
+  },
 };
 
 export function parseConfig(
@@ -169,6 +175,7 @@ export function parseConfig(
     cssModules: parseCssModules(parsed.cssModules, filePath, diagnostics),
     externalCss: parseExternalCss(parsed.externalCss, filePath, diagnostics),
     ownership: parseOwnership(parsed.ownership, filePath, diagnostics),
+    ignore: parseIgnore(parsed.ignore, filePath, diagnostics),
   };
 }
 
@@ -179,6 +186,7 @@ export function cloneScannerConfig(config: ScannerConfig): ScannerConfig {
     cssModules: { ...config.cssModules },
     externalCss: cloneExternalCssConfig(config.externalCss),
     ownership: cloneOwnershipConfig(config.ownership),
+    ignore: cloneIgnoreConfig(config.ignore),
   };
 }
 
@@ -395,6 +403,57 @@ function parseOwnership(
       diagnostics,
       code: "config.invalid-ownership-shared-css",
       message: "ownership.sharedCss must be an array of non-empty strings",
+      requireNonEmpty: true,
+    }),
+  };
+}
+
+function parseIgnore(
+  value: unknown,
+  filePath: string,
+  diagnostics: ScanDiagnostic[],
+): ScannerConfig["ignore"] {
+  if (value === undefined) {
+    return cloneIgnoreConfig(DEFAULT_SCANNER_CONFIG.ignore);
+  }
+
+  if (!isRecord(value)) {
+    diagnostics.push({
+      code: "config.invalid-ignore",
+      severity: "error",
+      phase: "config",
+      filePath,
+      message: "ignore must be an object",
+    });
+    return cloneIgnoreConfig(DEFAULT_SCANNER_CONFIG.ignore);
+  }
+
+  reportUnknownKeys({
+    value,
+    allowedKeys: IGNORE_CONFIG_KEYS,
+    filePath,
+    diagnostics,
+    objectName: "ignore",
+    code: "config.unknown-ignore-key",
+  });
+
+  return {
+    classNames: parseStringArray({
+      value: value.classNames,
+      fallback: DEFAULT_SCANNER_CONFIG.ignore.classNames,
+      filePath,
+      diagnostics,
+      code: "config.invalid-ignore-class-names",
+      message: "ignore.classNames must be an array of non-empty strings",
+      requireNonEmpty: true,
+    }),
+    filePaths: parseStringArray({
+      value: value.filePaths,
+      fallback: DEFAULT_SCANNER_CONFIG.ignore.filePaths,
+      filePath,
+      diagnostics,
+      code: "config.invalid-ignore-file-paths",
+      message: "ignore.filePaths must be an array of non-empty strings",
       requireNonEmpty: true,
     }),
   };
@@ -645,6 +704,13 @@ function cloneExternalCssConfig(
 function cloneOwnershipConfig(config: ScannerConfig["ownership"]): ScannerConfig["ownership"] {
   return {
     sharedCss: [...config.sharedCss],
+  };
+}
+
+function cloneIgnoreConfig(config: ScannerConfig["ignore"]): ScannerConfig["ignore"] {
+  return {
+    classNames: [...config.classNames],
+    filePaths: [...config.filePaths],
   };
 }
 

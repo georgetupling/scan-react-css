@@ -10,6 +10,7 @@ import {
 import { discoverProjectFiles } from "./discovery.js";
 import { extractHtmlScriptSources } from "./htmlScriptSources.js";
 import { extractHtmlStylesheetLinks } from "./htmlStylesheetLinks.js";
+import { applyIgnoreFilter, mergeIgnoreConfig } from "./ignoreFilter.js";
 import { loadPackageCssImports } from "./packageCssImports.js";
 import { normalizeProjectPath } from "./pathUtils.js";
 import { fetchRemoteCssSources } from "./remoteCss.js";
@@ -158,7 +159,7 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
     failed,
   });
 
-  return {
+  const unignoredResult: ScanProjectResult = {
     rootDir: discovered.rootDir,
     config,
     findings: ruleResult.findings,
@@ -179,6 +180,14 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
       htmlFiles: discovered.htmlFiles,
     },
   };
+
+  return applyIgnoreFilter(
+    unignoredResult,
+    mergeIgnoreConfig({
+      config: config.ignore,
+      overrides: input.ignore,
+    }),
+  );
 }
 
 function createScanProgressReporter(input: {
@@ -270,6 +279,7 @@ function buildScanSummary(input: {
     sourceFileCount: input.sourceFileCount,
     cssFileCount: input.cssFileCount,
     findingCount: input.findings.length,
+    ignoredFindingCount: 0,
     findingsBySeverity: {
       debug: countFindingsBySeverity(input.findings, "debug"),
       info: countFindingsBySeverity(input.findings, "info"),

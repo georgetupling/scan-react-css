@@ -9,6 +9,10 @@ export type ScanProjectInput = {
   htmlFilePaths?: string[];
   configPath?: string;
   configBaseDir?: string;
+  ignore?: Partial<{
+    classNames: string[];
+    filePaths: string[];
+  }>;
   onProgress?: ScanProgressCallback;
   collectPerformance?: boolean;
   includeTraces?: boolean;
@@ -57,6 +61,7 @@ export type ScanSummary = {
   sourceFileCount: number;
   cssFileCount: number;
   findingCount: number;
+  ignoredFindingCount: number;
   findingsBySeverity: SeverityCounts;
   diagnosticCount: number;
   diagnosticsBySeverity: DiagnosticSeverityCounts;

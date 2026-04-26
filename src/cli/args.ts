@@ -9,6 +9,8 @@ export function parseArgs(rawArgs: string[]): CliArgs {
     outputMinSeverity: "info",
     verbosity: "medium",
     overwriteOutput: false,
+    ignoreClassNames: [],
+    ignoreFilePaths: [],
     json: false,
     timings: false,
     help: false,
@@ -45,6 +47,28 @@ export function parseArgs(rawArgs: string[]): CliArgs {
       }
 
       args.focusPaths.push(...parseFocusValues(value));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--ignore-class") {
+      const value = rawArgs[index + 1];
+      if (!value || value.startsWith("-")) {
+        throw new CliUsageError("--ignore-class requires a class name or glob value.");
+      }
+
+      args.ignoreClassNames.push(value);
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--ignore-path") {
+      const value = rawArgs[index + 1];
+      if (!value || value.startsWith("-")) {
+        throw new CliUsageError("--ignore-path requires a path or glob value.");
+      }
+
+      args.ignoreFilePaths.push(value);
       index += 1;
       continue;
     }
@@ -127,7 +151,7 @@ export function parseArgs(rawArgs: string[]): CliArgs {
 
 export function printHelp(stream: NodeJS.WriteStream = process.stdout): void {
   stream.write(
-    `Usage: scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--json] [--output-file path] [--overwrite-output] [--output-min-severity severity] [--verbosity low|medium|high] [--timings]\n`,
+    `Usage: scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--ignore-class class-or-glob] [--ignore-path path-or-glob] [--json] [--output-file path] [--overwrite-output] [--output-min-severity severity] [--verbosity low|medium|high] [--timings]\n`,
   );
 }
 

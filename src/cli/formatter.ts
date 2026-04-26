@@ -308,6 +308,7 @@ function formatTextSummary(result: ScanProjectResult, visibleFindingCount: numbe
     `  Source files: ${result.summary.sourceFileCount}`,
     `  CSS files: ${result.summary.cssFileCount}`,
     `  Findings: ${visibleFindingCount}`,
+    `  Ignored findings: ${result.summary.ignoredFindingCount}`,
     `  Failed: ${result.failed ? "yes" : "no"}`,
     `  Fail on severity: ${result.config.failOnSeverity}`,
     `  Class references: ${result.summary.classReferenceCount}`,

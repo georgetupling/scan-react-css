@@ -25,12 +25,18 @@ export type OwnershipConfig = {
   sharedCss: string[];
 };
 
+export type IgnoreConfig = {
+  classNames: string[];
+  filePaths: string[];
+};
+
 export type ScannerConfig = {
   failOnSeverity: RuleSeverity;
   rules: Record<string, RuleConfigSeverity>;
   cssModules: CssModulesConfig;
   externalCss: ExternalCssConfig;
   ownership: OwnershipConfig;
+  ignore: IgnoreConfig;
 };
 
 export type ResolvedScannerConfig = ScannerConfig & {

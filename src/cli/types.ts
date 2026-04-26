@@ -10,6 +10,8 @@ export type CliArgs = {
   verbosity: CliVerbosity;
   outputFile?: string;
   overwriteOutput: boolean;
+  ignoreClassNames: string[];
+  ignoreFilePaths: string[];
   json: boolean;
   timings: boolean;
   help: boolean;

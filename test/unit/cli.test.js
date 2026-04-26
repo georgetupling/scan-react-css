@@ -758,6 +758,101 @@ test("CLI --focus uses supplied class provenance for forwarded class findings", 
   }
 });
 
+test("CLI applies config and repeatable CLI ignores before focus output", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ignore: {
+        classNames: ["config-missing"],
+      },
+    })
+    .withSourceFile(
+      "src/pages/Page.tsx",
+      [
+        "export function Page() {",
+        '  return <main className="config-missing cli-missing visible-missing" />;',
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/legacy/Legacy.tsx",
+      'export function Legacy() { return <main className="legacy-missing" />; }\n',
+    )
+    .build();
+
+  try {
+    const outputPath = project.filePath("report.json");
+    const error = await captureRejectedCliRun(
+      [
+        project.rootDir,
+        "--focus",
+        "src",
+        "--ignore-class",
+        "cli-*",
+        "--ignore-path",
+        "src/legacy/**",
+        "--json",
+        "--output-file",
+        outputPath,
+      ],
+      { cwd: project.rootDir },
+    );
+    const output = await readJsonFile(outputPath);
+
+    assert.equal(error.code, 1);
+    assert.equal(output.summary.ignoredFindingCount, 3);
+    assert.deepEqual(
+      output.findings.map((finding) => finding.data.className),
+      ["visible-missing"],
+    );
+    assert.equal(output.failed, true);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI ignored findings do not fail CI", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      'export function App() { return <main className="ProseMirror" />; }\n',
+    )
+    .build();
+
+  try {
+    const outputPath = project.filePath("report.json");
+    await runCli([
+      project.rootDir,
+      "--ignore-class",
+      "ProseMirror",
+      "--json",
+      "--output-file",
+      outputPath,
+    ]);
+    const output = await readJsonFile(outputPath);
+
+    assert.equal(output.failed, false);
+    assert.equal(output.summary.findingCount, 0);
+    assert.equal(output.summary.ignoredFindingCount, 1);
+    assert.deepEqual(output.findings, []);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI rejects ignore flags without values", async () => {
+  for (const [flag, message] of [
+    ["--ignore-class", /--ignore-class requires a class name or glob value\./],
+    ["--ignore-path", /--ignore-path requires a path or glob value\./],
+  ]) {
+    const error = await captureRejectedCliRun([".", flag, "--json"]);
+
+    assert.equal(error.code, 2);
+    assert.match(error.stderr, message);
+    assert.equal(error.stdout, "");
+  }
+});
+
 test("CLI rejects --focus without a value", async () => {
   const error = await captureRejectedCliRun([".", "--focus", "--json"]);
 

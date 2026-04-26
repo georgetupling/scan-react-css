@@ -25,6 +25,13 @@ Rules use the following severities:
 
 Severity and confidence are separate. A rule can be high severity but low confidence if analysis was bounded or uncertain.
 
+## Suppression
+
+Rules run against the full analysis model before ignores are applied. Top-level `ignore.classNames`,
+`ignore.filePaths`, `--ignore-class`, and `--ignore-path` suppress matching findings after rule
+evaluation. Ignores are not proof that CSS exists and must not change selector matching,
+reachability, provider satisfaction, or ownership evidence.
+
 ## Initial Rule Set
 
 The initial catalogue should be small enough to implement coherently and large enough to define the product.

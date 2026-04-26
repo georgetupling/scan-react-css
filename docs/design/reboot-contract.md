@@ -536,6 +536,23 @@ Focused output semantics:
 - The CLI exit code follows the focused `failed` value, so findings outside focus do not fail a
   focused run.
 
+## Explicit Ignores
+
+Ignores are post-rule suppression, not analysis evidence. They hide findings that are known and
+accepted by the project, but they must not create class definitions, declared-provider matches,
+selector context, stylesheet reachability, or ownership evidence.
+
+Ignore semantics:
+
+- config supports top-level `ignore.classNames` and `ignore.filePaths` arrays
+- CLI supports repeatable `--ignore-class class-or-glob` and `--ignore-path path-or-glob`
+- CLI ignore entries are additive with config ignore entries
+- class ignores match individual CSS class tokens with glob-like `*`, `?`, and `**` support
+- path ignores match project-relative `/` file paths involved in a finding
+- ignores are applied after rule evaluation and before output/failure calculation
+- ignored findings do not contribute to `failed`
+- summaries include `ignoredFindingCount`
+
 ## Minimal Config Contract
 
 The first stable reboot config should stay intentionally small.
@@ -559,6 +576,10 @@ type ScanConfig = {
   };
   ownership?: {
     sharedCss?: string[];
+  };
+  ignore?: {
+    classNames?: string[];
+    filePaths?: string[];
   };
 };
 ```
@@ -602,6 +623,8 @@ Design rules:
   conventions, then relational ownership evidence
 - `ownership.sharedCss` is an array of project-relative stylesheet path/glob patterns that extends
   built-in broad/shared stylesheet conventions for ownership rules
+- `ignore.classNames` and `ignore.filePaths` are arrays of non-empty suppression patterns, not CSS
+  evidence declarations
 - default rule severities come from `docs/design/rules-catalogue.md` and the rule catalogue code
 - rule ids follow the reboot catalogue; old scanner rule ids are not part of the clean contract
 - missing config should resolve to built-in defaults
@@ -630,6 +653,7 @@ Output path behavior:
 - JSON mode does not print progress updates
 - `--output-min-severity` filters reported diagnostics, findings, and report summary counts without
   changing scan analysis or failure status
+- `ignoredFindingCount` is retained in the summary after output severity filtering
 - `--timings` adds the optional `performance` block to JSON output
 
 The JSON object written to disk should contain:

@@ -26,6 +26,10 @@ export async function runCli(rawArgs: string[]): Promise<void> {
       rootDir: args.rootDir,
       configBaseDir: process.cwd(),
       configPath: args.configPath,
+      ignore: {
+        classNames: args.ignoreClassNames,
+        filePaths: args.ignoreFilePaths,
+      },
       onProgress: progressRenderer.onProgress,
       collectPerformance: args.timings,
       includeTraces: false,
