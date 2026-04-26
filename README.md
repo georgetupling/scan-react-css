@@ -228,8 +228,10 @@ diagnostics. Default scans perform no network requests.
 
 Ownership config lets projects explicitly mark project CSS paths as intentionally shared. Patterns
 in `ownership.sharedCss` are project-relative globs and extend the built-in broad stylesheet
-conventions. Matching stylesheets are not reported by ownership rules as private component CSS or as
-shared-without-owner CSS.
+conventions, including names such as `global.css`, `shared.css`, `layout.css`, and `layouts.css`.
+Strong private component-owner evidence, such as `Layout.tsx` paired with `Layout.css`, takes
+precedence over configured and built-in shared path signals. Otherwise, matching shared stylesheets
+are not reported as shared-without-owner CSS.
 
 The scanner also recognizes a small set of usage-only runtime DOM class APIs. ProseMirror
 `new EditorView(..., { attributes: { class: "..." } })` static class strings are indexed as

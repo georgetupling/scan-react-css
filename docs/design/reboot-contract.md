@@ -584,6 +584,9 @@ Design rules:
 - remote HTML stylesheet links are fetched only when `externalCss.fetchRemote` is `true`; fetched CSS is
   parsed into concrete class definitions, uses `remoteTimeoutMs`, is treated as project-wide
   external CSS, and fetch failures emit warning diagnostics
+- ownership-style rules apply stylesheet intent in this order: strong private component owner
+  evidence, then configured `ownership.sharedCss` patterns, then built-in broad/shared stylesheet
+  conventions, then relational ownership evidence
 - `ownership.sharedCss` is an array of project-relative stylesheet path/glob patterns that extends
   built-in broad/shared stylesheet conventions for ownership rules
 - default rule severities come from `docs/design/rules-catalogue.md` and the rule catalogue code

@@ -4,6 +4,8 @@ const BROAD_STYLESHEET_SEGMENTS = new Set([
   "designsystem",
   "global",
   "globals",
+  "layout",
+  "layouts",
   "shared",
   "theme",
   "themes",
@@ -51,7 +53,7 @@ export function isIntentionallySharedStylesheetPath(input: {
   sharedCssPatterns: string[];
 }): boolean {
   return (
-    isIntentionallyBroadStylesheetPath(input.filePath) || isConfiguredSharedStylesheetPath(input)
+    isConfiguredSharedStylesheetPath(input) || isIntentionallyBroadStylesheetPath(input.filePath)
   );
 }
 

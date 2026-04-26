@@ -29,10 +29,6 @@ function runSingleComponentStyleNotColocatedRule(context: RuleContext): Unresolv
       !stylesheet ||
       definition.isCssModule ||
       stylesheet.origin !== "project-css" ||
-      isIntentionallySharedStylesheetPath({
-        filePath: stylesheet.filePath,
-        sharedCssPatterns: context.config.ownership.sharedCss,
-      }) ||
       ownership.consumerSummary.consumerComponentIds.length !== 1
     ) {
       continue;
@@ -41,6 +37,15 @@ function runSingleComponentStyleNotColocatedRule(context: RuleContext): Unresolv
     const componentId = ownership.consumerSummary.consumerComponentIds[0];
     const component = context.analysis.indexes.componentsById.get(componentId);
     if (!component || hasColocationEvidence(ownership, componentId)) {
+      continue;
+    }
+
+    if (
+      isIntentionallySharedStylesheetPath({
+        filePath: stylesheet.filePath,
+        sharedCssPatterns: context.config.ownership.sharedCss,
+      })
+    ) {
       continue;
     }
 

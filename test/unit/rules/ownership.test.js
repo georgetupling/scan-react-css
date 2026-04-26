@@ -263,30 +263,25 @@ test("style-used-outside-owner does not report intentionally broad stylesheets",
   }
 });
 
-test("style-used-outside-owner does not report configured shared CSS", async () => {
+test("style-used-outside-owner reports private owner leaks even when the path looks broad", async () => {
   const project = await new TestProjectBuilder()
-    .withConfig({
-      ownership: {
-        sharedCss: ["src/components/Button/Button.css"],
-      },
-    })
     .withSourceFile(
-      "src/components/Button/Button.tsx",
+      "src/components/Layout/Layout.tsx",
       [
-        'import "./Button.css";',
-        'export function Button() { return <button className="button">Save</button>; }',
+        'import "./Layout.css";',
+        'export function Layout() { return <main className="layout">Content</main>; }',
         "",
       ].join("\n"),
     )
     .withSourceFile(
       "src/components/Card.tsx",
       [
-        'import { Button } from "./Button/Button";',
-        'export function Card() { return <div><Button /><span className="button">Again</span></div>; }',
+        'import { Layout } from "./Layout/Layout";',
+        'export function Card() { return <div><Layout /><span className="layout">Again</span></div>; }',
         "",
       ].join("\n"),
     )
-    .withCssFile("src/components/Button/Button.css", ".button { display: block; }\n")
+    .withCssFile("src/components/Layout/Layout.css", ".layout { display: block; }\n")
     .build();
 
   try {
@@ -294,10 +289,12 @@ test("style-used-outside-owner does not report configured shared CSS", async () 
       rootDir: project.rootDir,
     });
 
-    assert.deepEqual(
-      result.findings.filter((finding) => finding.ruleId === "style-used-outside-owner"),
-      [],
+    const findings = result.findings.filter(
+      (finding) => finding.ruleId === "style-used-outside-owner",
     );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].data?.className, "layout");
+    assert.equal(findings[0].data?.ownerComponentName, "Layout");
   } finally {
     await project.cleanup();
   }
@@ -382,6 +379,41 @@ test("style-shared-without-shared-owner does not report intentionally broad styl
   }
 });
 
+test("style-shared-without-shared-owner treats layouts stylesheets as broad", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import "../styles/layouts.css";',
+        'export function Button() { return <button className="stack">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      [
+        'import "../styles/layouts.css";',
+        'export function Card() { return <article className="stack">Again</article>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/styles/layouts.css", ".stack { display: grid; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("style-shared-without-shared-owner does not report configured shared CSS globs", async () => {
   const project = await new TestProjectBuilder()
     .withConfig({
@@ -438,6 +470,35 @@ test("single-component-style-not-colocated does not report configured shared CSS
       ].join("\n"),
     )
     .withCssFile("src/styles/layouts.css", ".stack { display: grid; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.deepEqual(
+      result.findings.filter(
+        (finding) => finding.ruleId === "single-component-style-not-colocated",
+      ),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("single-component-style-not-colocated treats layout stylesheets as broad after colocation checks", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/components/Button.tsx",
+      [
+        'import "../styles/layout.css";',
+        'export function Button() { return <button className="cluster">Save</button>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/styles/layout.css", ".cluster { display: flex; }\n")
     .build();
 
   try {
