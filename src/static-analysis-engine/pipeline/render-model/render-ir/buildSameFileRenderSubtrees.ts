@@ -96,7 +96,7 @@ export function buildSameFileRenderSubtrees(input: {
         ...(input.importedExpressionBindings?.entries() ?? []),
         ...definition.localExpressionBindings.entries(),
       ]),
-      stringSetBindings: buildParameterStringSetBindings(definition),
+      stringSetBindings: buildDefinitionStringSetBindings(definition),
       helperDefinitions: new Map([
         ...(input.importedHelperDefinitions?.entries() ?? []),
         ...(input.topLevelHelperDefinitions?.entries() ?? []),
@@ -130,17 +130,15 @@ export function buildSameFileRenderSubtrees(input: {
   }));
 }
 
-function buildParameterStringSetBindings(
+function buildDefinitionStringSetBindings(
   definition: import("./collection/shared/types.js").SameFileComponentDefinition,
 ): Map<string, string[]> {
-  const bindings = new Map<string, string[]>();
-  if (definition.parameterBinding.kind !== "destructured-props") {
-    return bindings;
-  }
-
-  for (const property of definition.parameterBinding.properties) {
-    if (property.finiteStringValues) {
-      bindings.set(property.identifierName, property.finiteStringValues);
+  const bindings = new Map(definition.localStringSetBindings);
+  if (definition.parameterBinding.kind === "destructured-props") {
+    for (const property of definition.parameterBinding.properties) {
+      if (property.finiteStringValues) {
+        bindings.set(property.identifierName, property.finiteStringValues);
+      }
     }
   }
 

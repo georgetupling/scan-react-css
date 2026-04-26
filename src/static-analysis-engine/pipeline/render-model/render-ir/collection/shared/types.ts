@@ -11,10 +11,15 @@ export type SameFileComponentDefinition = {
   sourceAnchor: SourceAnchor;
   rootExpression: ts.Expression;
   localExpressionBindings: Map<string, ts.Expression>;
+  localStringSetBindings: Map<string, string[]>;
   localHelperDefinitions: Map<string, LocalHelperDefinition>;
   parameterBinding:
     | { kind: "none" }
-    | { kind: "props-identifier"; identifierName: string }
+    | {
+        kind: "props-identifier";
+        identifierName: string;
+        finiteStringValuesByProperty?: Map<string, string[]>;
+      }
     | {
         kind: "destructured-props";
         properties: Array<{

@@ -14,11 +14,16 @@ import {
   summarizeIfStatementAsExpression,
   summarizeSwitchStatementAsExpression,
 } from "./statementToReturnExpression.js";
+import type { SameFileComponentDefinition } from "../shared/types.js";
 
-export function summarizeComponentBody(body: ts.ConciseBody):
+export function summarizeComponentBody(
+  body: ts.ConciseBody,
+  parameterBinding: SameFileComponentDefinition["parameterBinding"],
+):
   | {
       rootExpression: ts.Expression;
       localExpressionBindings: Map<string, ts.Expression>;
+      localStringSetBindings: Map<string, string[]>;
       localHelperDefinitions: Map<string, LocalHelperDefinition>;
     }
   | undefined {
@@ -27,13 +32,16 @@ export function summarizeComponentBody(body: ts.ConciseBody):
       ? {
           rootExpression: body,
           localExpressionBindings: new Map(),
+          localStringSetBindings: new Map(),
           localHelperDefinitions: new Map(),
         }
       : undefined;
   }
 
   const localExpressionBindings = new Map<string, ts.Expression>();
+  const localStringSetBindings = new Map<string, string[]>();
   const localHelperDefinitions = new Map<string, LocalHelperDefinition>();
+  const finiteStringValuesByObjectName = buildFiniteStringValuesByObjectName(parameterBinding);
 
   for (let index = 0; index < body.statements.length; index += 1) {
     const statement = body.statements[index];
@@ -56,7 +64,9 @@ export function summarizeComponentBody(body: ts.ConciseBody):
       collectLocalBodyBindings(
         statement.declarationList,
         localExpressionBindings,
+        localStringSetBindings,
         localHelperDefinitions,
+        finiteStringValuesByObjectName,
       );
       continue;
     }
@@ -70,6 +80,7 @@ export function summarizeComponentBody(body: ts.ConciseBody):
         return {
           rootExpression: ifReturnExpression,
           localExpressionBindings,
+          localStringSetBindings,
           localHelperDefinitions,
         };
       }
@@ -84,6 +95,7 @@ export function summarizeComponentBody(body: ts.ConciseBody):
           return {
             rootExpression: switchReturnExpression,
             localExpressionBindings,
+            localStringSetBindings,
             localHelperDefinitions,
           };
         }
@@ -96,6 +108,7 @@ export function summarizeComponentBody(body: ts.ConciseBody):
       return {
         rootExpression: statement.expression,
         localExpressionBindings,
+        localStringSetBindings,
         localHelperDefinitions,
       };
     }
@@ -105,3 +118,18 @@ export function summarizeComponentBody(body: ts.ConciseBody):
 }
 
 export { summarizeTopLevelHelperDefinition };
+
+function buildFiniteStringValuesByObjectName(
+  parameterBinding: SameFileComponentDefinition["parameterBinding"],
+): Map<string, Map<string, string[]>> {
+  if (
+    parameterBinding.kind !== "props-identifier" ||
+    !parameterBinding.finiteStringValuesByProperty
+  ) {
+    return new Map();
+  }
+
+  return new Map([
+    [parameterBinding.identifierName, parameterBinding.finiteStringValuesByProperty],
+  ]);
+}

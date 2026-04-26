@@ -231,6 +231,77 @@ test("unused-css-class treats observed button helper class assembly as used", as
   }
 });
 
+test("unused-css-class treats props-object destructured finite variants as used", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/Button.tsx",
+      [
+        'import "./Button.css";',
+        'type ButtonVariant = "primary" | "ghost" | "ghost-round" | "destructive";',
+        'type ButtonSize = "md" | "sm";',
+        "type ButtonBaseProps = {",
+        "  variant?: ButtonVariant;",
+        "  size?: ButtonSize;",
+        "  className?: string;",
+        "  iconOnly?: boolean;",
+        "};",
+        'type ButtonAsButtonProps = ButtonBaseProps & { to?: undefined; type?: "button" | "submit" };',
+        "type ButtonAsLinkProps = ButtonBaseProps & { to: string; replace?: boolean };",
+        "type ButtonProps = ButtonAsButtonProps | ButtonAsLinkProps;",
+        "function joinClasses(...classes: Array<string | false | null | undefined>) {",
+        "  return classes.filter(Boolean).join(' ');",
+        "}",
+        "export function Button(props: ButtonProps) {",
+        "  const {",
+        "    variant = 'primary',",
+        "    size = 'md',",
+        "    className,",
+        "    iconOnly = false,",
+        "  } = props;",
+        "  const classes = joinClasses(",
+        "    'button',",
+        "    `button--${variant}`,",
+        "    size === 'sm' && 'button--sm',",
+        "    iconOnly && 'button--icon-only',",
+        "    className,",
+        "  );",
+        "  return <button className={classes}>Save</button>;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/Button.css",
+      [
+        ".button { display: inline-flex; }",
+        ".button--primary { color: white; }",
+        ".button--ghost { color: inherit; }",
+        ".button--ghost-round { border-radius: 999px; }",
+        ".button--destructive { color: red; }",
+        ".button--sm { min-height: 2rem; }",
+        ".button--icon-only { inline-size: 2.5rem; }",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+
+    assertNoClassFindings(result, "unused-css-class", [
+      "button",
+      "button--primary",
+      "button--ghost",
+      "button--ghost-round",
+      "button--destructive",
+      "button--sm",
+      "button--icon-only",
+    ]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("unused-css-class treats static JSX classes inside assigned conditional content as used", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

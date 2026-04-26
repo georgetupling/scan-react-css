@@ -18,13 +18,12 @@ export function summarizeParameterBinding(
   }
 
   const [parameter] = parameters;
-  const finiteStringValuesByProperty = ts.isObjectBindingPattern(parameter.name)
-    ? collectFiniteStringValuesByProperty(parameter)
-    : new Map<string, string[]>();
+  const finiteStringValuesByProperty = collectFiniteStringValuesByProperty(parameter);
   if (ts.isIdentifier(parameter.name)) {
     return {
       kind: "props-identifier",
       identifierName: parameter.name.text,
+      ...(finiteStringValuesByProperty.size > 0 ? { finiteStringValuesByProperty } : {}),
     };
   }
 
@@ -138,6 +137,36 @@ function collectObjectPropertyTypes(
     return propertyTypes;
   }
 
+  if (ts.isIntersectionTypeNode(typeNode)) {
+    const merged = new Map<string, ts.TypeNode>();
+    for (const entry of typeNode.types) {
+      for (const [propertyName, propertyType] of collectObjectPropertyTypes(
+        entry,
+        typeAliases,
+        seenTypeNames,
+      ).entries()) {
+        merged.set(propertyName, mergePropertyTypeNodes(merged.get(propertyName), propertyType));
+      }
+    }
+
+    return merged;
+  }
+
+  if (ts.isUnionTypeNode(typeNode)) {
+    const merged = new Map<string, ts.TypeNode>();
+    for (const entry of typeNode.types) {
+      for (const [propertyName, propertyType] of collectObjectPropertyTypes(
+        entry,
+        typeAliases,
+        seenTypeNames,
+      ).entries()) {
+        merged.set(propertyName, mergePropertyTypeNodes(merged.get(propertyName), propertyType));
+      }
+    }
+
+    return merged;
+  }
+
   if (ts.isTypeReferenceNode(typeNode) && ts.isIdentifier(typeNode.typeName)) {
     const typeName = typeNode.typeName.text;
     if (seenTypeNames.has(typeName)) {
@@ -157,6 +186,14 @@ function collectObjectPropertyTypes(
   }
 
   return new Map();
+}
+
+function mergePropertyTypeNodes(existing: ts.TypeNode | undefined, next: ts.TypeNode): ts.TypeNode {
+  if (!existing) {
+    return next;
+  }
+
+  return ts.factory.createUnionTypeNode([existing, next]);
 }
 
 function resolveFiniteStringType(

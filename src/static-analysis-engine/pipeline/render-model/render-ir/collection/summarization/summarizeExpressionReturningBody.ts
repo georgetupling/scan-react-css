@@ -28,7 +28,12 @@ export function summarizeExpressionReturningBody(body: ts.ConciseBody):
     const statement = body.statements[index];
 
     if (ts.isVariableStatement(statement) && isConstDeclarationList(statement.declarationList)) {
-      collectLocalBodyBindings(statement.declarationList, localExpressionBindings, new Map());
+      collectLocalBodyBindings(
+        statement.declarationList,
+        localExpressionBindings,
+        new Map(),
+        new Map(),
+      );
       continue;
     }
 

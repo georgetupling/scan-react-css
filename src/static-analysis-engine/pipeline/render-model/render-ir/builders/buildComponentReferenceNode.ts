@@ -168,7 +168,10 @@ export function buildComponentReferenceNode(
           expansionBinding.expressionBindings,
           definition.localExpressionBindings,
         ),
-        stringSetBindings: expansionBinding.stringSetBindings,
+        stringSetBindings: mergeStringSetBindings(
+          expansionBinding.stringSetBindings,
+          definition.localStringSetBindings,
+        ),
         helperDefinitions: mergeHelperDefinitions(
           context.topLevelHelperDefinitionsByFilePath.get(definition.filePath) ?? new Map(),
           definition.localHelperDefinitions,
@@ -190,6 +193,18 @@ export function buildComponentReferenceNode(
     ),
     sourceAnchor,
   );
+}
+
+function mergeStringSetBindings(
+  baseBindings: Map<string, string[]>,
+  localBindings: Map<string, string[]>,
+): Map<string, string[]> {
+  const merged = new Map(baseBindings);
+  for (const [identifierName, values] of localBindings.entries()) {
+    merged.set(identifierName, values);
+  }
+
+  return merged;
 }
 
 function resolveComponentDefinition(

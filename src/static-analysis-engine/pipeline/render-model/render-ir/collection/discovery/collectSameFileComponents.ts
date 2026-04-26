@@ -12,7 +12,8 @@ export function collectSameFileComponents(input: {
 
   for (const statement of input.parsedSourceFile.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
-      const bodySummary = summarizeComponentBody(statement.body);
+      const parameterBinding = summarizeParameterBinding(statement.parameters);
+      const bodySummary = summarizeComponentBody(statement.body, parameterBinding);
       if (!bodySummary) {
         continue;
       }
@@ -25,8 +26,9 @@ export function collectSameFileComponents(input: {
         sourceAnchor: toSourceAnchor(statement.name, input.parsedSourceFile, input.filePath),
         rootExpression: bodySummary.rootExpression,
         localExpressionBindings: bodySummary.localExpressionBindings,
+        localStringSetBindings: bodySummary.localStringSetBindings,
         localHelperDefinitions: bodySummary.localHelperDefinitions,
-        parameterBinding: summarizeParameterBinding(statement.parameters),
+        parameterBinding,
       });
       continue;
     }
@@ -48,7 +50,8 @@ export function collectSameFileComponents(input: {
         continue;
       }
 
-      const bodySummary = summarizeComponentBody(componentLikeExpression.body);
+      const parameterBinding = summarizeParameterBinding(componentLikeExpression.parameters);
+      const bodySummary = summarizeComponentBody(componentLikeExpression.body, parameterBinding);
       if (!bodySummary) {
         continue;
       }
@@ -61,8 +64,9 @@ export function collectSameFileComponents(input: {
         sourceAnchor: toSourceAnchor(declaration.name, input.parsedSourceFile, input.filePath),
         rootExpression: bodySummary.rootExpression,
         localExpressionBindings: bodySummary.localExpressionBindings,
+        localStringSetBindings: bodySummary.localStringSetBindings,
         localHelperDefinitions: bodySummary.localHelperDefinitions,
-        parameterBinding: summarizeParameterBinding(componentLikeExpression.parameters),
+        parameterBinding,
       });
     }
   }
