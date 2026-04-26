@@ -105,7 +105,7 @@ function collectFiniteStringValuesByProperty(
   return valuesByProperty;
 }
 
-function collectLocalTypeAliases(sourceFile: ts.SourceFile): Map<string, ts.TypeNode> {
+export function collectLocalTypeAliases(sourceFile: ts.SourceFile): Map<string, ts.TypeNode> {
   const aliases = new Map<string, ts.TypeNode>();
   for (const statement of sourceFile.statements) {
     if (ts.isTypeAliasDeclaration(statement)) {
@@ -116,7 +116,7 @@ function collectLocalTypeAliases(sourceFile: ts.SourceFile): Map<string, ts.Type
   return aliases;
 }
 
-function collectObjectPropertyTypes(
+export function collectObjectPropertyTypes(
   typeNode: ts.TypeNode,
   typeAliases: Map<string, ts.TypeNode>,
   seenTypeNames: Set<string>,
@@ -168,6 +168,15 @@ function collectObjectPropertyTypes(
   }
 
   if (ts.isTypeReferenceNode(typeNode) && ts.isIdentifier(typeNode.typeName)) {
+    const utilityType = collectSupportedUtilityObjectPropertyTypes(
+      typeNode,
+      typeAliases,
+      seenTypeNames,
+    );
+    if (utilityType) {
+      return utilityType;
+    }
+
     const typeName = typeNode.typeName.text;
     if (seenTypeNames.has(typeName)) {
       return new Map();
@@ -188,6 +197,28 @@ function collectObjectPropertyTypes(
   return new Map();
 }
 
+function collectSupportedUtilityObjectPropertyTypes(
+  typeNode: ts.TypeReferenceNode,
+  typeAliases: Map<string, ts.TypeNode>,
+  seenTypeNames: Set<string>,
+): Map<string, ts.TypeNode> | undefined {
+  if (typeNode.typeName.getText(typeNode.getSourceFile()) !== "Omit") {
+    return undefined;
+  }
+
+  const [sourceType, omittedKeysType] = typeNode.typeArguments ?? [];
+  if (!sourceType || !omittedKeysType) {
+    return new Map();
+  }
+
+  const properties = collectObjectPropertyTypes(sourceType, typeAliases, seenTypeNames);
+  for (const key of resolveFiniteStringType(omittedKeysType, typeAliases, new Set())) {
+    properties.delete(key);
+  }
+
+  return properties;
+}
+
 function mergePropertyTypeNodes(existing: ts.TypeNode | undefined, next: ts.TypeNode): ts.TypeNode {
   if (!existing) {
     return next;
@@ -196,7 +227,7 @@ function mergePropertyTypeNodes(existing: ts.TypeNode | undefined, next: ts.Type
   return ts.factory.createUnionTypeNode([existing, next]);
 }
 
-function resolveFiniteStringType(
+export function resolveFiniteStringType(
   typeNode: ts.TypeNode,
   typeAliases: Map<string, ts.TypeNode>,
   seenTypeNames: Set<string>,

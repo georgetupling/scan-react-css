@@ -1,8 +1,17 @@
 import ts from "typescript";
 
-import type { LocalHelperDefinition } from "../shared/types.js";
+import type {
+  DestructuredPropBinding,
+  HelperParameterBinding,
+  LocalHelperDefinition,
+} from "../shared/types.js";
 import { unwrapExpression } from "../shared/utils.js";
 import { summarizeExpressionReturningBody } from "./summarizeExpressionReturningBody.js";
+import {
+  collectLocalTypeAliases,
+  collectObjectPropertyTypes,
+  resolveFiniteStringType,
+} from "./summarizeParameterBinding.js";
 
 export function summarizeTopLevelHelperDefinition(input: {
   helperName: string;
@@ -48,14 +57,15 @@ export function summarizeLocalHelperDefinition(input: {
   body: ts.ConciseBody;
 }): LocalHelperDefinition | undefined {
   const parameterNames: string[] = [];
+  const parameterBindings: HelperParameterBinding[] = [];
   let restParameterName: string | undefined;
   for (let index = 0; index < input.parameters.length; index += 1) {
     const parameter = input.parameters[index];
-    if (!ts.isIdentifier(parameter.name)) {
-      return undefined;
-    }
-
     if (parameter.dotDotDotToken) {
+      if (!ts.isIdentifier(parameter.name)) {
+        return undefined;
+      }
+
       if (index !== input.parameters.length - 1 || restParameterName) {
         return undefined;
       }
@@ -64,10 +74,34 @@ export function summarizeLocalHelperDefinition(input: {
       continue;
     }
 
-    parameterNames.push(parameter.name.text);
+    if (ts.isIdentifier(parameter.name)) {
+      const finiteStringValuesByProperty = collectFiniteStringValuesByProperty(parameter);
+      parameterNames.push(parameter.name.text);
+      parameterBindings.push({
+        kind: "identifier",
+        identifierName: parameter.name.text,
+        ...(finiteStringValuesByProperty.size > 0 ? { finiteStringValuesByProperty } : {}),
+      });
+      continue;
+    }
+
+    if (ts.isObjectBindingPattern(parameter.name)) {
+      const properties = collectDestructuredHelperProperties(parameter);
+      if (!properties) {
+        return undefined;
+      }
+
+      parameterBindings.push({ kind: "destructured-object", properties });
+      continue;
+    }
+
+    return undefined;
   }
 
-  const bodySummary = summarizeExpressionReturningBody(input.body);
+  const bodySummary = summarizeExpressionReturningBody(
+    input.body,
+    buildFiniteStringValuesByObjectName(parameterBindings),
+  );
   if (!bodySummary) {
     return undefined;
   }
@@ -77,8 +111,84 @@ export function summarizeLocalHelperDefinition(input: {
     filePath: input.filePath,
     parsedSourceFile: input.parsedSourceFile,
     parameterNames,
+    parameterBindings,
     restParameterName,
     returnExpression: bodySummary.returnExpression,
     localExpressionBindings: bodySummary.localExpressionBindings,
+    localStringSetBindings: bodySummary.localStringSetBindings,
   };
+}
+
+function collectDestructuredHelperProperties(
+  parameter: ts.ParameterDeclaration,
+): DestructuredPropBinding[] | undefined {
+  const finiteStringValuesByProperty = collectFiniteStringValuesByProperty(parameter);
+  const properties: DestructuredPropBinding[] = [];
+
+  if (!ts.isObjectBindingPattern(parameter.name)) {
+    return undefined;
+  }
+
+  for (const element of parameter.name.elements) {
+    if (element.dotDotDotToken || !ts.isIdentifier(element.name)) {
+      return undefined;
+    }
+
+    const propertyNameNode = element.propertyName;
+    if (
+      propertyNameNode &&
+      !ts.isIdentifier(propertyNameNode) &&
+      !ts.isStringLiteral(propertyNameNode)
+    ) {
+      return undefined;
+    }
+
+    const propertyName = propertyNameNode?.text ?? element.name.text;
+    properties.push({
+      propertyName,
+      identifierName: element.name.text,
+      ...(element.initializer ? { initializer: element.initializer } : {}),
+      ...(finiteStringValuesByProperty.has(propertyName)
+        ? { finiteStringValues: finiteStringValuesByProperty.get(propertyName) }
+        : {}),
+    });
+  }
+
+  return properties;
+}
+
+function collectFiniteStringValuesByProperty(
+  parameter: ts.ParameterDeclaration,
+): Map<string, string[]> {
+  const valuesByProperty = new Map<string, string[]>();
+  if (!parameter.type) {
+    return valuesByProperty;
+  }
+
+  const typeAliases = collectLocalTypeAliases(parameter.getSourceFile());
+  const propertyTypes = collectObjectPropertyTypes(parameter.type, typeAliases, new Set());
+  for (const [propertyName, typeNode] of propertyTypes.entries()) {
+    const values = resolveFiniteStringType(typeNode, typeAliases, new Set());
+    if (values.length > 0) {
+      valuesByProperty.set(propertyName, values);
+    }
+  }
+
+  return valuesByProperty;
+}
+
+function buildFiniteStringValuesByObjectName(
+  parameterBindings: HelperParameterBinding[],
+): Map<string, Map<string, string[]>> {
+  const valuesByObjectName = new Map<string, Map<string, string[]>>();
+  for (const parameterBinding of parameterBindings) {
+    if (parameterBinding.kind === "identifier" && parameterBinding.finiteStringValuesByProperty) {
+      valuesByObjectName.set(
+        parameterBinding.identifierName,
+        parameterBinding.finiteStringValuesByProperty,
+      );
+    }
+  }
+
+  return valuesByObjectName;
 }

@@ -37,12 +37,27 @@ export type LocalHelperDefinition = {
   filePath: string;
   parsedSourceFile: ts.SourceFile;
   parameterNames: string[];
+  parameterBindings: HelperParameterBinding[];
   restParameterName?: string;
   returnExpression: ts.Expression;
   localExpressionBindings: Map<string, ts.Expression>;
+  localStringSetBindings: Map<string, string[]>;
 };
 
 export type DestructuredPropBinding = {
   propertyName: string;
   identifierName: string;
+  initializer?: ts.Expression;
+  finiteStringValues?: string[];
 };
+
+export type HelperParameterBinding =
+  | {
+      kind: "identifier";
+      identifierName: string;
+      finiteStringValuesByProperty?: Map<string, string[]>;
+    }
+  | {
+      kind: "destructured-object";
+      properties: DestructuredPropBinding[];
+    };

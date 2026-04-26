@@ -302,6 +302,118 @@ test("unused-css-class treats props-object destructured finite variants as used"
   }
 });
 
+test("unused-css-class treats finite classes returned from typed destructured helpers as used", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/Tag.tsx",
+      [
+        'import "./Tag.css";',
+        'type TagVariant = "default" | "genre" | "article-type" | "topic" | "featured";',
+        'type TagSize = "sm" | "md" | "lg";',
+        "type TagBaseProps = {",
+        "  children?: unknown;",
+        "  variant?: TagVariant;",
+        "  size?: TagSize;",
+        "  className?: string;",
+        "};",
+        "function getTagClassName({",
+        "  variant = 'default',",
+        "  size = 'md',",
+        "  className,",
+        "}: Omit<TagBaseProps, 'children'>) {",
+        "  return [",
+        "    'tag',",
+        "    size === 'sm' ? 'tag--small' : '',",
+        "    size === 'lg' ? 'tag--large' : '',",
+        "    variant !== 'default' ? `tag--${variant}` : '',",
+        "    className ?? '',",
+        "  ].filter(Boolean).join(' ');",
+        "}",
+        "export function Tag({ children, variant, size, className }: TagBaseProps) {",
+        "  return <span className={getTagClassName({ variant, size, className })}>{children}</span>;",
+        "}",
+        "export function TagDismissButton({ variant, size, className }: TagBaseProps) {",
+        "  return <button className={getTagClassName({",
+        "    variant,",
+        "    size,",
+        "    className: ['tag--dismissible', className].filter(Boolean).join(' '),",
+        "  })}>Dismiss</button>;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/Tag.css",
+      [
+        ".tag { display: inline-flex; }",
+        ".tag--genre { color: green; }",
+        ".tag--article-type { color: blue; }",
+        ".tag--topic { color: purple; }",
+        ".tag--featured { color: gold; }",
+        ".tag--small { min-height: 1rem; }",
+        ".tag--large { min-height: 2rem; }",
+        ".tag--dismissible { gap: 0.5rem; }",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+
+    assertNoClassFindings(result, "unused-css-class", [
+      "tag",
+      "tag--article-type",
+      "tag--dismissible",
+      "tag--featured",
+      "tag--genre",
+      "tag--large",
+      "tag--small",
+      "tag--topic",
+    ]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("unused-css-class preserves finite helper evidence through helper body destructuring", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/Badge.tsx",
+      [
+        'import "./Badge.css";',
+        'type BadgeTone = "info" | "success";',
+        "type BadgeProps = { tone?: BadgeTone; className?: string };",
+        "function getBadgeClassName(props: BadgeProps) {",
+        "  const { tone = 'info', className } = props;",
+        "  return ['badge', `badge--${tone}`, className ?? ''].filter(Boolean).join(' ');",
+        "}",
+        "export function Badge({ tone, className }: BadgeProps) {",
+        "  return <span className={getBadgeClassName({ tone, className })}>Badge</span>;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/Badge.css",
+      [
+        ".badge { display: inline-flex; }",
+        ".badge--info { color: blue; }",
+        ".badge--success { color: green; }",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+
+    assertNoClassFindings(result, "unused-css-class", ["badge", "badge--info", "badge--success"]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("unused-css-class treats static JSX classes inside assigned conditional content as used", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

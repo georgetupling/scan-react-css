@@ -9,20 +9,26 @@ import {
   summarizeSwitchStatementAsExpression,
 } from "./statementToReturnExpression.js";
 
-export function summarizeExpressionReturningBody(body: ts.ConciseBody):
+export function summarizeExpressionReturningBody(
+  body: ts.ConciseBody,
+  finiteStringValuesByObjectName: Map<string, Map<string, string[]>> = new Map(),
+):
   | {
       returnExpression: ts.Expression;
       localExpressionBindings: Map<string, ts.Expression>;
+      localStringSetBindings: Map<string, string[]>;
     }
   | undefined {
   if (!ts.isBlock(body)) {
     return {
       returnExpression: body,
       localExpressionBindings: new Map(),
+      localStringSetBindings: new Map(),
     };
   }
 
   const localExpressionBindings = new Map<string, ts.Expression>();
+  const localStringSetBindings = new Map<string, string[]>();
 
   for (let index = 0; index < body.statements.length; index += 1) {
     const statement = body.statements[index];
@@ -31,8 +37,9 @@ export function summarizeExpressionReturningBody(body: ts.ConciseBody):
       collectLocalBodyBindings(
         statement.declarationList,
         localExpressionBindings,
+        localStringSetBindings,
         new Map(),
-        new Map(),
+        finiteStringValuesByObjectName,
       );
       continue;
     }
@@ -46,6 +53,7 @@ export function summarizeExpressionReturningBody(body: ts.ConciseBody):
         return {
           returnExpression: ifReturnExpression,
           localExpressionBindings,
+          localStringSetBindings,
         };
       }
 
@@ -59,6 +67,7 @@ export function summarizeExpressionReturningBody(body: ts.ConciseBody):
           return {
             returnExpression: switchReturnExpression,
             localExpressionBindings,
+            localStringSetBindings,
           };
         }
       }
@@ -69,6 +78,7 @@ export function summarizeExpressionReturningBody(body: ts.ConciseBody):
     return {
       returnExpression: statement.expression,
       localExpressionBindings,
+      localStringSetBindings,
     };
   }
 

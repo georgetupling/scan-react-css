@@ -157,11 +157,11 @@ export function resolveHelperCallContext(
     return undefined;
   }
 
-  const helperExpressionBindings = bindHelperArguments(expression, helperDefinition, context);
+  const helperBindings = bindHelperArguments(expression, helperDefinition, context);
 
   const inheritedExpressionBindings = mergeExpressionBindings(
     context.expressionBindings,
-    helperExpressionBindings,
+    helperBindings.expressionBindings,
   );
   const helperContext: BuildContext = {
     ...context,
@@ -172,7 +172,10 @@ export function resolveHelperCallContext(
       inheritedExpressionBindings,
       helperDefinition.localExpressionBindings,
     ),
-    stringSetBindings: context.stringSetBindings,
+    stringSetBindings: mergeStringSetBindings(
+      mergeStringSetBindings(context.stringSetBindings, helperBindings.stringSetBindings),
+      helperDefinition.localStringSetBindings,
+    ),
     namespaceExpressionBindings: context.namespaceExpressionBindings,
     namespaceHelperDefinitions: context.namespaceHelperDefinitions,
     namespaceComponentDefinitions: context.namespaceComponentDefinitions,
@@ -196,32 +199,170 @@ function canBindHelperArguments(
   }
 
   if (helperDefinition.restParameterName) {
-    return expandedArguments.length >= helperDefinition.parameterNames.length;
+    return expandedArguments.length >= helperDefinition.parameterBindings.length;
   }
 
-  return expandedArguments.length === helperDefinition.parameterNames.length;
+  return expandedArguments.length === helperDefinition.parameterBindings.length;
 }
 
 function bindHelperArguments(
   expression: ts.CallExpression,
   helperDefinition: LocalHelperDefinition,
   context: BuildContext,
-): Map<string, ts.Expression> {
+): {
+  expressionBindings: Map<string, ts.Expression>;
+  stringSetBindings: Map<string, string[]>;
+} {
   const helperExpressionBindings = new Map<string, ts.Expression>();
+  const helperStringSetBindings = new Map<string, string[]>();
   const expandedArguments = expandHelperArguments(expression.arguments, context) ?? [];
-  for (let index = 0; index < helperDefinition.parameterNames.length; index += 1) {
-    helperExpressionBindings.set(helperDefinition.parameterNames[index], expandedArguments[index]);
+  for (let index = 0; index < helperDefinition.parameterBindings.length; index += 1) {
+    bindHelperArgument({
+      parameterBinding: helperDefinition.parameterBindings[index],
+      argument: expandedArguments[index],
+      context,
+      expressionBindings: helperExpressionBindings,
+      stringSetBindings: helperStringSetBindings,
+    });
   }
 
   if (helperDefinition.restParameterName) {
-    const restArguments = expandedArguments.slice(helperDefinition.parameterNames.length);
+    const restArguments = expandedArguments.slice(helperDefinition.parameterBindings.length);
     helperExpressionBindings.set(
       helperDefinition.restParameterName,
       ts.factory.createArrayLiteralExpression(restArguments, false),
     );
   }
 
-  return helperExpressionBindings;
+  return {
+    expressionBindings: helperExpressionBindings,
+    stringSetBindings: helperStringSetBindings,
+  };
+}
+
+function bindHelperArgument(input: {
+  parameterBinding: LocalHelperDefinition["parameterBindings"][number];
+  argument: ts.Expression;
+  context: BuildContext;
+  expressionBindings: Map<string, ts.Expression>;
+  stringSetBindings: Map<string, string[]>;
+}): void {
+  if (input.parameterBinding.kind === "identifier") {
+    input.expressionBindings.set(input.parameterBinding.identifierName, input.argument);
+    return;
+  }
+
+  const argument = resolveBoundExpression(input.argument, input.context) ?? input.argument;
+  const unwrappedArgument = unwrapResolvableExpression(argument);
+  if (!ts.isObjectLiteralExpression(unwrappedArgument)) {
+    for (const property of input.parameterBinding.properties) {
+      if (property.initializer) {
+        input.expressionBindings.set(property.identifierName, property.initializer);
+      }
+      if (property.finiteStringValues) {
+        input.stringSetBindings.set(property.identifierName, property.finiteStringValues);
+      }
+    }
+    return;
+  }
+
+  for (const property of input.parameterBinding.properties) {
+    const propertyExpression = resolveObjectLiteralPropertyExpression(
+      unwrappedArgument,
+      property.propertyName,
+    );
+    if (propertyExpression) {
+      bindHelperDestructuredProperty({
+        identifierName: property.identifierName,
+        expression: propertyExpression,
+        context: input.context,
+        expressionBindings: input.expressionBindings,
+        stringSetBindings: input.stringSetBindings,
+      });
+      continue;
+    }
+
+    if (property.initializer) {
+      input.expressionBindings.set(property.identifierName, property.initializer);
+    }
+
+    if (property.finiteStringValues) {
+      input.stringSetBindings.set(property.identifierName, property.finiteStringValues);
+    }
+  }
+}
+
+function bindHelperDestructuredProperty(input: {
+  identifierName: string;
+  expression: ts.Expression;
+  context: BuildContext;
+  expressionBindings: Map<string, ts.Expression>;
+  stringSetBindings: Map<string, string[]>;
+}): void {
+  if (ts.isIdentifier(input.expression)) {
+    const stringValues = input.context.stringSetBindings.get(input.expression.text);
+    if (stringValues) {
+      input.stringSetBindings.set(input.identifierName, stringValues);
+      return;
+    }
+
+    if (input.expression.text === input.identifierName) {
+      return;
+    }
+  }
+
+  if (containsIdentifier(input.expression, input.identifierName)) {
+    const staticClassTokens = collectStaticStringLiteralClassTokens(input.expression);
+    if (staticClassTokens.length > 0) {
+      input.stringSetBindings.set(input.identifierName, [staticClassTokens.join(" ")]);
+    }
+    return;
+  }
+
+  input.expressionBindings.set(input.identifierName, input.expression);
+}
+
+function containsIdentifier(node: ts.Node, identifierName: string): boolean {
+  let found = false;
+
+  function visit(current: ts.Node): void {
+    if (found) {
+      return;
+    }
+
+    if (ts.isIdentifier(current) && current.text === identifierName) {
+      found = true;
+      return;
+    }
+
+    current.forEachChild(visit);
+  }
+
+  visit(node);
+  return found;
+}
+
+function collectStaticStringLiteralClassTokens(node: ts.Node): string[] {
+  const tokens = new Set<string>();
+
+  function visit(current: ts.Node): void {
+    if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
+      for (const token of current.text.split(/\s+/)) {
+        if (isLikelyClassToken(token)) {
+          tokens.add(token);
+        }
+      }
+    }
+
+    current.forEachChild(visit);
+  }
+
+  visit(node);
+  return [...tokens].sort((left, right) => left.localeCompare(right));
+}
+
+function isLikelyClassToken(value: string): boolean {
+  return /^[A-Za-z_-][A-Za-z0-9_-]*$/.test(value);
 }
 
 function expandHelperArguments(
@@ -260,6 +401,18 @@ export function mergeExpressionBindings(
   const merged = new Map(baseBindings);
   for (const [identifierName, expression] of localBindings.entries()) {
     merged.set(identifierName, expression);
+  }
+
+  return merged;
+}
+
+function mergeStringSetBindings(
+  baseBindings: Map<string, string[]>,
+  localBindings: Map<string, string[]>,
+): Map<string, string[]> {
+  const merged = new Map(baseBindings);
+  for (const [identifierName, values] of localBindings.entries()) {
+    merged.set(identifierName, values);
   }
 
   return merged;
@@ -356,12 +509,48 @@ function resolvePropertyValueFromExpression(
         continue;
       }
 
-      if (ts.isShorthandPropertyAssignment(property) && property.name.text === propertyName) {
-        return property.name;
+      if (ts.isShorthandPropertyAssignment(property)) {
+        if (property.name.text === propertyName) {
+          return property.name;
+        }
+
+        continue;
       }
 
       return undefined;
     }
+  }
+
+  return undefined;
+}
+
+function resolveObjectLiteralPropertyExpression(
+  expression: ts.ObjectLiteralExpression,
+  propertyName: string,
+): ts.Expression | undefined {
+  for (const property of expression.properties) {
+    if (ts.isSpreadAssignment(property)) {
+      return undefined;
+    }
+
+    if (ts.isPropertyAssignment(property)) {
+      const candidateName = getObjectLiteralPropertyName(property.name);
+      if (candidateName === propertyName) {
+        return property.initializer;
+      }
+
+      continue;
+    }
+
+    if (ts.isShorthandPropertyAssignment(property)) {
+      if (property.name.text === propertyName) {
+        return property.name;
+      }
+
+      continue;
+    }
+
+    return undefined;
   }
 
   return undefined;
