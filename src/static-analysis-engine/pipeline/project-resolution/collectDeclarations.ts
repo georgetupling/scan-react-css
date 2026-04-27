@@ -56,6 +56,24 @@ function collectDeclaration(
     return;
   }
 
+  if (ts.isEnumDeclaration(statement)) {
+    declarations.valueDeclarations.set(statement.name.text, {
+      kind: hasConstModifier(statement) ? "const-enum" : "enum",
+      name: statement.name.text,
+      node: statement,
+    });
+    return;
+  }
+
+  if (ts.isModuleDeclaration(statement) && ts.isIdentifier(statement.name)) {
+    declarations.valueDeclarations.set(statement.name.text, {
+      kind: "namespace",
+      name: statement.name.text,
+      node: statement,
+    });
+    return;
+  }
+
   if (!ts.isVariableStatement(statement)) {
     return;
   }
@@ -82,4 +100,12 @@ function getVariableStatementKind(statement: ts.VariableStatement): "const" | "l
     return "let";
   }
   return "var";
+}
+
+function hasConstModifier(statement: ts.Statement): boolean {
+  return (
+    ts.canHaveModifiers(statement) &&
+    (ts.getModifiers(statement)?.some((modifier) => modifier.kind === ts.SyntaxKind.ConstKeyword) ??
+      false)
+  );
 }

@@ -213,6 +213,79 @@ test("project resolution indexes exported expression bindings", () => {
   );
 });
 
+test("project resolution indexes exported enums and namespace declarations", () => {
+  const resolution = buildProjectResolution({
+    parsedFiles: [
+      sourceFile(
+        "src/tokens.ts",
+        `
+          export enum Role {
+            Owner = "owner",
+          }
+
+          export const enum ConstRole {
+            Viewer = "viewer",
+          }
+
+          export namespace TokenNames {
+            export const root = "token-root";
+          }
+
+          export module LegacyTokenNames {
+            export const root = "legacy-token-root";
+          }
+        `,
+      ),
+    ],
+  });
+
+  assert.deepEqual(
+    (resolution.exportsByFilePath.get("src/tokens.ts") ?? []).map((exportRecord) => ({
+      exportedName: exportRecord.exportedName,
+      sourceExportedName: exportRecord.sourceExportedName,
+      localName: exportRecord.localName,
+      typeOnly: exportRecord.typeOnly,
+      declarationKind: exportRecord.declarationKind,
+    })),
+    [
+      {
+        exportedName: "ConstRole",
+        sourceExportedName: "ConstRole",
+        localName: "ConstRole",
+        typeOnly: false,
+        declarationKind: "value",
+      },
+      {
+        exportedName: "LegacyTokenNames",
+        sourceExportedName: "LegacyTokenNames",
+        localName: "LegacyTokenNames",
+        typeOnly: false,
+        declarationKind: "value",
+      },
+      {
+        exportedName: "Role",
+        sourceExportedName: "Role",
+        localName: "Role",
+        typeOnly: false,
+        declarationKind: "value",
+      },
+      {
+        exportedName: "TokenNames",
+        sourceExportedName: "TokenNames",
+        localName: "TokenNames",
+        typeOnly: false,
+        declarationKind: "value",
+      },
+    ],
+  );
+
+  const declarations = resolution.declarationsByFilePath.get("src/tokens.ts");
+  assert.equal(declarations?.valueDeclarations.get("Role")?.kind, "enum");
+  assert.equal(declarations?.valueDeclarations.get("ConstRole")?.kind, "const-enum");
+  assert.equal(declarations?.valueDeclarations.get("TokenNames")?.kind, "namespace");
+  assert.equal(declarations?.valueDeclarations.get("LegacyTokenNames")?.kind, "namespace");
+});
+
 test("project resolution resolves direct and named re-exports", () => {
   const resolution = buildProjectResolution({
     parsedFiles: [

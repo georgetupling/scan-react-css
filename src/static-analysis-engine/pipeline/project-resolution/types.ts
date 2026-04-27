@@ -48,6 +48,16 @@ export type ProjectResolutionValueDeclaration =
       kind: "class";
       name: string;
       node: ts.ClassDeclaration;
+    }
+  | {
+      kind: "enum" | "const-enum";
+      name: string;
+      node: ts.EnumDeclaration;
+    }
+  | {
+      kind: "namespace";
+      name: string;
+      node: ts.ModuleDeclaration;
     };
 
 export type ProjectResolutionFileDeclarationIndex = {

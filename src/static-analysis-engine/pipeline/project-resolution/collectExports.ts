@@ -111,6 +111,28 @@ function collectDeclarationExports(
     ];
   }
 
+  if (ts.isEnumDeclaration(statement)) {
+    return [
+      createLocalExportRecord({
+        filePath,
+        exportedName: statement.name.text,
+        localName: statement.name.text,
+        declarationKind: "value",
+      }),
+    ];
+  }
+
+  if (ts.isModuleDeclaration(statement) && ts.isIdentifier(statement.name)) {
+    return [
+      createLocalExportRecord({
+        filePath,
+        exportedName: statement.name.text,
+        localName: statement.name.text,
+        declarationKind: "value",
+      }),
+    ];
+  }
+
   if (!ts.isVariableStatement(statement)) {
     return [];
   }
