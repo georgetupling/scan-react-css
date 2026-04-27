@@ -67,6 +67,17 @@ function collectDeclarationExports(
     ];
   }
 
+  if (ts.isFunctionDeclaration(statement) && hasDefaultModifier(statement)) {
+    return [
+      {
+        filePath,
+        exportedName: "default",
+        typeOnly: false,
+        declarationKind: "value",
+      },
+    ];
+  }
+
   if (ts.isClassDeclaration(statement) && statement.name) {
     return [
       createLocalExportRecord({
@@ -75,6 +86,17 @@ function collectDeclarationExports(
         localName: statement.name.text,
         declarationKind: "value",
       }),
+    ];
+  }
+
+  if (ts.isClassDeclaration(statement) && hasDefaultModifier(statement)) {
+    return [
+      {
+        filePath,
+        exportedName: "default",
+        typeOnly: false,
+        declarationKind: "value",
+      },
     ];
   }
 

@@ -4,6 +4,7 @@ import test from "node:test";
 import ts from "typescript";
 
 import { buildProjectResolution } from "../../dist/static-analysis-engine/pipeline/project-resolution/buildProjectResolution.js";
+import { resolveProjectExport } from "../../dist/static-analysis-engine/pipeline/project-resolution/resolveExportedName.js";
 import { resolveSourceSpecifier } from "../../dist/static-analysis-engine/pipeline/project-resolution/resolveSourceSpecifier.js";
 
 test("project resolution indexes imports, exports, declarations, and workspace entrypoints", () => {
@@ -203,6 +204,60 @@ test("project resolution indexes exported expression bindings", () => {
     ),
     '"literal-default"',
   );
+});
+
+test("project resolution resolves direct and named re-exports", () => {
+  const resolution = buildProjectResolution({
+    parsedFiles: [
+      sourceFile("src/index.ts", 'export { primaryButton as button } from "./tokens.ts";'),
+      sourceFile("src/tokens.ts", 'export const primaryButton = "btn--primary";'),
+    ],
+  });
+
+  const result = resolveProjectExport({
+    projectResolution: resolution,
+    filePath: "src/index.ts",
+    exportedName: "button",
+    visitedExports: new Set(["src/index.ts:button"]),
+    currentDepth: 0,
+    includeTraces: false,
+  });
+
+  assert.deepEqual(result, {
+    resolvedExport: {
+      targetFilePath: "src/tokens.ts",
+      targetExportName: "primaryButton",
+      targetLocalName: "primaryButton",
+    },
+    traces: [],
+  });
+});
+
+test("project resolution resolves star re-exports with TypeScript extension alternates", () => {
+  const resolution = buildProjectResolution({
+    parsedFiles: [
+      sourceFile("src/index.ts", 'export * from "./roles.js";'),
+      sourceFile("src/roles.ts", 'export const memberRole = "owner";'),
+    ],
+  });
+
+  const result = resolveProjectExport({
+    projectResolution: resolution,
+    filePath: "src/index.ts",
+    exportedName: "memberRole",
+    visitedExports: new Set(["src/index.ts:memberRole"]),
+    currentDepth: 0,
+    includeTraces: false,
+  });
+
+  assert.deepEqual(result, {
+    resolvedExport: {
+      targetFilePath: "src/roles.ts",
+      targetExportName: "memberRole",
+      targetLocalName: "memberRole",
+    },
+    traces: [],
+  });
 });
 
 test("source specifier resolver preserves explicit TypeScript alternate opt-in", () => {

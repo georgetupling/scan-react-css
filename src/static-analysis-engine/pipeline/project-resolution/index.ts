@@ -1,9 +1,18 @@
 export { buildProjectResolution } from "./buildProjectResolution.js";
 export { collectExportedExpressionBindings } from "./collectExportedExpressionBindings.js";
 export {
+  collectAvailableExportedNames,
+  resolveProjectExport,
+  resolveReExportTargetFilePath,
+} from "./resolveExportedName.js";
+export {
   getSourceSpecifierCandidatePaths,
   resolveSourceSpecifier,
 } from "./resolveSourceSpecifier.js";
+export type {
+  ResolvedProjectResolutionExport,
+  ResolveProjectResolutionExportResult,
+} from "./resolveExportedName.js";
 export type {
   ResolveSourceSpecifierInput,
   SourceFilePathLookup,

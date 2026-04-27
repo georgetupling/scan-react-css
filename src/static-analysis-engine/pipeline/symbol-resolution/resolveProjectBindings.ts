@@ -3,7 +3,13 @@ import ts from "typescript";
 import { MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH } from "../../libraries/policy/index.js";
 import { createModuleId } from "../module-graph/index.js";
 import type { ModuleGraph } from "../module-graph/types.js";
-import type { ProjectResolution } from "../project-resolution/index.js";
+import {
+  collectAvailableExportedNames,
+  resolveProjectExport as resolveProjectResolutionExport,
+  resolveReExportTargetFilePath,
+  type ProjectResolution,
+  type ResolvedProjectResolutionExport,
+} from "../project-resolution/index.js";
 import type { AnalysisTrace } from "../../types/analysis.js";
 import type { EngineSymbolId } from "../../types/core.js";
 import type {
@@ -53,6 +59,7 @@ export function buildProjectBindingResolution(input: {
       resolveImportedBindingsForFile({
         filePath: moduleNode.filePath,
         moduleGraph: input.moduleGraph,
+        projectResolution: input.projectResolution,
         symbolsByFilePath,
         includeTraces,
       }),
@@ -68,6 +75,8 @@ export function buildProjectBindingResolution(input: {
       resolveNamespaceImportsForFile({
         filePath: moduleNode.filePath,
         moduleGraph: input.moduleGraph,
+        projectResolution: input.projectResolution,
+        symbolsByFilePath,
         includeTraces,
       }),
     );
@@ -94,6 +103,7 @@ export function buildProjectBindingResolution(input: {
         const unresolvedImportedBinding = resolveImportedBindingFailureForSymbol({
           symbol,
           moduleGraph: input.moduleGraph,
+          projectResolution: input.projectResolution,
           filePath: moduleNode.filePath,
           includeTraces,
         });
@@ -175,6 +185,7 @@ function isResolvedComponentBinding(
 export function resolveImportedBindingsForFile(input: {
   filePath: string;
   moduleGraph: ModuleGraph;
+  projectResolution: ProjectResolution;
   symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   includeTraces?: boolean;
 }): ResolvedImportedBinding[] {
@@ -204,7 +215,8 @@ export function resolveImportedBindingsForFile(input: {
       const resolvedExport = resolveProjectExport({
         filePath: importedFilePath,
         exportedName: importedName.importedName,
-        moduleGraph: input.moduleGraph,
+        projectResolution: input.projectResolution,
+        symbolsByFilePath: input.symbolsByFilePath,
         visitedExports: new Set([`${importedFilePath}:${importedName.importedName}`]),
         currentDepth: 0,
         importAnchor: importSymbolAnchorsByLocalName.get(importedName.localName),
@@ -232,6 +244,8 @@ export function resolveImportedBindingsForFile(input: {
 export function resolveNamespaceImportsForFile(input: {
   filePath: string;
   moduleGraph: ModuleGraph;
+  projectResolution: ProjectResolution;
+  symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   includeTraces?: boolean;
 }): ResolvedNamespaceImport[] {
   const includeTraces = input.includeTraces ?? true;
@@ -253,7 +267,8 @@ export function resolveNamespaceImportsForFile(input: {
           localName: importedName.localName,
           exports: resolveNamespaceBundle({
             filePath: importedFilePath,
-            moduleGraph: input.moduleGraph,
+            projectResolution: input.projectResolution,
+            symbolsByFilePath: input.symbolsByFilePath,
             currentDepth: 0,
           }),
           traces: includeTraces
@@ -276,7 +291,8 @@ export function resolveNamespaceImportsForFile(input: {
       const resolvedNamespaceImport = resolveNamedNamespaceImport({
         filePath: importedFilePath,
         exportedName: importedName.importedName,
-        moduleGraph: input.moduleGraph,
+        projectResolution: input.projectResolution,
+        symbolsByFilePath: input.symbolsByFilePath,
         visitedNamespaceExports: new Set([`${importedFilePath}:${importedName.importedName}`]),
         currentDepth: 0,
       });
@@ -310,7 +326,8 @@ export function resolveNamespaceImportsForFile(input: {
 function resolveNamedNamespaceImport(input: {
   filePath: string;
   exportedName: string;
-  moduleGraph: ModuleGraph;
+  projectResolution: ProjectResolution;
+  symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   visitedNamespaceExports: Set<string>;
   currentDepth: number;
 }): Map<string, ResolvedProjectExport> | undefined {
@@ -318,39 +335,54 @@ function resolveNamedNamespaceImport(input: {
     return undefined;
   }
 
-  const moduleNode = input.moduleGraph.modulesById.get(createModuleId(input.filePath));
-  if (!moduleNode) {
+  const exportRecords = input.projectResolution.exportsByFilePath.get(input.filePath);
+  if (!exportRecords) {
     return undefined;
   }
 
-  for (const exportRecord of moduleNode.exports) {
+  for (const exportRecord of exportRecords) {
     if (
       exportRecord.exportedName !== input.exportedName ||
       exportRecord.reexportKind !== "namespace" ||
-      !exportRecord.reexportedModuleId
+      !exportRecord.specifier
     ) {
       continue;
     }
 
-    const targetFilePath = exportRecord.reexportedModuleId.replace(/^module:/, "");
+    const targetFilePath = resolveReExportTargetFilePath({
+      projectResolution: input.projectResolution,
+      exportRecord,
+    });
+    if (!targetFilePath) {
+      continue;
+    }
+
     return resolveNamespaceBundle({
       filePath: targetFilePath,
-      moduleGraph: input.moduleGraph,
+      projectResolution: input.projectResolution,
+      symbolsByFilePath: input.symbolsByFilePath,
       currentDepth: input.currentDepth + 1,
     });
   }
 
-  for (const exportRecord of moduleNode.exports) {
+  for (const exportRecord of exportRecords) {
     if (
       exportRecord.exportedName !== input.exportedName ||
       exportRecord.reexportKind === "namespace" ||
-      !exportRecord.reexportedModuleId
+      !exportRecord.specifier
     ) {
       continue;
     }
 
     const sourceExportedName = exportRecord.sourceExportedName ?? exportRecord.exportedName;
-    const targetFilePath = exportRecord.reexportedModuleId.replace(/^module:/, "");
+    const targetFilePath = resolveReExportTargetFilePath({
+      projectResolution: input.projectResolution,
+      exportRecord,
+    });
+    if (!targetFilePath) {
+      continue;
+    }
+
     const exportKey = `${targetFilePath}:${sourceExportedName}`;
     if (input.visitedNamespaceExports.has(exportKey)) {
       continue;
@@ -373,12 +405,13 @@ function resolveNamedNamespaceImport(input: {
 
 function resolveNamespaceBundle(input: {
   filePath: string;
-  moduleGraph: ModuleGraph;
+  projectResolution: ProjectResolution;
+  symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   currentDepth: number;
 }): Map<string, ResolvedProjectExport> {
   const exportedNames = collectAvailableExportedNames({
     filePath: input.filePath,
-    moduleGraph: input.moduleGraph,
+    projectResolution: input.projectResolution,
     visitedFilePaths: new Set([input.filePath]),
     currentDepth: input.currentDepth,
   });
@@ -392,7 +425,8 @@ function resolveNamespaceBundle(input: {
     const resolvedExport = resolveProjectExport({
       filePath: input.filePath,
       exportedName,
-      moduleGraph: input.moduleGraph,
+      projectResolution: input.projectResolution,
+      symbolsByFilePath: input.symbolsByFilePath,
       visitedExports: new Set([`${input.filePath}:${exportedName}`]),
       currentDepth: input.currentDepth,
     });
@@ -404,53 +438,11 @@ function resolveNamespaceBundle(input: {
   return resolvedBindings;
 }
 
-function collectAvailableExportedNames(input: {
-  filePath: string;
-  moduleGraph: ModuleGraph;
-  visitedFilePaths: Set<string>;
-  currentDepth: number;
-}): Set<string> {
-  const moduleNode = input.moduleGraph.modulesById.get(createModuleId(input.filePath));
-  const exportedNames = new Set<string>(
-    moduleNode?.exports.map((exportRecord) => exportRecord.exportedName) ?? [],
-  );
-  if (!moduleNode || input.currentDepth >= MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH) {
-    return exportedNames;
-  }
-
-  for (const exportRecord of moduleNode.exports) {
-    if (exportRecord.exportedName === "*") {
-      if (!exportRecord.reexportedModuleId) {
-        continue;
-      }
-
-      const targetFilePath = exportRecord.reexportedModuleId.replace(/^module:/, "");
-      if (input.visitedFilePaths.has(targetFilePath)) {
-        continue;
-      }
-
-      const nestedNames = collectAvailableExportedNames({
-        ...input,
-        filePath: targetFilePath,
-        visitedFilePaths: new Set([...input.visitedFilePaths, targetFilePath]),
-        currentDepth: input.currentDepth + 1,
-      });
-      for (const nestedName of nestedNames) {
-        exportedNames.add(nestedName);
-      }
-      continue;
-    }
-
-    exportedNames.add(exportRecord.exportedName);
-  }
-
-  return exportedNames;
-}
-
 function resolveProjectExport(input: {
   filePath: string;
   exportedName: string;
-  moduleGraph: ModuleGraph;
+  projectResolution: ProjectResolution;
+  symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   visitedExports: Set<string>;
   currentDepth: number;
   importAnchor?: EngineSymbol["declaration"];
@@ -460,182 +452,63 @@ function resolveProjectExport(input: {
   traces: AnalysisTrace[];
   reason?: string;
 } {
-  const moduleNode = input.moduleGraph.modulesById.get(createModuleId(input.filePath));
-  const includeTraces = input.includeTraces ?? true;
-  if (!moduleNode) {
-    return {
-      reason: "target-module-not-found",
-      traces: includeTraces
-        ? [
-            createSymbolResolutionTrace({
-              traceId: `symbol-resolution:module-not-found:${input.filePath}:${input.exportedName}`,
-              summary: `could not resolve export ${input.exportedName} because module ${input.filePath} was not found`,
-              anchor: input.importAnchor,
-              metadata: {
-                filePath: input.filePath,
-                exportedName: input.exportedName,
-                reason: "target-module-not-found",
-              },
-            }),
-          ]
-        : [],
-    };
-  }
-
-  const directExport = moduleNode.exports.find(
-    (exportRecord) =>
-      exportRecord.exportedName === input.exportedName && !exportRecord.reexportedModuleId,
-  );
-  if (directExport) {
-    return {
-      resolvedExport: {
-        targetModuleId: moduleNode.id,
-        targetFilePath: input.filePath,
-        targetExportName: directExport.exportedName,
-        targetSymbolId: directExport.localSymbolId,
-      },
-      traces: includeTraces
-        ? [
-            createSymbolResolutionTrace({
-              traceId: `symbol-resolution:direct-export:${input.filePath}:${input.exportedName}`,
-              summary: `resolved export ${input.exportedName} directly from ${input.filePath}`,
-              anchor: input.importAnchor,
-              metadata: {
-                filePath: input.filePath,
-                exportedName: input.exportedName,
-                resolution: "direct-export",
-              },
-            }),
-          ]
-        : [],
-    };
-  }
-
-  if (input.currentDepth >= MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH) {
-    return {
-      reason: "budget-exceeded",
-      traces: includeTraces
-        ? [
-            createSymbolResolutionTrace({
-              traceId: `symbol-resolution:budget-exceeded:${input.filePath}:${input.exportedName}`,
-              summary: `stopped resolving export ${input.exportedName} after hitting the cross-file symbol-resolution budget`,
-              anchor: input.importAnchor,
-              metadata: {
-                filePath: input.filePath,
-                exportedName: input.exportedName,
-                reason: "budget-exceeded",
-                currentDepth: input.currentDepth,
-              },
-            }),
-          ]
-        : [],
-    };
-  }
-
-  for (const exportRecord of moduleNode.exports) {
-    if (!exportRecord.reexportedModuleId) {
-      continue;
-    }
-
-    const targetFilePath = exportRecord.reexportedModuleId.replace(/^module:/, "");
-    if (exportRecord.exportedName === input.exportedName) {
-      const sourceExportedName = exportRecord.sourceExportedName ?? exportRecord.exportedName;
-      const exportKey = `${targetFilePath}:${sourceExportedName}`;
-      if (input.visitedExports.has(exportKey)) {
-        continue;
-      }
-
-      const resolvedValue = resolveProjectExport({
-        ...input,
-        filePath: targetFilePath,
-        exportedName: sourceExportedName,
-        visitedExports: new Set([...input.visitedExports, exportKey]),
-        currentDepth: input.currentDepth + 1,
-      });
-      if (resolvedValue.resolvedExport) {
-        return {
-          resolvedExport: resolvedValue.resolvedExport,
-          traces: includeTraces
-            ? [
-                createSymbolResolutionTrace({
-                  traceId: `symbol-resolution:re-export:${input.filePath}:${input.exportedName}:${targetFilePath}`,
-                  summary: `followed re-export ${input.exportedName} from ${input.filePath} to ${targetFilePath}`,
-                  anchor: input.importAnchor,
-                  children: resolvedValue.traces,
-                  metadata: {
-                    filePath: input.filePath,
-                    exportedName: input.exportedName,
-                    targetFilePath,
-                    reexportKind: exportRecord.reexportKind ?? "named",
-                  },
-                }),
-              ]
-            : [],
-        };
-      }
-    }
-
-    if (exportRecord.exportedName !== "*") {
-      continue;
-    }
-
-    const exportKey = `${targetFilePath}:${input.exportedName}`;
-    if (input.visitedExports.has(exportKey)) {
-      continue;
-    }
-
-    const resolvedValue = resolveProjectExport({
-      ...input,
-      filePath: targetFilePath,
-      exportedName: input.exportedName,
-      visitedExports: new Set([...input.visitedExports, exportKey]),
-      currentDepth: input.currentDepth + 1,
-    });
-    if (resolvedValue.resolvedExport) {
-      return {
-        resolvedExport: resolvedValue.resolvedExport,
-        traces: includeTraces
-          ? [
-              createSymbolResolutionTrace({
-                traceId: `symbol-resolution:star-re-export:${input.filePath}:${input.exportedName}:${targetFilePath}`,
-                summary: `followed star re-export while resolving ${input.exportedName} from ${input.filePath} to ${targetFilePath}`,
-                anchor: input.importAnchor,
-                children: resolvedValue.traces,
-                metadata: {
-                  filePath: input.filePath,
-                  exportedName: input.exportedName,
-                  targetFilePath,
-                  reexportKind: "star",
-                },
-              }),
-            ]
-          : [],
-      };
-    }
-  }
+  const resolvedValue = resolveProjectResolutionExport({
+    projectResolution: input.projectResolution,
+    filePath: input.filePath,
+    exportedName: input.exportedName,
+    visitedExports: input.visitedExports,
+    currentDepth: input.currentDepth,
+    importAnchor: input.importAnchor,
+    includeTraces: input.includeTraces,
+  });
 
   return {
-    reason: "export-not-found",
-    traces: includeTraces
-      ? [
-          createSymbolResolutionTrace({
-            traceId: `symbol-resolution:export-not-found:${input.filePath}:${input.exportedName}`,
-            summary: `could not resolve export ${input.exportedName} from ${input.filePath}`,
-            anchor: input.importAnchor,
-            metadata: {
-              filePath: input.filePath,
-              exportedName: input.exportedName,
-              reason: "export-not-found",
-            },
-          }),
-        ]
-      : [],
+    ...resolvedValue,
+    resolvedExport: resolvedValue.resolvedExport
+      ? toResolvedProjectExport({
+          resolvedExport: resolvedValue.resolvedExport,
+          symbolsByFilePath: input.symbolsByFilePath,
+        })
+      : undefined,
   };
+}
+
+function toResolvedProjectExport(input: {
+  resolvedExport: ResolvedProjectResolutionExport;
+  symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
+}): ResolvedProjectExport {
+  return {
+    targetModuleId: createModuleId(input.resolvedExport.targetFilePath),
+    targetFilePath: input.resolvedExport.targetFilePath,
+    targetExportName: input.resolvedExport.targetExportName,
+    targetSymbolId: input.resolvedExport.targetLocalName
+      ? findSymbolIdByLocalName({
+          symbolsByFilePath: input.symbolsByFilePath,
+          filePath: input.resolvedExport.targetFilePath,
+          localName: input.resolvedExport.targetLocalName,
+        })
+      : undefined,
+  };
+}
+
+function findSymbolIdByLocalName(input: {
+  symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
+  filePath: string;
+  localName: string;
+}): EngineSymbolId | undefined {
+  for (const [symbolId, symbol] of input.symbolsByFilePath?.get(input.filePath) ?? []) {
+    if (symbol.localName === input.localName) {
+      return symbolId;
+    }
+  }
+
+  return undefined;
 }
 
 function resolveImportedBindingFailureForSymbol(input: {
   symbol: EngineSymbol;
   moduleGraph: ModuleGraph;
+  projectResolution: ProjectResolution;
   filePath: string;
   includeTraces?: boolean;
 }): { reason: string; traces: AnalysisTrace[] } | undefined {
@@ -664,7 +537,7 @@ function resolveImportedBindingFailureForSymbol(input: {
     const result = resolveProjectExport({
       filePath: importedFilePath,
       exportedName: importedName.importedName,
-      moduleGraph: input.moduleGraph,
+      projectResolution: input.projectResolution,
       visitedExports: new Set([`${importedFilePath}:${importedName.importedName}`]),
       currentDepth: 0,
       importAnchor: input.symbol.declaration,
