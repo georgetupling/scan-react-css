@@ -161,6 +161,50 @@ test("project resolution initializes shared caches without doing expensive resol
   assert.equal(resolution.caches.finiteTypeEvidence.size, 0);
 });
 
+test("project resolution indexes exported expression bindings", () => {
+  const resolution = buildProjectResolution({
+    parsedFiles: [
+      sourceFile(
+        "src/tokens.ts",
+        `
+          const privateToken = "private-token";
+          export const publicToken = "public-token";
+          export const buttonTokens = ["btn", "btn--primary"] as const;
+        `,
+      ),
+      sourceFile(
+        "src/defaultIdentifier.ts",
+        `
+          const defaultToken = "default-token";
+          export default defaultToken;
+        `,
+      ),
+      sourceFile("src/defaultExpression.ts", 'export default "literal-default";'),
+    ],
+  });
+
+  assert.deepEqual(
+    [...(resolution.exportedExpressionBindingsByFilePath.get("src/tokens.ts") ?? []).keys()],
+    ["publicToken", "buttonTokens"],
+  );
+  assert.equal(
+    expressionText(
+      resolution.exportedExpressionBindingsByFilePath
+        .get("src/defaultIdentifier.ts")
+        ?.get("default"),
+    ),
+    '"default-token"',
+  );
+  assert.equal(
+    expressionText(
+      resolution.exportedExpressionBindingsByFilePath
+        .get("src/defaultExpression.ts")
+        ?.get("default"),
+    ),
+    '"literal-default"',
+  );
+});
+
 test("source specifier resolver preserves explicit TypeScript alternate opt-in", () => {
   const knownFilePaths = new Set(["src/worlds.enums.ts"]);
 
@@ -221,4 +265,8 @@ function sourceFile(filePath, sourceText) {
       ts.ScriptKind.TSX,
     ),
   };
+}
+
+function expressionText(expression) {
+  return expression?.getText();
 }

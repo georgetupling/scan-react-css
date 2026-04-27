@@ -3,6 +3,7 @@ import type ts from "typescript";
 import type { ParsedProjectFile } from "../../entry/stages/types.js";
 import { createProjectResolutionCaches } from "./cache.js";
 import { collectDeclarations } from "./collectDeclarations.js";
+import { collectExportedExpressionBindings } from "./collectExportedExpressionBindings.js";
 import { applyExportEvidenceToDeclarations, collectExports } from "./collectExports.js";
 import { collectImports } from "./collectImports.js";
 import { collectWorkspacePackageEntryPoints } from "./workspaceEntryPoints.js";
@@ -24,6 +25,7 @@ export function buildProjectResolution(input: {
   const importsByFilePath = new Map<string, ProjectResolutionImportRecord[]>();
   const exportsByFilePath = new Map<string, ProjectResolutionExportRecord[]>();
   const declarationsByFilePath = new Map<string, ProjectResolutionFileDeclarationIndex>();
+  const exportedExpressionBindingsByFilePath = new Map<string, Map<string, ts.Expression>>();
 
   for (const parsedFile of sortedParsedFiles) {
     const filePath = normalizeFilePath(parsedFile.filePath);
@@ -36,6 +38,10 @@ export function buildProjectResolution(input: {
 
     exportsByFilePath.set(filePath, exports);
     declarationsByFilePath.set(filePath, declarations);
+    exportedExpressionBindingsByFilePath.set(
+      filePath,
+      collectExportedExpressionBindings(parsedFile.parsedSourceFile),
+    );
   }
 
   return {
@@ -43,6 +49,7 @@ export function buildProjectResolution(input: {
     importsByFilePath,
     exportsByFilePath,
     declarationsByFilePath,
+    exportedExpressionBindingsByFilePath,
     workspacePackageEntryPointsByPackageName: collectWorkspacePackageEntryPoints(sortedParsedFiles),
     caches: createProjectResolutionCaches(),
   };

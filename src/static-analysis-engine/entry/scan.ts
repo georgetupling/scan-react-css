@@ -80,6 +80,7 @@ export function analyzeProjectSourceTexts(input: {
       runSymbolResolutionStage({
         parsedFiles: parseStage.parsedFiles,
         moduleGraph: moduleGraphStage.moduleGraph,
+        projectResolution: projectResolutionStage.projectResolution,
         includeTraces,
       }),
   );

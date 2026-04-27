@@ -3,6 +3,7 @@ import ts from "typescript";
 import { MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH } from "../../libraries/policy/index.js";
 import { createModuleId } from "../module-graph/index.js";
 import type { ModuleGraph } from "../module-graph/types.js";
+import type { ProjectResolution } from "../project-resolution/index.js";
 import type { AnalysisTrace } from "../../types/analysis.js";
 import type { EngineSymbolId } from "../../types/core.js";
 import type {
@@ -17,7 +18,7 @@ import type {
 export function buildProjectBindingResolution(input: {
   moduleGraph: ModuleGraph;
   symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
-  parsedSourceFilesByFilePath?: Map<string, ts.SourceFile>;
+  projectResolution: ProjectResolution;
   includeTraces?: boolean;
 }): ProjectBindingResolution {
   const includeTraces = input.includeTraces ?? true;
@@ -39,12 +40,8 @@ export function buildProjectBindingResolution(input: {
     ]),
   );
   const symbols = new Map<EngineSymbolId, EngineSymbol>();
-  const exportedConstBindingsByFilePath = new Map<string, Map<string, ts.Expression>>(
-    [...symbolsByFilePath.keys()].map((filePath) => [
-      filePath,
-      collectExportedConstBindings(input.parsedSourceFilesByFilePath?.get(filePath)),
-    ]),
-  );
+  const exportedExpressionBindingsByFilePath =
+    input.projectResolution.exportedExpressionBindingsByFilePath;
 
   for (const moduleNode of input.moduleGraph.modulesById.values()) {
     if (moduleNode.kind !== "source") {
@@ -146,14 +143,14 @@ export function buildProjectBindingResolution(input: {
     resolvedImportedBindingsByFilePath,
     resolvedImportedComponentBindingsByFilePath,
     resolvedNamespaceImportsByFilePath,
-    exportedExpressionBindingsByFilePath: exportedConstBindingsByFilePath,
+    exportedExpressionBindingsByFilePath,
     importedExpressionBindingsByFilePath: new Map(
       [...symbolsByFilePath.keys()].map((filePath) => [
         filePath,
         collectTransitiveImportedExpressionBindings({
           filePath,
           resolvedImportedBindingsByFilePath,
-          exportedConstBindingsByFilePath,
+          exportedExpressionBindingsByFilePath,
           visitedFilePaths: new Set([filePath]),
           currentDepth: 0,
         }),
@@ -689,7 +686,7 @@ function resolveImportedBindingFailureForSymbol(input: {
 function collectTransitiveImportedExpressionBindings(input: {
   filePath: string;
   resolvedImportedBindingsByFilePath: Map<string, ResolvedImportedBinding[]>;
-  exportedConstBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
+  exportedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
   visitedFilePaths: Set<string>;
   currentDepth: number;
 }): Map<string, ts.Expression> {
@@ -700,7 +697,7 @@ function collectTransitiveImportedExpressionBindings(input: {
 
   for (const resolvedBinding of input.resolvedImportedBindingsByFilePath.get(input.filePath) ??
     []) {
-    const exportedExpression = input.exportedConstBindingsByFilePath
+    const exportedExpression = input.exportedExpressionBindingsByFilePath
       .get(resolvedBinding.targetFilePath)
       ?.get(resolvedBinding.targetExportName);
     if (!exportedExpression) {
@@ -729,67 +726,6 @@ function collectTransitiveImportedExpressionBindings(input: {
   }
 
   return expressionBindings;
-}
-
-function collectExportedConstBindings(
-  parsedSourceFile: ts.SourceFile | undefined,
-): Map<string, ts.Expression> {
-  const bindings = new Map<string, ts.Expression>();
-  const topLevelConstBindings = new Map<string, ts.Expression>();
-  if (!parsedSourceFile) {
-    return bindings;
-  }
-
-  for (const statement of parsedSourceFile.statements) {
-    if (!ts.isVariableStatement(statement)) {
-      continue;
-    }
-
-    if ((statement.declarationList.flags & ts.NodeFlags.Const) === 0) {
-      continue;
-    }
-
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) {
-        continue;
-      }
-
-      topLevelConstBindings.set(declaration.name.text, declaration.initializer);
-
-      if (!isExportedStatement(statement)) {
-        continue;
-      }
-
-      bindings.set(declaration.name.text, declaration.initializer);
-    }
-  }
-
-  for (const statement of parsedSourceFile.statements) {
-    if (!ts.isExportAssignment(statement) || statement.isExportEquals) {
-      continue;
-    }
-
-    if (ts.isIdentifier(statement.expression)) {
-      const expression = topLevelConstBindings.get(statement.expression.text);
-      if (expression) {
-        bindings.set("default", expression);
-      }
-
-      continue;
-    }
-
-    bindings.set("default", statement.expression);
-  }
-
-  return bindings;
-}
-
-function isExportedStatement(
-  statement: ts.Statement & { modifiers?: ts.NodeArray<ts.ModifierLike> },
-): boolean {
-  return (
-    statement.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false
-  );
 }
 
 function createSymbolResolutionTrace(input: {

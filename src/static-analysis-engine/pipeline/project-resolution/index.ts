@@ -1,4 +1,5 @@
 export { buildProjectResolution } from "./buildProjectResolution.js";
+export { collectExportedExpressionBindings } from "./collectExportedExpressionBindings.js";
 export {
   getSourceSpecifierCandidatePaths,
   resolveSourceSpecifier,

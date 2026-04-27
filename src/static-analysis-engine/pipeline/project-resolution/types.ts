@@ -93,6 +93,7 @@ export type ProjectResolution = {
   importsByFilePath: Map<string, ProjectResolutionImportRecord[]>;
   exportsByFilePath: Map<string, ProjectResolutionExportRecord[]>;
   declarationsByFilePath: Map<string, ProjectResolutionFileDeclarationIndex>;
+  exportedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
   workspacePackageEntryPointsByPackageName: Map<string, WorkspacePackageEntryPoint[]>;
   caches: ProjectResolutionCaches;
 };
