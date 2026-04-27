@@ -7,7 +7,7 @@ import type {
   StylesheetReachabilityContextRecord,
 } from "../reachability/types.js";
 import type { RenderGraphEdge } from "../render-model/render-graph/types.js";
-import type { RenderSubtree } from "../render-model/render-ir/types.js";
+import type { RenderSubtree, RenderNode } from "../render-model/render-ir/types.js";
 import type { RuntimeDomClassReference, RuntimeDomLibraryHint } from "../runtime-dom/types.js";
 import type { SelectorConstraint, SelectorQueryResult } from "../selector-analysis/types.js";
 import type { AnalysisConfidence, AnalysisTrace } from "../../types/analysis.js";
@@ -499,3 +499,17 @@ export type ProjectAnalysisBuildInput = {
 };
 
 export type DeclarationForSignature = Pick<CssDeclarationFact, "property" | "value">;
+
+export type RenderClassExpressionEntry = {
+  classExpression: ClassExpressionSummary;
+  suppliedByComponentId?: ProjectAnalysisId;
+  emittedByComponentId?: ProjectAnalysisId;
+  classNameComponentIds?: Record<string, ProjectAnalysisId>;
+  renderSubtreeId: ProjectAnalysisId;
+  emittedElementLocation: SourceAnchor;
+  placementLocation?: SourceAnchor;
+};
+
+export type SkippedRenderClassExpressionEntry = RenderClassExpressionEntry & {
+  skippedBranch: NonNullable<RenderNode["staticallySkippedBranches"]>[number];
+};
