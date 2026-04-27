@@ -1331,6 +1331,127 @@ test("unused-css-class resolves finite variants from imported interfaces and re-
   }
 });
 
+test("unused-css-class resolves finite variants from tsconfig path aliases", async () => {
+  const project = await new TestProjectBuilder()
+    .withFile(
+      "tsconfig.json",
+      JSON.stringify(
+        {
+          compilerOptions: {
+            module: "NodeNext",
+            moduleResolution: "NodeNext",
+            baseUrl: ".",
+            paths: {
+              "@app-types/*": ["src/types/*"],
+            },
+          },
+        },
+        null,
+        2,
+      ),
+    )
+    .withSourceFile(
+      "src/types/button.ts",
+      [
+        'export type ButtonTone = "primary" | "ghost";',
+        "export interface ButtonProps {",
+        "  tone?: ButtonTone;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/Button.tsx",
+      [
+        'import "./Button.css";',
+        'import type { ButtonTone } from "@app-types/button";',
+        "type ButtonProps = { tone?: ButtonTone };",
+        "export function Button({ tone = 'primary' }: ButtonProps) {",
+        "  return <button className={`button--${tone}`}>Save</button>;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/Button.css",
+      [".button--primary { color: white; }", ".button--ghost { color: inherit; }", ""].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+
+    assertNoClassFindings(result, "unused-css-class", ["button--primary", "button--ghost"]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("unused-css-class resolves finite variants from package exports", async () => {
+  const project = await new TestProjectBuilder()
+    .withFile(
+      "tsconfig.json",
+      JSON.stringify(
+        {
+          compilerOptions: {
+            module: "NodeNext",
+            moduleResolution: "NodeNext",
+          },
+        },
+        null,
+        2,
+      ),
+    )
+    .withFile(
+      "node_modules/design-system/package.json",
+      JSON.stringify({
+        name: "design-system",
+        type: "module",
+        exports: {
+          "./button": "./src/button.ts",
+        },
+      }),
+    )
+    .withSourceFile(
+      "node_modules/design-system/src/button.ts",
+      [
+        'export type ButtonTone = "primary" | "ghost";',
+        "export interface ButtonProps {",
+        "  tone?: ButtonTone;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/Button.tsx",
+      [
+        'import "./Button.css";',
+        'import type { ButtonTone } from "design-system/button";',
+        "type ButtonProps = { tone?: ButtonTone };",
+        "export function Button({ tone = 'primary' }: ButtonProps) {",
+        "  return <button className={`button--${tone}`}>Save</button>;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/Button.css",
+      [".button--primary { color: white; }", ".button--ghost { color: inherit; }", ""].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/Button.tsx", "node_modules/design-system/src/button.ts"],
+    });
+
+    assertNoClassFindings(result, "unused-css-class", ["button--primary", "button--ghost"]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("unused-css-class degrades imported type cycles without crashing", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

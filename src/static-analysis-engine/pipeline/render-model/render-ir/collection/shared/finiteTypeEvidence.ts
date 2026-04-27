@@ -1,7 +1,9 @@
 import ts from "typescript";
-import type { ProjectResolution } from "../../../../project-resolution/index.js";
+import {
+  resolveProjectSourceSpecifier,
+  type ProjectResolution,
+} from "../../../../project-resolution/index.js";
 import { normalizeFilePath } from "../../../../project-resolution/pathUtils.js";
-import { resolveSourceSpecifier } from "../../../../project-resolution/resolveSourceSpecifier.js";
 
 type LocalTypeEvidence = {
   filePath: string;
@@ -745,13 +747,10 @@ function resolveProjectLocalSourceSpecifier(
     return undefined;
   }
 
-  return resolveSourceSpecifier({
+  return resolveProjectSourceSpecifier({
+    projectResolution: cache.projectResolution,
     fromFilePath,
     specifier,
-    knownFilePaths: cache.projectResolution.parsedSourceFilesByFilePath,
-    includeTypeScriptExtensionAlternates: true,
-    workspacePackageEntryPointsByPackageName:
-      cache.projectResolution.workspacePackageEntryPointsByPackageName,
   });
 }
 
