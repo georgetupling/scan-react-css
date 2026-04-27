@@ -143,6 +143,151 @@ test("unused-css-class does not report referenced classes", async () => {
   }
 });
 
+test("unused-css-class treats className on unresolved components as used", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/SiteHeader.tsx",
+      [
+        'import { Link } from "react-router-dom";',
+        'import "./SiteHeader.css";',
+        'export function SiteHeader() { return <Link to="/" className="site-header__brand">Home</Link>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/SiteHeader.css", ".site-header__brand { font-weight: 700; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/SiteHeader.tsx"],
+      cssFilePaths: ["src/SiteHeader.css"],
+    });
+
+    assertNoClassFindings(result, "unused-css-class", ["site-header__brand"]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("unused-css-class treats subtree prop classes inside nullish fallback branches as used", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import { Slot } from "./Slot";',
+        'import "./App.css";',
+        "export function App() {",
+        '  return <Slot content={<span className="slot-content">Ready</span>} />;',
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/Slot.tsx",
+      [
+        "export function Slot({ content }) {",
+        '  return <section>{content ?? <span className="slot-fallback">Fallback</span>}</section>;',
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/App.css",
+      ".slot-content { display: inline-flex; }\n.slot-fallback { display: none; }\n",
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx", "src/Slot.tsx"],
+      cssFilePaths: ["src/App.css"],
+    });
+
+    assertNoClassFindings(result, "unused-css-class", ["slot-content", "slot-fallback"]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("unused-css-class treats helper-forwarded class props as used across component boundaries", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import { Dropdown } from "./Dropdown";',
+        'import "./App.css";',
+        "export function App() {",
+        '  return <Dropdown className="site-header__notifications-menu" triggerClassName="site-header__menu-trigger site-header__menu-trigger--round" />;',
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/Dropdown.tsx",
+      [
+        'import { Popover } from "./Popover";',
+        "function joinClasses(...classes) { return classes.filter(Boolean).join(' '); }",
+        "export function Dropdown({ className, triggerClassName }) {",
+        "  return (",
+        "    <Popover",
+        "      className={joinClasses('dropdown-menu', className)}",
+        "      triggerClassName={triggerClassName}",
+        "    />",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/Popover.tsx",
+      [
+        "function joinClasses(...classes) { return classes.filter(Boolean).join(' '); }",
+        "export function Popover({ className, triggerClassName }) {",
+        "  return (",
+        "    <div className={joinClasses('popover', className)}>",
+        "      <button className={joinClasses('popover__trigger', triggerClassName)} />",
+        "    </div>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/App.css",
+      [
+        ".site-header__notifications-menu { display: block; }",
+        ".site-header__menu-trigger { display: inline-flex; }",
+        ".site-header__menu-trigger--round { border-radius: 999px; }",
+        ".dropdown-menu { display: contents; }",
+        ".popover { position: relative; }",
+        ".popover__trigger { display: inline-flex; }",
+        "",
+      ].join("\n"),
+    )
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+      sourceFilePaths: ["src/App.tsx", "src/Dropdown.tsx", "src/Popover.tsx"],
+      cssFilePaths: ["src/App.css"],
+    });
+
+    assertNoClassFindings(result, "unused-css-class", [
+      "site-header__notifications-menu",
+      "site-header__menu-trigger",
+      "site-header__menu-trigger--round",
+      "dropdown-menu",
+      "popover",
+      "popover__trigger",
+    ]);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("unused-css-class treats finite template literal variants through helpers as used", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(

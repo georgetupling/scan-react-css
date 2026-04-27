@@ -280,6 +280,144 @@ test("ProjectAnalysis preserves caller class props through props-object destruct
   assert.equal(reference.classNameComponentIds?.button, "component:src/ui/Button.tsx:Button");
 });
 
+test("ProjectAnalysis indexes className on unresolved component references", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/SiteHeader.tsx",
+        sourceText: [
+          'import { Link } from "react-router-dom";',
+          'export function SiteHeader() { return <Link to="/" className="site-header__brand">Home</Link>; }',
+          "",
+        ].join("\n"),
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/SiteHeader.css",
+        cssText: ".site-header__brand { font-weight: 700; }\n",
+      },
+    ],
+  });
+
+  const reference = result.projectAnalysis.entities.classReferences.find((candidate) =>
+    candidate.definiteClassNames.includes("site-header__brand"),
+  );
+  const unsupportedReference = result.projectAnalysis.entities.unsupportedClassReferences.find(
+    (candidate) => candidate.rawExpressionText === '"site-header__brand"',
+  );
+
+  assert.ok(reference);
+  assert.equal(reference.componentId, "component:src/SiteHeader.tsx:SiteHeader");
+  assert.equal(reference.emittedByComponentId, "component:src/SiteHeader.tsx:SiteHeader");
+  assert.equal(reference.emittedElementLocation?.startLine, 2);
+  assert.equal(unsupportedReference, undefined);
+});
+
+test("ProjectAnalysis resolves subtree prop identifiers inside nullish fallback branches", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/App.tsx",
+        sourceText: [
+          'import { Slot } from "./Slot";',
+          "export function App() {",
+          '  return <Slot content={<span className="slot-content">Ready</span>} />;',
+          "}",
+          "",
+        ].join("\n"),
+      },
+      {
+        filePath: "src/Slot.tsx",
+        sourceText: [
+          "export function Slot({ content }) {",
+          '  return <section>{content ?? <span className="slot-fallback">Fallback</span>}</section>;',
+          "}",
+          "",
+        ].join("\n"),
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/App.css",
+        cssText: ".slot-content { display: inline-flex; }\n.slot-fallback { display: none; }\n",
+      },
+    ],
+  });
+
+  assertIndexedClassReferences(result.projectAnalysis, ["slot-content", "slot-fallback"]);
+});
+
+test("ProjectAnalysis preserves class expression context across helper-forwarded props", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/App.tsx",
+        sourceText: [
+          'import { Dropdown } from "./Dropdown";',
+          "export function App() {",
+          '  return <Dropdown className="site-header__notifications-menu" triggerClassName="site-header__menu-trigger site-header__menu-trigger--round" />;',
+          "}",
+          "",
+        ].join("\n"),
+      },
+      {
+        filePath: "src/Dropdown.tsx",
+        sourceText: [
+          'import { Popover } from "./Popover";',
+          "function joinClasses(...classes) { return classes.filter(Boolean).join(' '); }",
+          "export function Dropdown({ className, triggerClassName }) {",
+          "  return (",
+          "    <Popover",
+          "      className={joinClasses('dropdown-menu', className)}",
+          "      triggerClassName={triggerClassName}",
+          "    />",
+          "  );",
+          "}",
+          "",
+        ].join("\n"),
+      },
+      {
+        filePath: "src/Popover.tsx",
+        sourceText: [
+          "function joinClasses(...classes) { return classes.filter(Boolean).join(' '); }",
+          "export function Popover({ className, triggerClassName }) {",
+          "  return (",
+          "    <div className={joinClasses('popover', className)}>",
+          "      <button className={joinClasses('popover__trigger', triggerClassName)} />",
+          "    </div>",
+          "  );",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/App.css",
+        cssText: [
+          ".site-header__notifications-menu { display: block; }",
+          ".site-header__menu-trigger { display: inline-flex; }",
+          ".site-header__menu-trigger--round { border-radius: 999px; }",
+          ".dropdown-menu { display: contents; }",
+          ".popover { position: relative; }",
+          ".popover__trigger { display: inline-flex; }",
+          "",
+        ].join("\n"),
+      },
+    ],
+  });
+
+  assertIndexedClassReferences(result.projectAnalysis, [
+    "site-header__notifications-menu",
+    "site-header__menu-trigger",
+    "site-header__menu-trigger--round",
+    "dropdown-menu",
+    "popover",
+    "popover__trigger",
+  ]);
+});
+
 test("ProjectAnalysis preserves finite switch helper classes in filtered class arrays", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [

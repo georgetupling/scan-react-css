@@ -1,7 +1,7 @@
 import ts from "typescript";
 
 import type { LocalHelperDefinition } from "../collection/shared/types.js";
-import type { BuildContext } from "../shared/internalTypes.js";
+import type { BoundExpression, BuildContext, ExpressionBinding } from "../shared/internalTypes.js";
 import { MAX_LOCAL_HELPER_EXPANSION_DEPTH } from "../../../../libraries/policy/index.js";
 import {
   buildHelperExpansionReason,
@@ -20,12 +20,24 @@ export function resolveBoundExpression(
   expression: ts.Expression,
   context: BuildContext,
 ): ts.Expression | undefined {
+  return resolveBoundExpressionContext(expression, context)?.expression;
+}
+
+export function resolveBoundExpressionContext(
+  expression: ts.Expression,
+  context: BuildContext,
+):
+  | {
+      expression: ts.Expression;
+      context: BuildContext;
+    }
+  | undefined {
   if (ts.isIdentifier(expression)) {
-    return context.expressionBindings.get(expression.text);
+    return unwrapExpressionBinding(context.expressionBindings.get(expression.text), context);
   }
 
   if (ts.isCallExpression(expression)) {
-    return resolveHelperCallExpression(expression, context);
+    return resolveHelperCallContext(expression, context);
   }
 
   if (ts.isPropertyAccessExpression(expression)) {
@@ -61,13 +73,21 @@ export function resolveBoundExpression(
 function resolvePropsObjectPropertyAccess(
   expression: ts.PropertyAccessExpression,
   context: BuildContext,
-): ts.Expression | undefined {
+):
+  | {
+      expression: ts.Expression;
+      context: BuildContext;
+    }
+  | undefined {
   if (
     context.propsObjectBindingName &&
     ts.isIdentifier(expression.expression) &&
     expression.expression.text === context.propsObjectBindingName
   ) {
-    return context.propsObjectProperties.get(expression.name.text);
+    return unwrapExpressionBinding(
+      context.propsObjectProperties.get(expression.name.text),
+      context,
+    );
   }
 
   return undefined;
@@ -76,11 +96,19 @@ function resolvePropsObjectPropertyAccess(
 function resolveNamespacePropertyAccess(
   expression: ts.PropertyAccessExpression,
   context: BuildContext,
-): ts.Expression | undefined {
+):
+  | {
+      expression: ts.Expression;
+      context: BuildContext;
+    }
+  | undefined {
   if (ts.isIdentifier(expression.expression)) {
-    return context.namespaceExpressionBindings
-      .get(expression.expression.text)
-      ?.get(expression.name.text);
+    return wrapExpressionBinding(
+      context.namespaceExpressionBindings
+        .get(expression.expression.text)
+        ?.get(expression.name.text),
+      context,
+    );
   }
 
   return undefined;
@@ -210,10 +238,10 @@ function bindHelperArguments(
   helperDefinition: LocalHelperDefinition,
   context: BuildContext,
 ): {
-  expressionBindings: Map<string, ts.Expression>;
+  expressionBindings: Map<string, ExpressionBinding>;
   stringSetBindings: Map<string, string[]>;
 } {
-  const helperExpressionBindings = new Map<string, ts.Expression>();
+  const helperExpressionBindings = new Map<string, ExpressionBinding>();
   const helperStringSetBindings = new Map<string, string[]>();
   const expandedArguments = expandHelperArguments(expression.arguments, context) ?? [];
   for (let index = 0; index < helperDefinition.parameterBindings.length; index += 1) {
@@ -244,16 +272,22 @@ function bindHelperArgument(input: {
   parameterBinding: LocalHelperDefinition["parameterBindings"][number];
   argument: ts.Expression;
   context: BuildContext;
-  expressionBindings: Map<string, ts.Expression>;
+  expressionBindings: Map<string, ExpressionBinding>;
   stringSetBindings: Map<string, string[]>;
 }): void {
   if (input.parameterBinding.kind === "identifier") {
-    input.expressionBindings.set(input.parameterBinding.identifierName, input.argument);
+    input.expressionBindings.set(
+      input.parameterBinding.identifierName,
+      bindExpression(input.argument, input.context),
+    );
     return;
   }
 
-  const argument = resolveBoundExpression(input.argument, input.context) ?? input.argument;
-  const unwrappedArgument = unwrapResolvableExpression(argument);
+  const argumentBinding = resolveBoundExpressionContext(input.argument, input.context) ?? {
+    expression: input.argument,
+    context: input.context,
+  };
+  const unwrappedArgument = unwrapResolvableExpression(argumentBinding.expression);
   if (!ts.isObjectLiteralExpression(unwrappedArgument)) {
     for (const property of input.parameterBinding.properties) {
       if (property.initializer) {
@@ -275,7 +309,7 @@ function bindHelperArgument(input: {
       bindHelperDestructuredProperty({
         identifierName: property.identifierName,
         expression: propertyExpression,
-        context: input.context,
+        context: argumentBinding.context,
         expressionBindings: input.expressionBindings,
         stringSetBindings: input.stringSetBindings,
       });
@@ -296,7 +330,7 @@ function bindHelperDestructuredProperty(input: {
   identifierName: string;
   expression: ts.Expression;
   context: BuildContext;
-  expressionBindings: Map<string, ts.Expression>;
+  expressionBindings: Map<string, ExpressionBinding>;
   stringSetBindings: Map<string, string[]>;
 }): void {
   if (ts.isIdentifier(input.expression)) {
@@ -319,7 +353,10 @@ function bindHelperDestructuredProperty(input: {
     return;
   }
 
-  input.expressionBindings.set(input.identifierName, input.expression);
+  input.expressionBindings.set(
+    input.identifierName,
+    bindExpression(input.expression, input.context),
+  );
 }
 
 function containsIdentifier(node: ts.Node, identifierName: string): boolean {
@@ -395,9 +432,9 @@ function expandHelperArguments(
 }
 
 export function mergeExpressionBindings(
-  baseBindings: Map<string, ts.Expression>,
-  localBindings: Map<string, ts.Expression>,
-): Map<string, ts.Expression> {
+  baseBindings: Map<string, ExpressionBinding>,
+  localBindings: Map<string, ExpressionBinding> | Map<string, ts.Expression>,
+): Map<string, ExpressionBinding> {
   const merged = new Map(baseBindings);
   for (const [identifierName, expression] of localBindings.entries()) {
     merged.set(identifierName, expression);
@@ -468,20 +505,34 @@ function resolveObjectLikePropertyExpression(
   baseExpression: ts.Expression,
   propertyName: string,
   context: BuildContext,
-): ts.Expression | undefined {
-  const resolvedBaseExpression = resolveBoundExpression(baseExpression, context);
+):
+  | {
+      expression: ts.Expression;
+      context: BuildContext;
+    }
+  | undefined {
+  const resolvedBaseExpression = resolveBoundExpressionContext(baseExpression, context);
   if (!resolvedBaseExpression) {
     return undefined;
   }
 
-  return resolvePropertyValueFromExpression(resolvedBaseExpression, propertyName, context);
+  return resolvePropertyValueFromExpression(
+    resolvedBaseExpression.expression,
+    propertyName,
+    resolvedBaseExpression.context,
+  );
 }
 
 function resolvePropertyValueFromExpression(
   expression: ts.Expression,
   propertyName: string,
   context: BuildContext,
-): ts.Expression | undefined {
+):
+  | {
+      expression: ts.Expression;
+      context: BuildContext;
+    }
+  | undefined {
   const helperResolution = ts.isCallExpression(expression)
     ? resolveHelperCallContext(expression, context)
     : undefined;
@@ -503,7 +554,10 @@ function resolvePropertyValueFromExpression(
       if (ts.isPropertyAssignment(property)) {
         const candidateName = getObjectLiteralPropertyName(property.name);
         if (candidateName === propertyName) {
-          return property.initializer;
+          return {
+            expression: property.initializer,
+            context,
+          };
         }
 
         continue;
@@ -511,7 +565,10 @@ function resolvePropertyValueFromExpression(
 
       if (ts.isShorthandPropertyAssignment(property)) {
         if (property.name.text === propertyName) {
-          return property.name;
+          return {
+            expression: property.name,
+            context,
+          };
         }
 
         continue;
@@ -522,6 +579,61 @@ function resolvePropertyValueFromExpression(
   }
 
   return undefined;
+}
+
+export function bindExpression(expression: ts.Expression, context: BuildContext): BoundExpression {
+  return {
+    kind: "bound-expression",
+    expression,
+    context,
+  };
+}
+
+function unwrapExpressionBinding(
+  binding: ExpressionBinding | undefined,
+  fallbackContext: BuildContext,
+):
+  | {
+      expression: ts.Expression;
+      context: BuildContext;
+    }
+  | undefined {
+  if (!binding) {
+    return undefined;
+  }
+
+  if (isBoundExpression(binding)) {
+    return {
+      expression: binding.expression,
+      context: binding.context,
+    };
+  }
+
+  return {
+    expression: binding,
+    context: fallbackContext,
+  };
+}
+
+function wrapExpressionBinding(
+  expression: ts.Expression | undefined,
+  context: BuildContext,
+):
+  | {
+      expression: ts.Expression;
+      context: BuildContext;
+    }
+  | undefined {
+  return expression
+    ? {
+        expression,
+        context,
+      }
+    : undefined;
+}
+
+function isBoundExpression(binding: ExpressionBinding): binding is BoundExpression {
+  return "kind" in binding && binding.kind === "bound-expression";
 }
 
 function resolveObjectLiteralPropertyExpression(

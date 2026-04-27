@@ -17,12 +17,15 @@ import {
   toSourceAnchor,
 } from "../shared/renderIrUtils.js";
 import {
+  bindExpression,
   mergeExpressionBindings,
   mergeHelperDefinitions,
   resolveBoundExpression,
+  resolveBoundExpressionContext,
 } from "../resolution/resolveBindings.js";
+import type { ExpressionBinding } from "../shared/internalTypes.js";
 import type { RenderNode } from "../types.js";
-import { buildChildren } from "./buildIntrinsicNode.js";
+import { buildChildren, summarizeClassAttribute } from "./buildIntrinsicNode.js";
 
 export function buildComponentReferenceNode(
   tagNameNode: ts.JsxTagNameExpression,
@@ -41,6 +44,7 @@ export function buildComponentReferenceNode(
       kind: "component-reference",
       sourceAnchor,
       componentName,
+      className: summarizeClassAttribute(attributes, context),
       reason: COMPONENT_DEFINITION_NOT_FOUND_REASON,
       traces: context.includeTraces
         ? [
@@ -229,10 +233,10 @@ function buildComponentExpansionBindings(
   buildRenderNode: (node: ts.Expression | ts.JsxChild, context: BuildContext) => RenderNode,
 ):
   | {
-      expressionBindings: Map<string, ts.Expression>;
+      expressionBindings: Map<string, ExpressionBinding>;
       stringSetBindings: Map<string, string[]>;
       propsObjectBindingName?: string;
-      propsObjectProperties: Map<string, ts.Expression>;
+      propsObjectProperties: Map<string, ExpressionBinding>;
       propsObjectSubtreeProperties: Map<string, RenderNode[]>;
       subtreeBindings: Map<string, RenderNode[]>;
     }
@@ -300,7 +304,7 @@ function buildComponentExpansionBindings(
     };
   }
 
-  const expressionBindings = new Map<string, ts.Expression>();
+  const expressionBindings = new Map<string, ExpressionBinding>();
   const stringSetBindings = new Map<string, string[]>();
   const subtreeBindings = new Map<string, RenderNode[]>();
   for (const property of definition.parameterBinding.properties) {
@@ -308,7 +312,10 @@ function buildComponentExpansionBindings(
     if (boundExpression) {
       expressionBindings.set(property.identifierName, boundExpression);
     } else if (property.initializer) {
-      expressionBindings.set(property.identifierName, property.initializer);
+      expressionBindings.set(
+        property.identifierName,
+        bindExpression(property.initializer, context),
+      );
     }
 
     if (!boundExpression && property.finiteStringValues) {
@@ -344,13 +351,13 @@ function collectLocalComponentAttributeExpressions(
   buildRenderNode: (node: ts.Expression | ts.JsxChild, context: BuildContext) => RenderNode,
 ):
   | {
-      properties: Map<string, ts.Expression>;
+      properties: Map<string, ExpressionBinding>;
       subtreeProperties: Map<string, RenderNode[]>;
     }
   | {
       reason: string;
     } {
-  const properties = new Map<string, ts.Expression>();
+  const properties = new Map<string, ExpressionBinding>();
   const subtreeProperties = new Map<string, RenderNode[]>();
 
   for (const property of attributes.properties) {
@@ -375,12 +382,21 @@ function collectLocalComponentAttributeExpressions(
       };
     }
 
-    const boundExpression = resolveBoundExpression(expression, context) ?? expression;
-    properties.set(property.name.text, boundExpression);
+    const boundExpression =
+      resolveBoundExpressionContext(expression, context) ?? bindExpression(expression, context);
+    properties.set(
+      property.name.text,
+      bindExpression(boundExpression.expression, boundExpression.context),
+    );
 
-    const renderableExpression = resolveRenderableExpression(boundExpression, context);
+    const renderableExpression = resolveRenderableExpression(
+      boundExpression.expression,
+      boundExpression.context,
+    );
     if (renderableExpression) {
-      subtreeProperties.set(property.name.text, [buildRenderNode(renderableExpression, context)]);
+      subtreeProperties.set(property.name.text, [
+        buildRenderNode(renderableExpression, boundExpression.context),
+      ]);
     }
   }
 

@@ -37,6 +37,7 @@ import type { ClassExpressionSummary } from "../render-model/abstract-values/typ
 import type { ReachabilityAvailability } from "../reachability/types.js";
 import type { RenderGraphEdge, RenderGraphNode } from "../render-model/render-graph/types.js";
 import type {
+  RenderComponentReferenceNode,
   RenderElementNode,
   RenderNode,
   RenderSubtree,
@@ -922,7 +923,7 @@ function visitRenderNode(
   inheritedPlacementLocation: SourceAnchor | undefined,
   inheritedExpansion: NonNullable<RenderNode["expandedFromComponentReference"]> | undefined,
   visitElement: (
-    node: RenderElementNode,
+    node: RenderElementNode | RenderComponentReferenceNode,
     inheritedPlacementLocation: SourceAnchor | undefined,
     inheritedExpansion: NonNullable<RenderNode["expandedFromComponentReference"]> | undefined,
   ) => void,
@@ -935,6 +936,11 @@ function visitRenderNode(
     for (const child of node.children) {
       visitRenderNode(child, placementLocation, expansion, visitElement);
     }
+    return;
+  }
+
+  if (node.kind === "component-reference") {
+    visitElement(node, inheritedPlacementLocation, expansion);
     return;
   }
 

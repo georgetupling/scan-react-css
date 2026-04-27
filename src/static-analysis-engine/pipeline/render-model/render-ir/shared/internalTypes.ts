@@ -6,6 +6,14 @@ import type {
 } from "../collection/shared/types.js";
 import type { RenderNode } from "../types.js";
 
+export type BoundExpression = {
+  kind: "bound-expression";
+  expression: ts.Expression;
+  context: BuildContext;
+};
+
+export type ExpressionBinding = ts.Expression | BoundExpression;
+
 export type BuildContext = {
   filePath: string;
   parsedSourceFile: ts.SourceFile;
@@ -13,7 +21,7 @@ export type BuildContext = {
   componentsByFilePath: Map<string, Map<string, SameFileComponentDefinition>>;
   currentDepth: number;
   expansionStack: string[];
-  expressionBindings: Map<string, ts.Expression>;
+  expressionBindings: Map<string, ExpressionBinding>;
   stringSetBindings: Map<string, string[]>;
   helperDefinitions: Map<string, LocalHelperDefinition>;
   topLevelHelperDefinitionsByFilePath: Map<string, Map<string, LocalHelperDefinition>>;
@@ -22,7 +30,7 @@ export type BuildContext = {
   namespaceComponentDefinitions: Map<string, Map<string, SameFileComponentDefinition>>;
   helperExpansionStack: string[];
   propsObjectBindingName?: string;
-  propsObjectProperties: Map<string, ts.Expression>;
+  propsObjectProperties: Map<string, ExpressionBinding>;
   propsObjectSubtreeProperties: Map<string, RenderNode[]>;
   subtreeBindings: Map<string, RenderNode[]>;
   includeTraces: boolean;

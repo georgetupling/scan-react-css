@@ -167,6 +167,13 @@ function buildRenderNode(node: ts.Expression | ts.JsxChild, context: BuildContex
     return createEmptyFragmentNode(node, context);
   }
 
+  if (ts.isExpression(node)) {
+    const insertedSubtree = tryResolveInsertedSubtreeExpression(node, context, node);
+    if (insertedSubtree) {
+      return insertedSubtree;
+    }
+  }
+
   const boundRenderableNode = tryBuildBoundRenderableNode(node, context);
   if (boundRenderableNode) {
     return boundRenderableNode;

@@ -61,7 +61,7 @@ function collectModeledClassReferenceKeys(renderSubtrees: RenderSubtree[]): Set<
 
   for (const renderSubtree of renderSubtrees) {
     visitRenderNode(renderSubtree.root, (node) => {
-      if (node.kind === "element" && node.className) {
+      if ((node.kind === "element" || node.kind === "component-reference") && node.className) {
         keys.add(createAnchorKey(node.className.sourceAnchor));
       }
     });

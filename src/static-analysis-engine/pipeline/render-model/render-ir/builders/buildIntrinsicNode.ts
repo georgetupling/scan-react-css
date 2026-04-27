@@ -12,7 +12,7 @@ import type { BuildContext } from "../shared/internalTypes.js";
 import { toSourceAnchor, unwrapExpression } from "../shared/renderIrUtils.js";
 import {
   mergeExpressionBindings,
-  resolveBoundExpression,
+  resolveBoundExpressionContext,
   resolveHelperCallContext,
 } from "../resolution/resolveBindings.js";
 import {
@@ -90,7 +90,7 @@ export function buildChildren(
   return results;
 }
 
-function summarizeClassAttribute(
+export function summarizeClassAttribute(
   attributes: ts.JsxAttributes,
   context: BuildContext,
 ): ClassExpressionSummary | undefined {
@@ -227,11 +227,11 @@ function summarizeBoundClassNameExpression(
       );
     }
 
-    const boundExpression = resolveBoundExpression(expression, context);
+    const boundExpression = resolveBoundExpressionContext(expression, context);
     if (boundExpression) {
       return summarizeBoundClassNameExpression(
-        boundExpression,
-        context,
+        boundExpression.expression,
+        boundExpression.context,
         nextClassNameResolutionState(state),
       );
     }
@@ -481,11 +481,11 @@ function collectClassNameSourceAnchors(
       );
     }
 
-    const boundExpression = resolveBoundExpression(expression, context);
+    const boundExpression = resolveBoundExpressionContext(expression, context);
     if (boundExpression) {
       return collectClassNameSourceAnchors(
-        boundExpression,
-        context,
+        boundExpression.expression,
+        boundExpression.context,
         nextClassNameResolutionState(state),
       );
     }
@@ -752,11 +752,11 @@ function resolveExactClassArrayElements(
       );
     }
 
-    const boundExpression = resolveBoundExpression(expression, context);
+    const boundExpression = resolveBoundExpressionContext(expression, context);
     if (boundExpression) {
       return resolveExactClassArrayElements(
-        boundExpression,
-        context,
+        boundExpression.expression,
+        boundExpression.context,
         nextExactClassArrayResolutionState(state),
       );
     }

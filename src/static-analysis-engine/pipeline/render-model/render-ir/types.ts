@@ -54,6 +54,7 @@ export type RenderRepeatedRegionNode = RenderNodeBase & {
 export type RenderComponentReferenceNode = RenderNodeBase & {
   kind: "component-reference";
   componentName: string;
+  className?: ClassExpressionSummary;
   reason: string;
 };
 
