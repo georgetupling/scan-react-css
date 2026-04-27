@@ -58,10 +58,14 @@ export function analyzeProjectSourceTexts(input: {
   const parseStage = runAnalysisStage(progress, "parse", "Parsing source files", () =>
     runParseStage(input.sourceFiles),
   );
-  runAnalysisStage(progress, "project-resolution", "Indexing project resolution data", () =>
-    runProjectResolutionStage({
-      parsedFiles: parseStage.parsedFiles,
-    }),
+  const projectResolutionStage = runAnalysisStage(
+    progress,
+    "project-resolution",
+    "Indexing project resolution data",
+    () =>
+      runProjectResolutionStage({
+        parsedFiles: parseStage.parsedFiles,
+      }),
   );
   const moduleGraphStage = runAnalysisStage(progress, "module-graph", "Building module graph", () =>
     runModuleGraphStage({
@@ -83,6 +87,7 @@ export function analyzeProjectSourceTexts(input: {
     runRenderModelStage({
       parsedFiles: parseStage.parsedFiles,
       symbolResolution: symbolResolutionStage,
+      projectResolution: projectResolutionStage.projectResolution,
       includeTraces,
     }),
   );

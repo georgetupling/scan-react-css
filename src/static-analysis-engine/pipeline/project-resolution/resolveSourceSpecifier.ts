@@ -5,12 +5,17 @@ export type ResolveSourceSpecifierInput = {
   specifier: string;
   knownFilePaths: SourceFilePathLookup;
   includeTypeScriptExtensionAlternates?: boolean;
-  workspacePackageEntryPointsByPackageName?: ReadonlyMap<string, readonly string[]>;
+  workspacePackageEntryPointsByPackageName?: ReadonlyMap<
+    string,
+    readonly WorkspacePackageEntryPointLike[]
+  >;
 };
 
 export type SourceFilePathLookup = {
   has(filePath: string): boolean;
 };
+
+export type WorkspacePackageEntryPointLike = string | { filePath: string };
 
 export function resolveSourceSpecifier(input: ResolveSourceSpecifierInput): string | undefined {
   if (!input.specifier.startsWith(".")) {
@@ -63,7 +68,13 @@ function resolveWorkspacePackageSpecifier(
   }
 
   const entryPoints = input.workspacePackageEntryPointsByPackageName?.get(packageName) ?? [];
-  return entryPoints.length === 1 ? entryPoints[0] : undefined;
+  return entryPoints.length === 1
+    ? getWorkspacePackageEntryPointFilePath(entryPoints[0])
+    : undefined;
+}
+
+function getWorkspacePackageEntryPointFilePath(entryPoint: WorkspacePackageEntryPointLike): string {
+  return typeof entryPoint === "string" ? entryPoint : entryPoint.filePath;
 }
 
 function getTypeScriptSourceAlternatesForSpecifier(candidateBasePath: string): string[] {

@@ -1,4 +1,5 @@
 import ts from "typescript";
+import type { ProjectResolution } from "../../../../project-resolution/index.js";
 import { normalizeFilePath } from "../../../../project-resolution/pathUtils.js";
 import { resolveSourceSpecifier } from "../../../../project-resolution/resolveSourceSpecifier.js";
 
@@ -29,28 +30,18 @@ type TypeResolutionState = {
 };
 
 export type FiniteTypeEvidenceCache = {
-  parsedSourceFilesByFilePath: Map<string, ts.SourceFile>;
+  projectResolution: ProjectResolution;
   evidenceByFilePath: Map<string, LocalTypeEvidence>;
   resolvedExportedTypesByKey: Map<string, ResolvedTypeDeclaration | undefined>;
-  workspacePackageEntryPointsByPackageName: Map<string, string[]>;
 };
 
 export function createFiniteTypeEvidenceCache(
-  parsedFiles: Array<{
-    filePath: string;
-    parsedSourceFile: ts.SourceFile;
-  }>,
+  projectResolution: ProjectResolution,
 ): FiniteTypeEvidenceCache {
   return {
-    parsedSourceFilesByFilePath: new Map(
-      parsedFiles.map((parsedFile) => [
-        normalizeFilePath(parsedFile.filePath),
-        parsedFile.parsedSourceFile,
-      ]),
-    ),
+    projectResolution,
     evidenceByFilePath: new Map(),
     resolvedExportedTypesByKey: new Map(),
-    workspacePackageEntryPointsByPackageName: collectWorkspacePackageEntryPoints(parsedFiles),
   };
 }
 
@@ -676,7 +667,7 @@ function resolveExportedTypeDeclaration(
     return undefined;
   }
 
-  const sourceFile = cache?.parsedSourceFilesByFilePath.get(normalizedFilePath);
+  const sourceFile = cache?.projectResolution.parsedSourceFilesByFilePath.get(normalizedFilePath);
   if (!cache || !sourceFile) {
     return undefined;
   }
@@ -757,53 +748,11 @@ function resolveProjectLocalSourceSpecifier(
   return resolveSourceSpecifier({
     fromFilePath,
     specifier,
-    knownFilePaths: cache.parsedSourceFilesByFilePath,
+    knownFilePaths: cache.projectResolution.parsedSourceFilesByFilePath,
     includeTypeScriptExtensionAlternates: true,
-    workspacePackageEntryPointsByPackageName: cache.workspacePackageEntryPointsByPackageName,
+    workspacePackageEntryPointsByPackageName:
+      cache.projectResolution.workspacePackageEntryPointsByPackageName,
   });
-}
-
-function collectWorkspacePackageEntryPoints(
-  parsedFiles: Array<{
-    filePath: string;
-    parsedSourceFile: ts.SourceFile;
-  }>,
-): Map<string, string[]> {
-  const entryPointsByPackageName = new Map<string, string[]>();
-
-  for (const parsedFile of parsedFiles) {
-    const normalizedFilePath = normalizeFilePath(parsedFile.filePath);
-    const packageName = getWorkspacePackageEntryPointName(normalizedFilePath);
-    if (!packageName) {
-      continue;
-    }
-
-    const entryPoints = entryPointsByPackageName.get(packageName) ?? [];
-    entryPoints.push(normalizedFilePath);
-    entryPointsByPackageName.set(packageName, entryPoints);
-  }
-
-  return new Map(
-    [...entryPointsByPackageName.entries()].map(([packageName, entryPoints]) => [
-      packageName,
-      entryPoints.sort((left, right) => left.localeCompare(right)),
-    ]),
-  );
-}
-
-function getWorkspacePackageEntryPointName(filePath: string): string | undefined {
-  const segments = filePath.split("/");
-  const fileName = segments.at(-1);
-  if (!fileName || !/^index\.[cm]?[jt]sx?$/.test(fileName)) {
-    return undefined;
-  }
-
-  const parentDirectory = segments.at(-2);
-  if (parentDirectory === "src") {
-    return segments.at(-3);
-  }
-
-  return parentDirectory;
 }
 
 function unwrapConstExpression(expression: ts.Expression): ts.Expression {

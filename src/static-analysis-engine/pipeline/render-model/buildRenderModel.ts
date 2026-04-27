@@ -15,6 +15,7 @@ import type {
   SameFileComponentDefinition,
 } from "./render-ir/index.js";
 import type { ProjectBindingResolution } from "../symbol-resolution/index.js";
+import type { ProjectResolution } from "../project-resolution/index.js";
 
 export type RenderModelBuildInput = {
   parsedFiles: Array<{
@@ -22,6 +23,7 @@ export type RenderModelBuildInput = {
     parsedSourceFile: ts.SourceFile;
   }>;
   symbolResolution: ProjectBindingResolution;
+  projectResolution: ProjectResolution;
   includeTraces?: boolean;
 };
 
@@ -36,6 +38,7 @@ export function buildRenderModel(input: RenderModelBuildInput): RenderModel {
   const filePaths = input.parsedFiles.map((parsedFile) => parsedFile.filePath);
   const renderDefinitions = buildProjectRenderDefinitions({
     parsedFiles: input.parsedFiles,
+    projectResolution: input.projectResolution,
   });
   const renderBindings = buildProjectRenderBindings({
     filePaths,

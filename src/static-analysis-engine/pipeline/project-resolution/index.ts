@@ -3,7 +3,11 @@ export {
   getSourceSpecifierCandidatePaths,
   resolveSourceSpecifier,
 } from "./resolveSourceSpecifier.js";
-export type { ResolveSourceSpecifierInput } from "./resolveSourceSpecifier.js";
+export type {
+  ResolveSourceSpecifierInput,
+  SourceFilePathLookup,
+  WorkspacePackageEntryPointLike,
+} from "./resolveSourceSpecifier.js";
 export type {
   ProjectResolution,
   ProjectResolutionCacheEntry,
