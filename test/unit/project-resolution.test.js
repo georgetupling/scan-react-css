@@ -433,6 +433,130 @@ test("project resolution resolves type-only re-exports through barrels", () => {
   });
 });
 
+test("project resolution pins supported ESM re-export forms", () => {
+  const resolution = buildProjectResolution({
+    parsedFiles: [
+      sourceFile(
+        "src/index.ts",
+        `
+          export { default as Button } from "./Button.tsx";
+          export { Button as default } from "./namedButton.tsx";
+          export type { ButtonProps } from "./types.ts";
+          export { type ButtonVariant } from "./variants.ts";
+          export * as ButtonTokens from "./tokens.ts";
+        `,
+      ),
+      sourceFile("src/Button.tsx", "export default function Button() { return null; }"),
+      sourceFile("src/namedButton.tsx", "export function Button() { return null; }"),
+      sourceFile("src/types.ts", 'export type ButtonProps = { variant?: "primary" };'),
+      sourceFile("src/variants.ts", 'export type ButtonVariant = "primary" | "secondary";'),
+      sourceFile("src/tokens.ts", 'export const root = "button";'),
+    ],
+  });
+
+  assert.deepEqual(
+    (resolution.exportsByFilePath.get("src/index.ts") ?? []).map((exportRecord) => ({
+      exportedName: exportRecord.exportedName,
+      sourceExportedName: exportRecord.sourceExportedName,
+      specifier: exportRecord.specifier,
+      reexportKind: exportRecord.reexportKind,
+      typeOnly: exportRecord.typeOnly,
+      declarationKind: exportRecord.declarationKind,
+    })),
+    [
+      {
+        exportedName: "Button",
+        sourceExportedName: "default",
+        specifier: "./Button.tsx",
+        reexportKind: "named",
+        typeOnly: false,
+        declarationKind: "unknown",
+      },
+      {
+        exportedName: "ButtonProps",
+        sourceExportedName: "ButtonProps",
+        specifier: "./types.ts",
+        reexportKind: "named",
+        typeOnly: true,
+        declarationKind: "type",
+      },
+      {
+        exportedName: "ButtonTokens",
+        sourceExportedName: undefined,
+        specifier: "./tokens.ts",
+        reexportKind: "namespace",
+        typeOnly: false,
+        declarationKind: "unknown",
+      },
+      {
+        exportedName: "ButtonVariant",
+        sourceExportedName: "ButtonVariant",
+        specifier: "./variants.ts",
+        reexportKind: "named",
+        typeOnly: true,
+        declarationKind: "type",
+      },
+      {
+        exportedName: "default",
+        sourceExportedName: "Button",
+        specifier: "./namedButton.tsx",
+        reexportKind: "named",
+        typeOnly: false,
+        declarationKind: "unknown",
+      },
+    ],
+  );
+
+  assert.deepEqual(resolveExportForTest(resolution, "Button"), {
+    resolvedExport: {
+      targetFilePath: "src/Button.tsx",
+      targetExportName: "default",
+      targetLocalName: "Button",
+    },
+    traces: [],
+  });
+  assert.deepEqual(resolveExportForTest(resolution, "default"), {
+    resolvedExport: {
+      targetFilePath: "src/namedButton.tsx",
+      targetExportName: "Button",
+      targetLocalName: "Button",
+    },
+    traces: [],
+  });
+  assert.deepEqual(resolveExportForTest(resolution, "ButtonProps"), {
+    resolvedExport: {
+      targetFilePath: "src/types.ts",
+      targetExportName: "ButtonProps",
+      targetLocalName: "ButtonProps",
+    },
+    traces: [],
+  });
+  assert.deepEqual(resolveExportForTest(resolution, "ButtonVariant"), {
+    resolvedExport: {
+      targetFilePath: "src/variants.ts",
+      targetExportName: "ButtonVariant",
+      targetLocalName: "ButtonVariant",
+    },
+    traces: [],
+  });
+
+  assert.deepEqual(resolveExportForTest(resolution, "ButtonTokens"), {
+    reason: "export-not-found",
+    traces: [],
+  });
+  assert.deepEqual(
+    [
+      ...collectAvailableExportedNames({
+        projectResolution: resolution,
+        filePath: "src/index.ts",
+        visitedFilePaths: new Set(["src/index.ts"]),
+        currentDepth: 0,
+      }),
+    ].sort(),
+    ["Button", "ButtonProps", "ButtonTokens", "ButtonVariant", "default"],
+  );
+});
+
 test("project resolution caches repeated source-specifier lookups", () => {
   const resolution = buildProjectResolution({
     parsedFiles: [
@@ -696,4 +820,15 @@ function sourceFile(filePath, sourceText) {
 
 function expressionText(expression) {
   return expression?.getText();
+}
+
+function resolveExportForTest(projectResolution, exportedName) {
+  return resolveProjectExport({
+    projectResolution,
+    filePath: "src/index.ts",
+    exportedName,
+    visitedExports: new Set([`src/index.ts:${exportedName}`]),
+    currentDepth: 0,
+    includeTraces: false,
+  });
 }
