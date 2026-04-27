@@ -8,6 +8,7 @@ import { runExternalCssStage } from "./stages/externalCssStage.js";
 import { runModuleGraphStage } from "./stages/moduleGraphStage.js";
 import { runParseStage } from "./stages/parseStage.js";
 import { runProjectAnalysisStage } from "./stages/projectAnalysisStage.js";
+import { runProjectResolutionStage } from "./stages/projectResolutionStage.js";
 import { runReachabilityStage } from "./stages/reachabilityStage.js";
 import { runRenderModelStage } from "./stages/renderModelStage.js";
 import { runRuntimeDomStage } from "./stages/runtimeDomStage.js";
@@ -56,6 +57,11 @@ export function analyzeProjectSourceTexts(input: {
   const progress = createAnalysisProgressReporter(input.onProgress);
   const parseStage = runAnalysisStage(progress, "parse", "Parsing source files", () =>
     runParseStage(input.sourceFiles),
+  );
+  runAnalysisStage(progress, "project-resolution", "Indexing project resolution data", () =>
+    runProjectResolutionStage({
+      parsedFiles: parseStage.parsedFiles,
+    }),
   );
   const moduleGraphStage = runAnalysisStage(progress, "module-graph", "Building module graph", () =>
     runModuleGraphStage({
