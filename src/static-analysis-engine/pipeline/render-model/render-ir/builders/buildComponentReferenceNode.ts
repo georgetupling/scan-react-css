@@ -169,7 +169,10 @@ export function buildComponentReferenceNode(
         currentDepth: context.currentDepth + 1,
         expansionStack: [...context.expansionStack, componentName],
         expressionBindings: mergeExpressionBindings(
-          expansionBinding.expressionBindings,
+          mergeExpressionBindings(
+            context.topLevelExpressionBindingsByFilePath.get(definition.filePath) ?? new Map(),
+            expansionBinding.expressionBindings,
+          ),
           definition.localExpressionBindings,
         ),
         stringSetBindings: mergeStringSetBindings(
@@ -181,6 +184,7 @@ export function buildComponentReferenceNode(
           definition.localHelperDefinitions,
         ),
         topLevelHelperDefinitionsByFilePath: context.topLevelHelperDefinitionsByFilePath,
+        topLevelExpressionBindingsByFilePath: context.topLevelExpressionBindingsByFilePath,
         helperExpansionStack: [],
         propsObjectBindingName: expansionBinding.propsObjectBindingName,
         propsObjectProperties: expansionBinding.propsObjectProperties,

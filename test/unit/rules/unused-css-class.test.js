@@ -344,67 +344,61 @@ test("unused-css-class treats helper-forwarded class props as used across compon
   }
 });
 
-test(
-  "unused-css-class should treat data-driven object literal class values in array maps as used",
-  {
-    skip: "known gap: template interpolation does not preserve exact object-property values from mapped array elements",
-  },
-  async () => {
-    const project = await new TestProjectBuilder()
-      .withSourceFile(
-        "src/HomePageGuestView.tsx",
-        [
-          'import "./HomePageGuestView.css";',
-          "const howItWorksItems = [",
-          "  { title: 'Create worlds', graphicClassName: 'home-page__how-it-works-graphic--world' },",
-          "  { title: 'Collaborate safely', graphicClassName: 'home-page__how-it-works-graphic--collaborate' },",
-          "  { title: 'Track canon', graphicClassName: 'home-page__how-it-works-graphic--control' },",
-          "  { title: 'Host beautifully', graphicClassName: 'home-page__how-it-works-graphic--hosted' },",
-          "];",
-          "export function HomePageGuestView() {",
-          "  return (",
-          '    <div className="home-page__how-it-works-grid">',
-          "      {howItWorksItems.map((item) => (",
-          '        <article className="home-page__how-it-works-card" key={item.title}>',
-          "          <div",
-          "            className={`home-page__how-it-works-graphic ${item.graphicClassName}`}",
-          '            aria-hidden="true"',
-          "          />",
-          "        </article>",
-          "      ))}",
-          "    </div>",
-          "  );",
-          "}",
-          "",
-        ].join("\n"),
-      )
-      .withCssFile(
-        "src/HomePageGuestView.css",
-        [
-          ".home-page__how-it-works-graphic { display: block; }",
-          ".home-page__how-it-works-graphic--world { color: green; }",
-          ".home-page__how-it-works-graphic--collaborate { color: blue; }",
-          ".home-page__how-it-works-graphic--control { color: purple; }",
-          ".home-page__how-it-works-graphic--hosted { color: gold; }",
-          "",
-        ].join("\n"),
-      )
-      .build();
+test("unused-css-class treats data-driven object literal class values in array maps as used", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/HomePageGuestView.tsx",
+      [
+        'import "./HomePageGuestView.css";',
+        "const howItWorksItems = [",
+        "  { title: 'Create worlds', graphicClassName: 'home-page__how-it-works-graphic--world' },",
+        "  { title: 'Collaborate safely', graphicClassName: 'home-page__how-it-works-graphic--collaborate' },",
+        "  { title: 'Track canon', graphicClassName: 'home-page__how-it-works-graphic--control' },",
+        "  { title: 'Host beautifully', graphicClassName: 'home-page__how-it-works-graphic--hosted' },",
+        "];",
+        "export function HomePageGuestView() {",
+        "  return (",
+        '    <div className="home-page__how-it-works-grid">',
+        "      {howItWorksItems.map((item) => (",
+        '        <article className="home-page__how-it-works-card" key={item.title}>',
+        "          <div",
+        "            className={`home-page__how-it-works-graphic ${item.graphicClassName}`}",
+        '            aria-hidden="true"',
+        "          />",
+        "        </article>",
+        "      ))}",
+        "    </div>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/HomePageGuestView.css",
+      [
+        ".home-page__how-it-works-graphic { display: block; }",
+        ".home-page__how-it-works-graphic--world { color: green; }",
+        ".home-page__how-it-works-graphic--collaborate { color: blue; }",
+        ".home-page__how-it-works-graphic--control { color: purple; }",
+        ".home-page__how-it-works-graphic--hosted { color: gold; }",
+        "",
+      ].join("\n"),
+    )
+    .build();
 
-    try {
-      const result = await scanProject({ rootDir: project.rootDir });
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
 
-      assertNoClassFindings(result, "unused-css-class", [
-        "home-page__how-it-works-graphic--world",
-        "home-page__how-it-works-graphic--collaborate",
-        "home-page__how-it-works-graphic--control",
-        "home-page__how-it-works-graphic--hosted",
-      ]);
-    } finally {
-      await project.cleanup();
-    }
-  },
-);
+    assertNoClassFindings(result, "unused-css-class", [
+      "home-page__how-it-works-graphic--world",
+      "home-page__how-it-works-graphic--collaborate",
+      "home-page__how-it-works-graphic--control",
+      "home-page__how-it-works-graphic--hosted",
+    ]);
+  } finally {
+    await project.cleanup();
+  }
+});
 
 test("unused-css-class treats finite role template literal class variants as used", async () => {
   const project = await new TestProjectBuilder()

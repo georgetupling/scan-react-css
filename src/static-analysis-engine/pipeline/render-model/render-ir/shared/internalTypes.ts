@@ -25,6 +25,7 @@ export type BuildContext = {
   stringSetBindings: Map<string, string[]>;
   helperDefinitions: Map<string, LocalHelperDefinition>;
   topLevelHelperDefinitionsByFilePath: Map<string, Map<string, LocalHelperDefinition>>;
+  topLevelExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
   namespaceExpressionBindings: Map<string, Map<string, ts.Expression>>;
   namespaceHelperDefinitions: Map<string, Map<string, LocalHelperDefinition>>;
   namespaceComponentDefinitions: Map<string, Map<string, SameFileComponentDefinition>>;

@@ -62,10 +62,12 @@ export function buildSameFileRenderSubtrees(input: {
     string,
     import("./collection/shared/types.js").LocalHelperDefinition
   >;
+  topLevelExpressionBindings?: Map<string, ts.Expression>;
   topLevelHelperDefinitionsByFilePath?: Map<
     string,
     Map<string, import("./collection/shared/types.js").LocalHelperDefinition>
   >;
+  topLevelExpressionBindingsByFilePath?: Map<string, Map<string, ts.Expression>>;
   importedNamespaceExpressionBindings?: Map<string, Map<string, ts.Expression>>;
   importedNamespaceHelperDefinitions?: Map<
     string,
@@ -95,6 +97,7 @@ export function buildSameFileRenderSubtrees(input: {
       expansionStack: [definition.componentName],
       expressionBindings: new Map([
         ...(input.importedExpressionBindings?.entries() ?? []),
+        ...(input.topLevelExpressionBindings?.entries() ?? []),
         ...definition.localExpressionBindings.entries(),
       ]),
       stringSetBindings: buildDefinitionStringSetBindings(definition),
@@ -108,6 +111,13 @@ export function buildSameFileRenderSubtrees(input: {
         new Map(
           input.topLevelHelperDefinitions
             ? [[definition.filePath, input.topLevelHelperDefinitions]]
+            : [],
+        ),
+      topLevelExpressionBindingsByFilePath:
+        input.topLevelExpressionBindingsByFilePath ??
+        new Map(
+          input.topLevelExpressionBindings
+            ? [[definition.filePath, input.topLevelExpressionBindings]]
             : [],
         ),
       namespaceExpressionBindings: new Map(
