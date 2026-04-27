@@ -14,12 +14,22 @@ import {
   mergeExpressionBindings,
 } from "../resolution/resolveBindings.js";
 import { resolveExactTruthyExpression } from "../resolution/resolveExactValues.js";
+import {
+  collectLocalBodyBindings,
+  isConstDeclarationList,
+} from "../collection/shared/collectLocalBodyBindings.js";
 
 const MAX_EXACT_ARRAY_RESOLUTION_DEPTH = 100;
 
 type ExactArrayResolutionState = {
   activeExpressions: Set<string>;
   depth: number;
+};
+
+type ArrayCallbackSummary = {
+  bodyExpression: ts.Expression;
+  localExpressionBindings: Map<string, ts.Expression>;
+  localStringSetBindings: Map<string, string[]>;
 };
 
 export function buildArrayRenderNode(input: {
@@ -98,8 +108,8 @@ export function tryBuildMappedArrayRenderNode(input: {
     return undefined;
   }
 
-  const callbackBodyExpression = summarizeArrayCallbackBody(callback.body);
-  if (!callbackBodyExpression) {
+  const callbackSummary = summarizeArrayCallback(callback.body);
+  if (!callbackSummary) {
     return undefined;
   }
 
@@ -116,7 +126,14 @@ export function tryBuildMappedArrayRenderNode(input: {
     return {
       kind: "repeated-region",
       sourceAnchor,
-      template: input.buildRenderNode(callbackBodyExpression, input.context),
+      template: input.buildRenderNode(
+        callbackSummary.bodyExpression,
+        buildArrayCallbackContext({
+          context: input.context,
+          callback,
+          callbackSummary,
+        }),
+      ),
       reason: "bounded-unknown-array-map",
       traces: input.context.includeTraces
         ? [
@@ -136,10 +153,11 @@ export function tryBuildMappedArrayRenderNode(input: {
 
   const children = arrayElements.map((elementExpression, index) =>
     input.buildRenderNode(
-      callbackBodyExpression,
+      callbackSummary.bodyExpression,
       buildArrayCallbackContext({
         context: input.context,
         callback,
+        callbackSummary,
         elementExpression,
         index,
       }),
@@ -262,8 +280,8 @@ function resolveExactArrayElements(
         return undefined;
       }
 
-      const callbackBodyExpression = summarizeArrayCallbackBody(callback.body);
-      if (!callbackBodyExpression) {
+      const callbackSummary = summarizeArrayCallback(callback.body);
+      if (!callbackSummary) {
         return undefined;
       }
 
@@ -272,10 +290,14 @@ function resolveExactArrayElements(
         const callbackContext = buildArrayCallbackContext({
           context,
           callback,
+          callbackSummary,
           elementExpression: sourceElements[index],
           index,
         });
-        const shouldInclude = resolveExactTruthyExpression(callbackBodyExpression, callbackContext);
+        const shouldInclude = resolveExactTruthyExpression(
+          callbackSummary.bodyExpression,
+          callbackContext,
+        );
         if (shouldInclude === undefined) {
           return undefined;
         }
@@ -356,8 +378,8 @@ function resolveExactFoundArrayElement(
     return undefined;
   }
 
-  const callbackBodyExpression = summarizeArrayCallbackBody(callback.body);
-  if (!callbackBodyExpression) {
+  const callbackSummary = summarizeArrayCallback(callback.body);
+  if (!callbackSummary) {
     return undefined;
   }
 
@@ -365,10 +387,11 @@ function resolveExactFoundArrayElement(
     const callbackContext = buildArrayCallbackContext({
       context,
       callback,
+      callbackSummary,
       elementExpression: sourceElements[index],
       index,
     });
-    const isMatch = resolveExactTruthyExpression(callbackBodyExpression, callbackContext);
+    const isMatch = resolveExactTruthyExpression(callbackSummary.bodyExpression, callbackContext);
     if (isMatch === undefined) {
       return undefined;
     }
@@ -390,14 +413,35 @@ function hasSupportedArrayCallbackParameters(
   );
 }
 
-function summarizeArrayCallbackBody(body: ts.ConciseBody): ts.Expression | undefined {
+function summarizeArrayCallback(body: ts.ConciseBody): ArrayCallbackSummary | undefined {
   if (!ts.isBlock(body)) {
-    return body;
+    return {
+      bodyExpression: body,
+      localExpressionBindings: new Map(),
+      localStringSetBindings: new Map(),
+    };
   }
 
+  const localExpressionBindings = new Map<string, ts.Expression>();
+  const localStringSetBindings = new Map<string, string[]>();
+
   for (const statement of body.statements) {
+    if (ts.isVariableStatement(statement) && isConstDeclarationList(statement.declarationList)) {
+      collectLocalBodyBindings(
+        statement.declarationList,
+        localExpressionBindings,
+        localStringSetBindings,
+        new Map(),
+      );
+      continue;
+    }
+
     if (ts.isReturnStatement(statement) && statement.expression) {
-      return statement.expression;
+      return {
+        bodyExpression: statement.expression,
+        localExpressionBindings,
+        localStringSetBindings,
+      };
     }
   }
 
@@ -407,25 +451,44 @@ function summarizeArrayCallbackBody(body: ts.ConciseBody): ts.Expression | undef
 function buildArrayCallbackContext(input: {
   context: BuildContext;
   callback: ts.ArrowFunction | ts.FunctionExpression;
-  elementExpression: ts.Expression;
-  index: number;
+  callbackSummary: ArrayCallbackSummary;
+  elementExpression?: ts.Expression;
+  index?: number;
 }): BuildContext {
   const callbackBindings = new Map<string, ts.Expression>();
   const [itemParameter, indexParameter] = input.callback.parameters;
 
-  if (itemParameter && ts.isIdentifier(itemParameter.name)) {
+  if (itemParameter && ts.isIdentifier(itemParameter.name) && input.elementExpression) {
     callbackBindings.set(itemParameter.name.text, input.elementExpression);
   }
 
-  if (indexParameter && ts.isIdentifier(indexParameter.name)) {
+  if (indexParameter && ts.isIdentifier(indexParameter.name) && input.index !== undefined) {
     callbackBindings.set(indexParameter.name.text, ts.factory.createNumericLiteral(input.index));
   }
 
   return {
     ...input.context,
-    expressionBindings: mergeExpressionBindings(input.context.expressionBindings, callbackBindings),
-    stringSetBindings: input.context.stringSetBindings,
+    expressionBindings: mergeExpressionBindings(
+      mergeExpressionBindings(input.context.expressionBindings, callbackBindings),
+      input.callbackSummary.localExpressionBindings,
+    ),
+    stringSetBindings: mergeStringSetBindings(
+      input.context.stringSetBindings,
+      input.callbackSummary.localStringSetBindings,
+    ),
   };
+}
+
+function mergeStringSetBindings(
+  baseBindings: Map<string, string[]>,
+  localBindings: Map<string, string[]>,
+): Map<string, string[]> {
+  const merged = new Map(baseBindings);
+  for (const [identifierName, values] of localBindings.entries()) {
+    merged.set(identifierName, values);
+  }
+
+  return merged;
 }
 
 function nextExactArrayResolutionState(

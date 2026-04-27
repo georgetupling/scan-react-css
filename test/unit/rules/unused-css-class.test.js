@@ -555,82 +555,78 @@ test("unused-css-class treats computed shared primitive base classes as used", a
   }
 });
 
-test(
-  "unused-css-class should preserve local class aliases declared inside mapped render callback bodies",
-  { skip: "known gap: array-map render callbacks currently drop callback-local const bindings" },
-  async () => {
-    const project = await new TestProjectBuilder()
-      .withSourceFile(
-        "src/DesktopPublicWorldPanel.tsx",
-        [
-          'import { HomepageDiscoveryCard } from "./HomepageDiscoveryCard";',
-          'import "./DesktopPublicWorldPanel.css";',
-          "export function DesktopPublicWorldPanel({ discovery }) {",
-          "  const safeActiveDiscoveryIndex = 0;",
-          "  const previousDiscoveryIndex = 1;",
-          "  const nextDiscoveryIndex = 2;",
-          "  return (",
-          '    <div className="home-page__discovery-stage">',
-          "      {discovery.slots.map((slot, index) => {",
-          "        const isActive = index === safeActiveDiscoveryIndex;",
-          "        const isPrevious = index === previousDiscoveryIndex;",
-          "        const isNext = index === nextDiscoveryIndex;",
-          "        const cardPositionClass = isActive",
-          "          ? 'home-page__discovery-card--active'",
-          "          : isPrevious",
-          "            ? 'home-page__discovery-card--previous'",
-          "            : isNext",
-          "              ? 'home-page__discovery-card--next'",
-          "              : 'home-page__discovery-card--hidden';",
-          "        return <HomepageDiscoveryCard slot={slot} className={cardPositionClass} />;",
-          "      })}",
-          "    </div>",
-          "  );",
-          "}",
-          "",
-        ].join("\n"),
-      )
-      .withSourceFile(
-        "src/HomepageDiscoveryCard.tsx",
-        [
-          'import "./HomepageDiscoveryCard.css";',
-          "function joinClasses(...classes) { return classes.filter(Boolean).join(' '); }",
-          "export function HomepageDiscoveryCard({ className }) {",
-          "  return <a className={joinClasses('home-page__discovery-card', className)} />;",
-          "}",
-          "",
-        ].join("\n"),
-      )
-      .withCssFile(
-        "src/DesktopPublicWorldPanel.css",
-        [
-          ".home-page__discovery-card--active { opacity: 1; }",
-          ".home-page__discovery-card--previous { opacity: 0.8; }",
-          ".home-page__discovery-card--next { opacity: 0.8; }",
-          ".home-page__discovery-card--hidden { opacity: 0; }",
-          "",
-        ].join("\n"),
-      )
-      .withCssFile(
-        "src/HomepageDiscoveryCard.css",
-        ".home-page__discovery-card { display: block; }\n",
-      )
-      .build();
+test("unused-css-class preserves local class aliases declared inside mapped render callback bodies", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/DesktopPublicWorldPanel.tsx",
+      [
+        'import { HomepageDiscoveryCard } from "./HomepageDiscoveryCard";',
+        'import "./DesktopPublicWorldPanel.css";',
+        "export function DesktopPublicWorldPanel({ discovery }) {",
+        "  const safeActiveDiscoveryIndex = 0;",
+        "  const previousDiscoveryIndex = 1;",
+        "  const nextDiscoveryIndex = 2;",
+        "  return (",
+        '    <div className="home-page__discovery-stage">',
+        "      {discovery.slots.map((slot, index) => {",
+        "        const isActive = index === safeActiveDiscoveryIndex;",
+        "        const isPrevious = index === previousDiscoveryIndex;",
+        "        const isNext = index === nextDiscoveryIndex;",
+        "        const cardPositionClass = isActive",
+        "          ? 'home-page__discovery-card--active'",
+        "          : isPrevious",
+        "            ? 'home-page__discovery-card--previous'",
+        "            : isNext",
+        "              ? 'home-page__discovery-card--next'",
+        "              : 'home-page__discovery-card--hidden';",
+        "        return <HomepageDiscoveryCard slot={slot} className={cardPositionClass} />;",
+        "      })}",
+        "    </div>",
+        "  );",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/HomepageDiscoveryCard.tsx",
+      [
+        'import "./HomepageDiscoveryCard.css";',
+        "function joinClasses(...classes) { return classes.filter(Boolean).join(' '); }",
+        "export function HomepageDiscoveryCard({ className }) {",
+        "  return <a className={joinClasses('home-page__discovery-card', className)} />;",
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/DesktopPublicWorldPanel.css",
+      [
+        ".home-page__discovery-card--active { opacity: 1; }",
+        ".home-page__discovery-card--previous { opacity: 0.8; }",
+        ".home-page__discovery-card--next { opacity: 0.8; }",
+        ".home-page__discovery-card--hidden { opacity: 0; }",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile(
+      "src/HomepageDiscoveryCard.css",
+      ".home-page__discovery-card { display: block; }\n",
+    )
+    .build();
 
-    try {
-      const result = await scanProject({ rootDir: project.rootDir });
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
 
-      assertNoClassFindings(result, "unused-css-class", [
-        "home-page__discovery-card--active",
-        "home-page__discovery-card--previous",
-        "home-page__discovery-card--next",
-        "home-page__discovery-card--hidden",
-      ]);
-    } finally {
-      await project.cleanup();
-    }
-  },
-);
+    assertNoClassFindings(result, "unused-css-class", [
+      "home-page__discovery-card--active",
+      "home-page__discovery-card--previous",
+      "home-page__discovery-card--next",
+      "home-page__discovery-card--hidden",
+    ]);
+  } finally {
+    await project.cleanup();
+  }
+});
 
 test(
   "unused-css-class should scan JSX literals passed into side-effect setters",
