@@ -47,7 +47,7 @@ test("symbol resolution owns exported expression bindings and imported expressio
   const resolution = buildProjectBindingResolution({
     parsedFiles,
     symbolsByFilePath,
-    projectResolution: moduleFacts,
+    moduleFacts,
     includeTraces: false,
   });
 

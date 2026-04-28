@@ -17,7 +17,7 @@ import { computeBatchedComponentAvailability } from "./componentAvailability.js"
 import { buildStylesheetReachabilityRecord } from "./stylesheetRecords.js";
 
 export function buildReachabilitySummary(input: {
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];
   cssSources: SelectorSourceInput[];
@@ -50,9 +50,9 @@ export function buildReachabilitySummary(input: {
         normalizeProjectPath(importRecord.resolvedFilePath) ?? importRecord.resolvedFilePath,
       ]),
   );
-  const analyzedSourceFilePaths = collectAnalyzedSourceFilePaths(input.projectResolution);
+  const analyzedSourceFilePaths = collectAnalyzedSourceFilePaths(input.moduleFacts);
   const directCssImportersByStylesheetPath = collectDirectCssImportersByStylesheetPath({
-    projectResolution: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     knownCssFilePaths,
     packageCssImportBySpecifier,
     sourcePackageCssImports: input.externalCssSummary.packageCssImports,

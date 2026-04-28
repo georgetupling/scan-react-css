@@ -16,7 +16,7 @@ export function runReachabilityStage(input: {
 }): ReachabilityStageResult {
   return {
     reachabilitySummary: buildReachabilitySummary({
-      projectResolution: input.moduleFacts,
+      moduleFacts: input.moduleFacts,
       renderGraph: input.renderGraph,
       renderSubtrees: input.renderSubtrees,
       cssSources: input.selectorCssSources,

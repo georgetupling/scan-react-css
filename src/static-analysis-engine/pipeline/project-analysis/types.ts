@@ -485,7 +485,7 @@ export type SerializableProjectAnalysisIndexes = {
 };
 
 export type ProjectAnalysisBuildInput = {
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   cssFiles: import("../css-analysis/types.js").ExperimentalCssFileAnalysis[];
   cssModules: CssModuleAnalysis;
   externalCssSummary: ExternalCssSummary;

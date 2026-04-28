@@ -27,7 +27,7 @@ import type {
 export function buildProjectBindingResolution(input: {
   parsedFiles: ParsedProjectFile[];
   symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   includeTraces?: boolean;
 }): ProjectBindingResolution {
   const includeTraces = input.includeTraces ?? true;
@@ -57,13 +57,13 @@ export function buildProjectBindingResolution(input: {
   );
 
   for (const moduleFacts of getAllResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
   })) {
     resolvedImportedBindingsByFilePath.set(
       moduleFacts.filePath,
       resolveImportedBindingsForFile({
         filePath: moduleFacts.filePath,
-        projectResolution: input.projectResolution,
+        moduleFacts: input.moduleFacts,
         symbolsByFilePath,
         includeTraces,
       }),
@@ -78,7 +78,7 @@ export function buildProjectBindingResolution(input: {
       moduleFacts.filePath,
       resolveNamespaceImportsForFile({
         filePath: moduleFacts.filePath,
-        projectResolution: input.projectResolution,
+        moduleFacts: input.moduleFacts,
         symbolsByFilePath,
         includeTraces,
       }),
@@ -105,7 +105,7 @@ export function buildProjectBindingResolution(input: {
       if (!resolvedBinding) {
         const unresolvedImportedBinding = resolveImportedBindingFailureForSymbol({
           symbol,
-          projectResolution: input.projectResolution,
+          moduleFacts: input.moduleFacts,
           filePath: moduleFacts.filePath,
           includeTraces,
         });
@@ -186,13 +186,13 @@ function isResolvedComponentBinding(
 
 export function resolveImportedBindingsForFile(input: {
   filePath: string;
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   includeTraces?: boolean;
 }): ResolvedImportedBinding[] {
   const includeTraces = input.includeTraces ?? true;
   const moduleFacts = getResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     filePath: input.filePath,
   });
   if (!moduleFacts) {
@@ -206,7 +206,7 @@ export function resolveImportedBindingsForFile(input: {
   );
   const resolvedBindings: ResolvedImportedBinding[] = [];
   for (const importFact of getDirectSourceImportFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     filePath: input.filePath,
   })) {
     const importedFilePath = importFact.resolution.resolvedFilePath;
@@ -222,7 +222,7 @@ export function resolveImportedBindingsForFile(input: {
       const resolvedExport = resolveImportedModuleFactExport({
         filePath: importedFilePath,
         exportedName: importedBinding.importedName,
-        projectResolution: input.projectResolution,
+        moduleFacts: input.moduleFacts,
         symbolsByFilePath: input.symbolsByFilePath,
         visitedExports: new Set([`${importedFilePath}:${importedBinding.importedName}`]),
         currentDepth: 0,
@@ -250,13 +250,13 @@ export function resolveImportedBindingsForFile(input: {
 
 export function resolveNamespaceImportsForFile(input: {
   filePath: string;
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   includeTraces?: boolean;
 }): ResolvedNamespaceImport[] {
   const includeTraces = input.includeTraces ?? true;
   const moduleFacts = getResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     filePath: input.filePath,
   });
   if (!moduleFacts) {
@@ -265,7 +265,7 @@ export function resolveNamespaceImportsForFile(input: {
 
   const namespaceImports: ResolvedNamespaceImport[] = [];
   for (const importFact of getDirectSourceImportFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     filePath: input.filePath,
   })) {
     const importedFilePath = importFact.resolution.resolvedFilePath;
@@ -279,7 +279,7 @@ export function resolveNamespaceImportsForFile(input: {
           localName: importedBinding.localName,
           exports: resolveNamespaceBundle({
             filePath: importedFilePath,
-            projectResolution: input.projectResolution,
+            moduleFacts: input.moduleFacts,
             symbolsByFilePath: input.symbolsByFilePath,
             currentDepth: 0,
           }),
@@ -303,7 +303,7 @@ export function resolveNamespaceImportsForFile(input: {
       const resolvedNamespaceImport = resolveNamedNamespaceImport({
         filePath: importedFilePath,
         exportedName: importedBinding.importedName,
-        projectResolution: input.projectResolution,
+        moduleFacts: input.moduleFacts,
         symbolsByFilePath: input.symbolsByFilePath,
         visitedNamespaceExports: new Set([`${importedFilePath}:${importedBinding.importedName}`]),
         currentDepth: 0,
@@ -338,7 +338,7 @@ export function resolveNamespaceImportsForFile(input: {
 function resolveNamedNamespaceImport(input: {
   filePath: string;
   exportedName: string;
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   visitedNamespaceExports: Set<string>;
   currentDepth: number;
@@ -348,7 +348,7 @@ function resolveNamedNamespaceImport(input: {
   }
 
   const moduleFacts = getResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     filePath: input.filePath,
   });
   if (!moduleFacts) {
@@ -369,7 +369,7 @@ function resolveNamedNamespaceImport(input: {
 
     return resolveNamespaceBundle({
       filePath: targetFilePath,
-      projectResolution: input.projectResolution,
+      moduleFacts: input.moduleFacts,
       symbolsByFilePath: input.symbolsByFilePath,
       currentDepth: input.currentDepth + 1,
     });
@@ -410,13 +410,13 @@ function resolveNamedNamespaceImport(input: {
 
 function resolveNamespaceBundle(input: {
   filePath: string;
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   currentDepth: number;
 }): Map<string, ResolvedProjectExport> {
   const exportedNames = collectAvailableExportedNames({
     filePath: input.filePath,
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     visitedFilePaths: new Set([input.filePath]),
     currentDepth: input.currentDepth,
   });
@@ -430,7 +430,7 @@ function resolveNamespaceBundle(input: {
     const resolvedExport = resolveImportedModuleFactExport({
       filePath: input.filePath,
       exportedName,
-      projectResolution: input.projectResolution,
+      moduleFacts: input.moduleFacts,
       symbolsByFilePath: input.symbolsByFilePath,
       visitedExports: new Set([`${input.filePath}:${exportedName}`]),
       currentDepth: input.currentDepth,
@@ -446,7 +446,7 @@ function resolveNamespaceBundle(input: {
 function resolveImportedModuleFactExport(input: {
   filePath: string;
   exportedName: string;
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   visitedExports: Set<string>;
   currentDepth: number;
@@ -458,7 +458,7 @@ function resolveImportedModuleFactExport(input: {
   reason?: string;
 } {
   const resolvedValue = resolveModuleFactExport({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     filePath: input.filePath,
     exportedName: input.exportedName,
     visitedExports: input.visitedExports,
@@ -512,7 +512,7 @@ function findSymbolIdByLocalName(input: {
 
 function resolveImportedBindingFailureForSymbol(input: {
   symbol: EngineSymbol;
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   filePath: string;
   includeTraces?: boolean;
 }): { reason: string; traces: AnalysisTrace[] } | undefined {
@@ -521,7 +521,7 @@ function resolveImportedBindingFailureForSymbol(input: {
   }
 
   const moduleFacts = getResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     filePath: input.filePath,
   });
   if (!moduleFacts) {
@@ -529,7 +529,7 @@ function resolveImportedBindingFailureForSymbol(input: {
   }
 
   for (const importFact of getDirectSourceImportFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
     filePath: input.filePath,
   })) {
     const importedFilePath = importFact.resolution.resolvedFilePath;
@@ -547,7 +547,7 @@ function resolveImportedBindingFailureForSymbol(input: {
     const result = resolveImportedModuleFactExport({
       filePath: importedFilePath,
       exportedName: importedBinding.importedName,
-      projectResolution: input.projectResolution,
+      moduleFacts: input.moduleFacts,
       visitedExports: new Set([`${importedFilePath}:${importedBinding.importedName}`]),
       currentDepth: 0,
       importAnchor: input.symbol.declaration,

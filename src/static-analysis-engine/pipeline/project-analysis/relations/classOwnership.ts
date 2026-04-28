@@ -103,7 +103,7 @@ export function buildImporterComponentsByStylesheetId(input: {
   const stylesheetIdByPath = new Map(input.indexes.stylesheetIdByPath);
 
   for (const moduleFacts of getAllResolvedModuleFacts({
-    moduleFacts: input.input.projectResolution,
+    moduleFacts: input.input.moduleFacts,
   })) {
     const sourceFileId = input.indexes.sourceFileIdByPath.get(
       normalizeProjectPath(moduleFacts.filePath),

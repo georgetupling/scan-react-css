@@ -16,7 +16,7 @@ import type {
 
 export function analyzeCssModules(input: {
   parsedFiles: ParsedProjectFile[];
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   cssFiles: ExperimentalCssFileAnalysis[];
   options?: CssModuleAnalysisOptions;
   includeTraces?: boolean;
@@ -50,7 +50,7 @@ function normalizeCssModuleAnalysisOptions(
 }
 
 function buildCssModuleImports(input: {
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   cssFiles: ExperimentalCssFileAnalysis[];
 }): CssModuleImportRecord[] {
   const imports: CssModuleImportRecord[] = [];
@@ -63,7 +63,7 @@ function buildCssModuleImports(input: {
   );
 
   for (const moduleFacts of getAllResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
   })) {
     const sourceFilePath = normalizeProjectPath(moduleFacts.filePath);
 

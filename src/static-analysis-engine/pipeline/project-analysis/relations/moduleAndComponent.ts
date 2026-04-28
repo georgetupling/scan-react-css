@@ -15,7 +15,7 @@ export function buildModuleImports(
   const imports: ModuleImportRelation[] = [];
 
   for (const moduleFacts of getAllResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
   })) {
     const sourceFileId = indexes.sourceFileIdByPath.get(normalizeProjectPath(moduleFacts.filePath));
     if (!sourceFileId) {

@@ -40,7 +40,7 @@ export function buildSourceFiles(
   const sourcePaths = new Set<string>();
 
   for (const moduleFacts of getAllResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
   })) {
     sourcePaths.add(normalizeProjectPath(moduleFacts.filePath));
   }

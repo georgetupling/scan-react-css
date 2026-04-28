@@ -20,7 +20,7 @@ import {
 } from "./sortAndKeys.js";
 
 export function collectDirectCssImportersByStylesheetPath(input: {
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   knownCssFilePaths: Set<string>;
   packageCssImportBySpecifier: Map<string, string>;
   sourcePackageCssImports: ExternalCssSummary["packageCssImports"];
@@ -28,11 +28,11 @@ export function collectDirectCssImportersByStylesheetPath(input: {
   const importersByStylesheetPath = new Map<string, Set<string>>();
 
   for (const moduleFacts of getAllResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
   })) {
     const sourceFilePath = normalizeProjectPath(moduleFacts.filePath) ?? moduleFacts.filePath;
     for (const importFact of getDirectStylesheetImportFacts({
-      moduleFacts: input.projectResolution,
+      moduleFacts: input.moduleFacts,
       filePath: moduleFacts.filePath,
     })) {
       const stylesheetPath =

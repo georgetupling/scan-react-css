@@ -15,7 +15,7 @@ export function runCssModuleAnalysisStage(input: {
   return {
     cssModules: analyzeCssModules({
       ...input,
-      projectResolution: input.moduleFacts,
+      moduleFacts: input.moduleFacts,
     }),
   };
 }

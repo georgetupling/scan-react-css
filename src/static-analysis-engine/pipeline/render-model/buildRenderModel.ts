@@ -23,7 +23,7 @@ export type RenderModelBuildInput = {
     parsedSourceFile: ts.SourceFile;
   }>;
   symbolResolution: ProjectBindingResolution;
-  projectResolution: ModuleFacts;
+  moduleFacts: ModuleFacts;
   includeTraces?: boolean;
 };
 
@@ -38,7 +38,7 @@ export function buildRenderModel(input: RenderModelBuildInput): RenderModel {
   const filePaths = input.parsedFiles.map((parsedFile) => parsedFile.filePath);
   const renderDefinitions = buildProjectRenderDefinitions({
     parsedFiles: input.parsedFiles,
-    projectResolution: input.projectResolution,
+    moduleFacts: input.moduleFacts,
   });
   const renderBindings = buildProjectRenderBindings({
     filePaths,

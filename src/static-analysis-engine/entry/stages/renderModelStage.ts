@@ -14,6 +14,6 @@ export function runRenderModelStage(input: {
 }): RenderModelStageResult {
   return buildRenderModel({
     ...input,
-    projectResolution: input.moduleFacts,
+    moduleFacts: input.moduleFacts,
   });
 }

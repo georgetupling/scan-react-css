@@ -26,7 +26,7 @@ export function runProjectAnalysisStage(input: {
   return {
     projectAnalysis: buildProjectAnalysis({
       ...input,
-      projectResolution: input.moduleFacts,
+      moduleFacts: input.moduleFacts,
     }),
   };
 }

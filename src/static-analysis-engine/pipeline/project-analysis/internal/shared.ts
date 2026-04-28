@@ -39,7 +39,7 @@ export function getStylesheetOrigin(
 export function isExternalStylesheet(filePath: string, input: ProjectAnalysisBuildInput): boolean {
   const normalizedFilePath = normalizeProjectPath(filePath);
   for (const moduleFacts of getAllResolvedModuleFacts({
-    moduleFacts: input.projectResolution,
+    moduleFacts: input.moduleFacts,
   })) {
     if (
       moduleFacts.imports.some(
