@@ -8,7 +8,6 @@ import type {
   EngineSymbol,
   ProjectBindingResolution,
   ResolvedImportedBinding,
-  ResolvedImportedComponentBinding,
   ResolvedNamespaceImport,
 } from "../types.js";
 import { collectTransitiveImportedExpressionBindings } from "./collectImportedExpressionBindings.js";
@@ -17,6 +16,10 @@ import {
   resolveImportedBindingsForFile,
 } from "../value-resolution/resolveImportedBindings.js";
 import { resolveNamespaceImportsForFile } from "../value-resolution/resolveNamespaceImports.js";
+import {
+  collectResolvedExportedTypeBindings,
+  resolveImportedTypeBindingsForFile,
+} from "../type-resolution/resolveTypeBindings.js";
 
 export function buildProjectBindingResolution(input: {
   parsedFiles: ParsedProjectFile[];
@@ -26,13 +29,19 @@ export function buildProjectBindingResolution(input: {
 }): ProjectBindingResolution {
   const includeTraces = input.includeTraces ?? true;
   const resolvedImportedBindingsByFilePath = new Map<string, ResolvedImportedBinding[]>();
-  const resolvedImportedComponentBindingsByFilePath = new Map<
+  const resolvedImportedComponentBindingsByFilePath = new Map<string, ResolvedImportedBinding[]>();
+  const resolvedTypeBindingsByFilePath = new Map<
     string,
-    ResolvedImportedComponentBinding[]
+    Map<string, import("../types.js").ResolvedTypeBinding>
   >();
   const resolvedNamespaceImportsByFilePath = new Map<string, ResolvedNamespaceImport[]>();
   const symbolsByFilePath = cloneSymbolsByFilePath(input.symbolsByFilePath);
   const symbols = new Map<EngineSymbolId, EngineSymbol>();
+  const resolvedExportedTypeBindingsByFilePath = collectResolvedExportedTypeBindings({
+    moduleFacts: input.moduleFacts,
+    symbolsByFilePath,
+    includeTraces,
+  });
   const exportedExpressionBindingsByFilePath = new Map<string, Map<string, ts.Expression>>(
     input.parsedFiles.map((parsedFile) => [
       parsedFile.filePath,
@@ -57,6 +66,16 @@ export function buildProjectBindingResolution(input: {
       (resolvedImportedBindingsByFilePath.get(moduleFacts.filePath) ?? []).filter((binding) =>
         isResolvedComponentBinding(binding, symbolsByFilePath),
       ),
+    );
+    resolvedTypeBindingsByFilePath.set(
+      moduleFacts.filePath,
+      resolveImportedTypeBindingsForFile({
+        filePath: moduleFacts.filePath,
+        moduleFacts: input.moduleFacts,
+        symbolsByFilePath,
+        resolvedExportedTypeBindingsByFilePath,
+        includeTraces,
+      }),
     );
     resolvedNamespaceImportsByFilePath.set(
       moduleFacts.filePath,
@@ -138,6 +157,8 @@ export function buildProjectBindingResolution(input: {
     symbolsByFilePath,
     resolvedImportedBindingsByFilePath,
     resolvedImportedComponentBindingsByFilePath,
+    resolvedTypeBindingsByFilePath,
+    resolvedExportedTypeBindingsByFilePath,
     resolvedNamespaceImportsByFilePath,
     exportedExpressionBindingsByFilePath,
     importedExpressionBindingsByFilePath: new Map(

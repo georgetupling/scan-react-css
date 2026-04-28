@@ -18,6 +18,8 @@ export type SymbolKind =
   | "css-resource"
   | "unknown";
 
+export type SymbolSpace = "value" | "type";
+
 export type EngineSymbol = {
   id: EngineSymbolId;
   moduleId: EngineModuleId;
@@ -41,6 +43,7 @@ export type EngineSymbol = {
 export type SymbolResolutionReason =
   | "target-module-not-found"
   | "export-not-found"
+  | "not-a-type-symbol"
   | "binding-not-found"
   | "external-module"
   | "budget-exceeded"
@@ -66,7 +69,14 @@ export type ResolvedImportedBinding = {
   traces: AnalysisTrace[];
 };
 
-export type ResolvedImportedComponentBinding = ResolvedImportedBinding;
+export type ResolvedTypeBinding = {
+  localName: string;
+  targetModuleId: EngineModuleId;
+  targetFilePath: string;
+  targetTypeName: string;
+  targetSymbolId?: EngineSymbolId;
+  traces: AnalysisTrace[];
+};
 
 export type ResolvedNamespaceMemberResult =
   | {
@@ -89,7 +99,9 @@ export type ProjectBindingResolution = {
   symbols: Map<EngineSymbolId, EngineSymbol>;
   symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   resolvedImportedBindingsByFilePath: Map<string, ResolvedImportedBinding[]>;
-  resolvedImportedComponentBindingsByFilePath: Map<string, ResolvedImportedComponentBinding[]>;
+  resolvedImportedComponentBindingsByFilePath: Map<string, ResolvedImportedBinding[]>;
+  resolvedTypeBindingsByFilePath: Map<string, Map<string, ResolvedTypeBinding>>;
+  resolvedExportedTypeBindingsByFilePath: Map<string, Map<string, ResolvedTypeBinding>>;
   resolvedNamespaceImportsByFilePath: Map<string, ResolvedNamespaceImport[]>;
   exportedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
   importedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;

@@ -18,6 +18,11 @@ export {
   buildProjectBindingResolution,
   collectTopLevelSymbols,
   createSymbolId,
+  getSymbol,
+  resolveExportedTypeDeclaration,
+  resolveExportedTypeBinding,
+  resolveTypeDeclaration,
+  resolveTypeBinding,
 } from "./pipeline/symbol-resolution/index.js";
 export { summarizeClassNameExpression, toAbstractClassSet } from "./pipeline/render-model/index.js";
 export { buildExternalCssSummary } from "./pipeline/external-css/index.js";
@@ -103,10 +108,12 @@ export type {
   EngineSymbol,
   ProjectBindingResolution,
   ResolvedImportedBinding,
-  ResolvedImportedComponentBinding,
   ResolvedNamespaceMemberResult,
   ResolvedNamespaceImport,
   ResolvedProjectExport,
+  ResolvedTypeDeclaration,
+  ResolvedTypeBinding,
+  SymbolSpace,
   SymbolResolutionReason,
   SymbolKind,
 } from "./pipeline/symbol-resolution/index.js";

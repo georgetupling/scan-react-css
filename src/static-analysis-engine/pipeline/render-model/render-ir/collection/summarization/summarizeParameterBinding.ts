@@ -4,12 +4,12 @@ import type { DestructuredPropBinding, SameFileComponentDefinition } from "../sh
 import { UNSUPPORTED_PARAMETER_BINDING_REASONS } from "../../shared/expansionSemantics.js";
 import {
   collectFiniteStringValuesByProperty,
-  type FiniteTypeEvidenceCache,
-} from "../shared/finiteTypeEvidence.js";
+  type FiniteTypeInterpreterCache,
+} from "../shared/finiteTypeInterpreter.js";
 
 export function summarizeParameterBinding(
   parameters: readonly ts.ParameterDeclaration[],
-  finiteTypeEvidenceCache?: FiniteTypeEvidenceCache,
+  finiteTypeInterpreterCache?: FiniteTypeInterpreterCache,
 ): SameFileComponentDefinition["parameterBinding"] {
   if (parameters.length === 0) {
     return { kind: "none" };
@@ -25,7 +25,7 @@ export function summarizeParameterBinding(
   const [parameter] = parameters;
   const finiteStringValuesByProperty = collectFiniteStringValuesByProperty(
     parameter,
-    finiteTypeEvidenceCache,
+    finiteTypeInterpreterCache,
   );
   if (ts.isIdentifier(parameter.name)) {
     return {

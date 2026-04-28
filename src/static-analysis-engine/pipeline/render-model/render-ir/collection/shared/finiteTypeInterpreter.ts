@@ -1,49 +1,45 @@
 import ts from "typescript";
-import { getResolvedModuleFacts, type ModuleFacts } from "../../../../module-facts/index.js";
+import type { ModuleFacts } from "../../../../module-facts/index.js";
 import { normalizeFilePath } from "../../../../module-facts/shared/pathUtils.js";
+import {
+  resolveTypeDeclaration,
+  type ProjectBindingResolution,
+} from "../../../../symbol-resolution/index.js";
 
 type LocalTypeEvidence = {
   filePath: string;
-  cache?: FiniteTypeEvidenceCache;
+  cache?: FiniteTypeInterpreterCache;
   typeAliases: Map<string, ts.TypeNode>;
   interfaces: Map<string, ts.InterfaceDeclaration>;
   constBindings: Map<string, ts.Expression>;
-  importedTypes: Map<string, ImportedTypeReference>;
-  localExportNames: Map<string, string>;
-  reExportedTypes: Map<string, ImportedTypeReference>;
-  starReExportedFilePaths: string[];
 };
-
-type ImportedTypeReference = {
-  filePath: string;
-  importedName: string;
-};
-
-type ResolvedTypeDeclaration =
-  | { kind: "type-alias"; type: ts.TypeNode; evidence: LocalTypeEvidence }
-  | { kind: "interface"; declaration: ts.InterfaceDeclaration; evidence: LocalTypeEvidence };
 
 type TypeResolutionState = {
   seenTypeNames: Set<string>;
-  seenExportNames: Set<string>;
 };
 
-export type FiniteTypeEvidenceCache = {
+type FiniteResolvedTypeDeclaration =
+  | { kind: "type-alias"; type: ts.TypeNode; evidence: LocalTypeEvidence }
+  | { kind: "interface"; declaration: ts.InterfaceDeclaration; evidence: LocalTypeEvidence };
+
+export type FiniteTypeInterpreterCache = {
   moduleFacts: ModuleFacts;
+  symbolResolution: ProjectBindingResolution;
   sourceFilesByFilePath: Map<string, ts.SourceFile>;
   evidenceByFilePath: Map<string, LocalTypeEvidence>;
-  resolvedExportedTypesByKey: Map<string, ResolvedTypeDeclaration | undefined>;
 };
 
-export function createFiniteTypeEvidenceCache(input: {
+export function createFiniteTypeInterpreterCache(input: {
   moduleFacts: ModuleFacts;
+  symbolResolution: ProjectBindingResolution;
   parsedFiles: Array<{
     filePath: string;
     parsedSourceFile: ts.SourceFile;
   }>;
-}): FiniteTypeEvidenceCache {
+}): FiniteTypeInterpreterCache {
   return {
     moduleFacts: input.moduleFacts,
+    symbolResolution: input.symbolResolution,
     sourceFilesByFilePath: new Map(
       input.parsedFiles.map((parsedFile) => [
         normalizeFilePath(parsedFile.filePath),
@@ -51,13 +47,12 @@ export function createFiniteTypeEvidenceCache(input: {
       ]),
     ),
     evidenceByFilePath: new Map(),
-    resolvedExportedTypesByKey: new Map(),
   };
 }
 
 export function collectFiniteStringValuesByProperty(
   parameter: ts.ParameterDeclaration,
-  cache?: FiniteTypeEvidenceCache,
+  cache?: FiniteTypeInterpreterCache,
 ): Map<string, string[]> {
   const valuesByProperty = new Map<string, string[]>();
   if (!parameter.type) {
@@ -71,12 +66,10 @@ export function collectFiniteStringValuesByProperty(
   );
   const propertyTypes = collectObjectPropertyTypes(parameter.type, evidence, {
     seenTypeNames: new Set(),
-    seenExportNames: new Set(),
   });
   for (const [propertyName, typeNode] of propertyTypes.entries()) {
     const values = resolveFiniteStringType(typeNode, evidence, {
       seenTypeNames: new Set(),
-      seenExportNames: new Set(),
     });
     if (values.length > 0) {
       valuesByProperty.set(propertyName, values);
@@ -89,7 +82,7 @@ export function collectFiniteStringValuesByProperty(
 function getLocalTypeEvidence(
   filePath: string,
   sourceFile: ts.SourceFile,
-  cache: FiniteTypeEvidenceCache | undefined,
+  cache: FiniteTypeInterpreterCache | undefined,
 ): LocalTypeEvidence {
   const normalizedFilePath = normalizeFilePath(filePath);
   const cachedEvidence = cache?.evidenceByFilePath.get(normalizedFilePath);
@@ -105,15 +98,11 @@ function getLocalTypeEvidence(
 function collectLocalTypeEvidence(
   filePath: string,
   sourceFile: ts.SourceFile,
-  cache: FiniteTypeEvidenceCache | undefined,
+  cache: FiniteTypeInterpreterCache | undefined,
 ): LocalTypeEvidence {
   const typeAliases = new Map<string, ts.TypeNode>();
   const interfaces = new Map<string, ts.InterfaceDeclaration>();
   const constBindings = new Map<string, ts.Expression>();
-  const importedTypes = new Map<string, ImportedTypeReference>();
-  const localExportNames = new Map<string, string>();
-  const reExportedTypes = new Map<string, ImportedTypeReference>();
-  const starReExportedFilePaths: string[] = [];
 
   for (const statement of sourceFile.statements) {
     if (ts.isVariableStatement(statement)) {
@@ -122,34 +111,12 @@ function collectLocalTypeEvidence(
 
     if (ts.isTypeAliasDeclaration(statement)) {
       typeAliases.set(statement.name.text, statement.type);
-      if (isExported(statement)) {
-        localExportNames.set(statement.name.text, statement.name.text);
-      }
       continue;
     }
 
     if (ts.isInterfaceDeclaration(statement)) {
       interfaces.set(statement.name.text, statement);
-      if (isExported(statement)) {
-        localExportNames.set(statement.name.text, statement.name.text);
-      }
       continue;
-    }
-
-    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
-      collectImportedTypeReferences(statement, filePath, cache, importedTypes);
-      continue;
-    }
-
-    if (ts.isExportDeclaration(statement)) {
-      collectExportedTypeReferences(
-        statement,
-        filePath,
-        cache,
-        localExportNames,
-        reExportedTypes,
-        starReExportedFilePaths,
-      );
     }
   }
 
@@ -159,46 +126,7 @@ function collectLocalTypeEvidence(
     typeAliases,
     interfaces,
     constBindings,
-    importedTypes,
-    localExportNames,
-    reExportedTypes,
-    starReExportedFilePaths,
   };
-}
-
-function collectImportedTypeReferences(
-  statement: ts.ImportDeclaration,
-  filePath: string,
-  cache: FiniteTypeEvidenceCache | undefined,
-  importedTypes: Map<string, ImportedTypeReference>,
-): void {
-  if (!statement.importClause || !ts.isStringLiteral(statement.moduleSpecifier)) {
-    return;
-  }
-
-  const importedFilePath = resolveProjectLocalSourceSpecifier(
-    filePath,
-    statement.moduleSpecifier.text,
-    cache,
-  );
-  if (!importedFilePath || !statement.importClause.namedBindings) {
-    return;
-  }
-
-  if (!ts.isNamedImports(statement.importClause.namedBindings)) {
-    return;
-  }
-
-  for (const element of statement.importClause.namedBindings.elements) {
-    if (!statement.importClause.isTypeOnly && !element.isTypeOnly) {
-      continue;
-    }
-
-    importedTypes.set(element.name.text, {
-      filePath: importedFilePath,
-      importedName: element.propertyName?.text ?? element.name.text,
-    });
-  }
 }
 
 function collectConstBindings(
@@ -215,61 +143,6 @@ function collectConstBindings(
     }
 
     constBindings.set(declaration.name.text, declaration.initializer);
-  }
-}
-
-function collectExportedTypeReferences(
-  statement: ts.ExportDeclaration,
-  filePath: string,
-  cache: FiniteTypeEvidenceCache | undefined,
-  localExportNames: Map<string, string>,
-  reExportedTypes: Map<string, ImportedTypeReference>,
-  starReExportedFilePaths: string[],
-): void {
-  if (!statement.moduleSpecifier) {
-    if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) {
-      return;
-    }
-
-    for (const element of statement.exportClause.elements) {
-      if (statement.isTypeOnly || element.isTypeOnly) {
-        localExportNames.set(element.name.text, element.propertyName?.text ?? element.name.text);
-      }
-    }
-    return;
-  }
-
-  if (!ts.isStringLiteral(statement.moduleSpecifier)) {
-    return;
-  }
-
-  const importedFilePath = resolveProjectLocalSourceSpecifier(
-    filePath,
-    statement.moduleSpecifier.text,
-    cache,
-  );
-  if (!importedFilePath) {
-    return;
-  }
-
-  if (!statement.exportClause) {
-    starReExportedFilePaths.push(importedFilePath);
-    return;
-  }
-
-  if (!ts.isNamedExports(statement.exportClause)) {
-    return;
-  }
-
-  for (const element of statement.exportClause.elements) {
-    if (!statement.isTypeOnly && !element.isTypeOnly) {
-      continue;
-    }
-
-    reExportedTypes.set(element.name.text, {
-      filePath: importedFilePath,
-      importedName: element.propertyName?.text ?? element.name.text,
-    });
   }
 }
 
@@ -429,7 +302,6 @@ function collectSupportedUtilityObjectPropertyTypes(
     const selectedKeys = new Set(
       resolveFiniteStringType(keysType, evidence, {
         seenTypeNames: new Set(),
-        seenExportNames: new Set(),
       }),
     );
     if (selectedKeys.size === 0 && keysType.kind !== ts.SyntaxKind.NeverKeyword) {
@@ -539,7 +411,6 @@ function resolveIndexedAccessFiniteStringType(
 
   const propertyNames = resolveFiniteStringType(typeNode.indexType, evidence, {
     seenTypeNames: new Set(),
-    seenExportNames: new Set(),
   });
   if (propertyNames.length === 0) {
     return [];
@@ -552,7 +423,6 @@ function resolveIndexedAccessFiniteStringType(
       return propertyType
         ? resolveFiniteStringType(propertyType, evidence, {
             seenTypeNames: new Set(),
-            seenExportNames: new Set(),
           })
         : [];
     }),
@@ -632,7 +502,6 @@ function resolveSupportedUtilityFiniteStringType(
     const filterValues = new Set(
       resolveFiniteStringType(filterType, evidence, {
         seenTypeNames: new Set(),
-        seenExportNames: new Set(),
       }),
     );
     if (filterValues.size === 0 && filterType.kind !== ts.SyntaxKind.NeverKeyword) {
@@ -651,126 +520,47 @@ function resolveImportedTypeDeclaration(
   typeName: string,
   evidence: LocalTypeEvidence,
   state: TypeResolutionState,
-): ResolvedTypeDeclaration | undefined {
-  const importedType = evidence.importedTypes.get(typeName);
-  if (!importedType) {
+): FiniteResolvedTypeDeclaration | undefined {
+  const resolvedDeclaration = evidence.cache
+    ? resolveTypeDeclaration({
+        symbolResolution: evidence.cache.symbolResolution,
+        sourceFilesByFilePath: evidence.cache.sourceFilesByFilePath,
+        filePath: evidence.filePath,
+        localName: typeName,
+      })
+    : undefined;
+  if (!resolvedDeclaration) {
     return undefined;
   }
 
-  return resolveExportedTypeDeclaration(
-    importedType.filePath,
-    importedType.importedName,
+  const normalizedFilePath = normalizeFilePath(resolvedDeclaration.binding.targetFilePath);
+  const typeKey = createTypeKey(normalizedFilePath, resolvedDeclaration.binding.targetTypeName);
+  if (state.seenTypeNames.has(typeKey)) {
+    return undefined;
+  }
+
+  if (!evidence.cache) {
+    return undefined;
+  }
+
+  const targetEvidence = getLocalTypeEvidence(
+    normalizedFilePath,
+    resolvedDeclaration.declaration.getSourceFile(),
     evidence.cache,
-    state,
   );
-}
-
-function resolveExportedTypeDeclaration(
-  filePath: string,
-  exportedName: string,
-  cache: FiniteTypeEvidenceCache | undefined,
-  state: TypeResolutionState,
-): ResolvedTypeDeclaration | undefined {
-  const normalizedFilePath = normalizeFilePath(filePath);
-  const exportKey = createTypeKey(normalizedFilePath, exportedName);
-  if (state.seenExportNames.has(exportKey)) {
-    return undefined;
+  if (resolvedDeclaration.kind === "type-alias") {
+    return {
+      kind: "type-alias",
+      type: resolvedDeclaration.declaration.type,
+      evidence: targetEvidence,
+    };
   }
 
-  const sourceFile = cache?.sourceFilesByFilePath.get(normalizedFilePath);
-  if (!cache || !sourceFile) {
-    return undefined;
-  }
-
-  if (cache.resolvedExportedTypesByKey.has(exportKey)) {
-    const cachedDeclaration = cache.resolvedExportedTypesByKey.get(exportKey);
-    return cachedDeclaration;
-  }
-
-  const nextState = {
-    ...state,
-    seenExportNames: new Set([...state.seenExportNames, exportKey]),
+  return {
+    kind: "interface",
+    declaration: resolvedDeclaration.declaration,
+    evidence: targetEvidence,
   };
-  const targetEvidence = getLocalTypeEvidence(normalizedFilePath, sourceFile, cache);
-  const localName = targetEvidence.localExportNames.get(exportedName);
-  if (localName) {
-    const localDeclaration = resolveLocalTypeDeclaration(localName, targetEvidence);
-    cache.resolvedExportedTypesByKey.set(exportKey, localDeclaration);
-    return localDeclaration;
-  }
-
-  const reExportedType = targetEvidence.reExportedTypes.get(exportedName);
-  if (reExportedType) {
-    const reExportedDeclaration = resolveExportedTypeDeclaration(
-      reExportedType.filePath,
-      reExportedType.importedName,
-      cache,
-      nextState,
-    );
-    cache.resolvedExportedTypesByKey.set(exportKey, reExportedDeclaration);
-    return reExportedDeclaration;
-  }
-
-  for (const starReExportedFilePath of targetEvidence.starReExportedFilePaths) {
-    const starExportKey = createTypeKey(starReExportedFilePath, exportedName);
-    if (nextState.seenExportNames.has(starExportKey)) {
-      continue;
-    }
-
-    const starReExportedDeclaration = resolveExportedTypeDeclaration(
-      starReExportedFilePath,
-      exportedName,
-      cache,
-      nextState,
-    );
-    if (starReExportedDeclaration) {
-      cache.resolvedExportedTypesByKey.set(exportKey, starReExportedDeclaration);
-      return starReExportedDeclaration;
-    }
-  }
-
-  cache.resolvedExportedTypesByKey.set(exportKey, undefined);
-  return undefined;
-}
-
-function resolveLocalTypeDeclaration(
-  typeName: string,
-  evidence: LocalTypeEvidence,
-): ResolvedTypeDeclaration | undefined {
-  const type = evidence.typeAliases.get(typeName);
-  if (type) {
-    return { kind: "type-alias", type, evidence };
-  }
-
-  const declaration = evidence.interfaces.get(typeName);
-  return declaration ? { kind: "interface", declaration, evidence } : undefined;
-}
-
-function resolveProjectLocalSourceSpecifier(
-  fromFilePath: string,
-  specifier: string,
-  cache: FiniteTypeEvidenceCache | undefined,
-): string | undefined {
-  if (!cache) {
-    return undefined;
-  }
-
-  return (
-    getResolvedModuleFacts({
-      moduleFacts: cache.moduleFacts,
-      filePath: fromFilePath,
-    })?.imports.find(
-      (importFact) =>
-        importFact.specifier === specifier && importFact.resolution.status === "resolved",
-    )?.resolution.resolvedFilePath ??
-    getResolvedModuleFacts({
-      moduleFacts: cache.moduleFacts,
-      filePath: fromFilePath,
-    })?.exports.find(
-      (exportFact) =>
-        exportFact.reexport.specifier === specifier && exportFact.reexport.status === "resolved",
-    )?.reexport.resolvedFilePath
-  );
 }
 
 function unwrapConstExpression(expression: ts.Expression): ts.Expression {
@@ -809,10 +599,4 @@ function getStaticPropertyName(name: ts.PropertyName): string | undefined {
   }
 
   return undefined;
-}
-
-function isExported(
-  node: ts.TypeAliasDeclaration | ts.InterfaceDeclaration | ts.ExportDeclaration,
-): boolean {
-  return node.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
 }

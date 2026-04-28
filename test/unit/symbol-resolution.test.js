@@ -7,6 +7,11 @@ import {
   buildModuleFacts,
   buildProjectBindingResolution,
   collectTopLevelSymbols,
+  getSymbol,
+  resolveExportedTypeDeclaration,
+  resolveExportedTypeBinding,
+  resolveTypeDeclaration,
+  resolveTypeBinding,
 } from "../../dist/static-analysis-engine.js";
 
 test("symbol resolution owns exported expression bindings and imported expression propagation", () => {
@@ -121,6 +126,31 @@ test("symbol resolution derives exported names from module facts and collects ri
   assert.equal(symbolsByLocalName.get("ButtonTone")?.kind, "type-alias");
   assert.equal(symbolsByLocalName.get("Size")?.kind, "enum");
   assert.equal(symbolsByLocalName.get("Theme")?.kind, "namespace");
+
+  const resolution = buildProjectBindingResolution({
+    parsedFiles,
+    symbolsByFilePath: new Map([["src/library.tsx", symbols]]),
+    moduleFacts,
+    includeTraces: false,
+  });
+  assert.equal(
+    getSymbol({
+      symbolResolution: resolution,
+      filePath: "src/library.tsx",
+      localName: "Widget",
+      symbolSpace: "value",
+    })?.kind,
+    "component",
+  );
+  assert.equal(
+    getSymbol({
+      symbolResolution: resolution,
+      filePath: "src/library.tsx",
+      localName: "ButtonTone",
+      symbolSpace: "value",
+    }),
+    undefined,
+  );
 });
 
 test("symbol resolution preserves unresolved namespace members as structured results", () => {
@@ -186,6 +216,239 @@ test("symbol resolution preserves unresolved namespace members as structured res
   });
 });
 
+test("symbol resolution resolves imported type bindings through type re-export barrels", () => {
+  const parsedFiles = [
+    sourceFile(
+      "src/types.ts",
+      `
+        export type ButtonVariant = "primary" | "ghost";
+        export interface ButtonProps { variant?: ButtonVariant; }
+      `,
+    ),
+    sourceFile(
+      "src/barrel.ts",
+      `
+        export type { ButtonProps } from "./types.ts";
+        export { type ButtonVariant as ExportedVariant } from "./types.ts";
+      `,
+    ),
+    sourceFile(
+      "src/consumer.ts",
+      `
+        import type { ButtonProps, ExportedVariant as Tone } from "./barrel.ts";
+      `,
+    ),
+  ];
+  const moduleFacts = buildModuleFacts({
+    parsedFiles,
+  });
+
+  const symbolsByFilePath = new Map(
+    parsedFiles.map((parsedFile) => [
+      parsedFile.filePath,
+      collectTopLevelSymbols({
+        filePath: parsedFile.filePath,
+        parsedSourceFile: parsedFile.parsedSourceFile,
+        moduleId: `module:${parsedFile.filePath}`,
+        moduleFacts,
+      }),
+    ]),
+  );
+
+  const resolution = buildProjectBindingResolution({
+    parsedFiles,
+    symbolsByFilePath,
+    moduleFacts,
+    includeTraces: false,
+  });
+
+  assert.deepEqual(resolveTypeBindingForTest(resolution, "src/consumer.ts", "ButtonProps"), {
+    localName: "ButtonProps",
+    targetModuleId: "module:src/types.ts",
+    targetFilePath: "src/types.ts",
+    targetTypeName: "ButtonProps",
+    targetSymbolId: "symbol:module:src/types.ts:ButtonProps",
+    traces: [],
+  });
+  assert.deepEqual(resolveTypeBindingForTest(resolution, "src/consumer.ts", "Tone"), {
+    localName: "Tone",
+    targetModuleId: "module:src/types.ts",
+    targetFilePath: "src/types.ts",
+    targetTypeName: "ButtonVariant",
+    targetSymbolId: "symbol:module:src/types.ts:ButtonVariant",
+    traces: [],
+  });
+  assert.deepEqual(
+    resolveExportedTypeBindingForTest(resolution, "src/barrel.ts", "ExportedVariant"),
+    {
+      localName: "ExportedVariant",
+      targetModuleId: "module:src/types.ts",
+      targetFilePath: "src/types.ts",
+      targetTypeName: "ButtonVariant",
+      targetSymbolId: "symbol:module:src/types.ts:ButtonVariant",
+      traces: [],
+    },
+  );
+  assert.deepEqual(
+    resolveTypeDeclarationForTest(parsedFiles, resolution, "src/consumer.ts", "ButtonProps"),
+    {
+      kind: "interface",
+      declarationText: "export interface ButtonProps { variant?: ButtonVariant; }",
+      binding: {
+        localName: "ButtonProps",
+        targetModuleId: "module:src/types.ts",
+        targetFilePath: "src/types.ts",
+        targetTypeName: "ButtonProps",
+        targetSymbolId: "symbol:module:src/types.ts:ButtonProps",
+        traces: [],
+      },
+    },
+  );
+  assert.deepEqual(
+    resolveExportedTypeDeclarationForTest(
+      parsedFiles,
+      resolution,
+      "src/barrel.ts",
+      "ExportedVariant",
+    ),
+    {
+      kind: "type-alias",
+      declarationText: 'export type ButtonVariant = "primary" | "ghost";',
+      binding: {
+        localName: "ExportedVariant",
+        targetModuleId: "module:src/types.ts",
+        targetFilePath: "src/types.ts",
+        targetTypeName: "ButtonVariant",
+        targetSymbolId: "symbol:module:src/types.ts:ButtonVariant",
+        traces: [],
+      },
+    },
+  );
+});
+
+test("symbol resolution resolves local type declarations through helper APIs", () => {
+  const parsedFiles = [
+    sourceFile(
+      "src/local.ts",
+      `
+        export interface LocalProps { tone?: "primary" | "secondary"; }
+        export type LocalTone = LocalProps["tone"];
+      `,
+    ),
+  ];
+  const moduleFacts = buildModuleFacts({
+    parsedFiles,
+  });
+
+  const symbolsByFilePath = new Map(
+    parsedFiles.map((parsedFile) => [
+      parsedFile.filePath,
+      collectTopLevelSymbols({
+        filePath: parsedFile.filePath,
+        parsedSourceFile: parsedFile.parsedSourceFile,
+        moduleId: `module:${parsedFile.filePath}`,
+        moduleFacts,
+      }),
+    ]),
+  );
+
+  const resolution = buildProjectBindingResolution({
+    parsedFiles,
+    symbolsByFilePath,
+    moduleFacts,
+    includeTraces: false,
+  });
+
+  assert.deepEqual(resolveTypeBindingForTest(resolution, "src/local.ts", "LocalTone"), {
+    localName: "LocalTone",
+    targetModuleId: "module:src/local.ts",
+    targetFilePath: "src/local.ts",
+    targetTypeName: "LocalTone",
+    targetSymbolId: "symbol:module:src/local.ts:LocalTone",
+    traces: [],
+  });
+  assert.deepEqual(
+    resolveTypeDeclarationForTest(parsedFiles, resolution, "src/local.ts", "LocalProps"),
+    {
+      kind: "interface",
+      declarationText: 'export interface LocalProps { tone?: "primary" | "secondary"; }',
+      binding: {
+        localName: "LocalProps",
+        targetModuleId: "module:src/local.ts",
+        targetFilePath: "src/local.ts",
+        targetTypeName: "LocalProps",
+        targetSymbolId: "symbol:module:src/local.ts:LocalProps",
+        traces: [],
+      },
+    },
+  );
+  const localTypeSymbol = getSymbol({
+    symbolResolution: resolution,
+    filePath: "src/local.ts",
+    localName: "LocalProps",
+    symbolSpace: "type",
+  });
+  assert.equal(localTypeSymbol?.id, "symbol:module:src/local.ts:LocalProps");
+  assert.equal(localTypeSymbol?.kind, "interface");
+  assert.deepEqual(localTypeSymbol?.exportedNames, ["LocalProps"]);
+  assert.equal(localTypeSymbol?.resolution.kind, "local");
+  assert.equal(
+    getSymbol({
+      symbolResolution: resolution,
+      filePath: "src/local.ts",
+      localName: "LocalProps",
+      symbolSpace: "value",
+    }),
+    undefined,
+  );
+});
+
+test("symbol resolution degrades type-only imports that target value exports", () => {
+  const parsedFiles = [
+    sourceFile(
+      "src/source.ts",
+      `
+        export const buttonTone = "primary";
+      `,
+    ),
+    sourceFile(
+      "src/consumer.ts",
+      `
+        import type { buttonTone } from "./source.ts";
+      `,
+    ),
+  ];
+  const moduleFacts = buildModuleFacts({
+    parsedFiles,
+  });
+
+  const symbolsByFilePath = new Map(
+    parsedFiles.map((parsedFile) => [
+      parsedFile.filePath,
+      collectTopLevelSymbols({
+        filePath: parsedFile.filePath,
+        parsedSourceFile: parsedFile.parsedSourceFile,
+        moduleId: `module:${parsedFile.filePath}`,
+        moduleFacts,
+      }),
+    ]),
+  );
+
+  const resolution = buildProjectBindingResolution({
+    parsedFiles,
+    symbolsByFilePath,
+    moduleFacts,
+    includeTraces: false,
+  });
+
+  assert.equal(resolveTypeBindingForTest(resolution, "src/consumer.ts", "buttonTone"), undefined);
+  assert.equal(
+    resolveTypeDeclarationForTest(parsedFiles, resolution, "src/consumer.ts", "buttonTone"),
+    undefined,
+  );
+  assert.deepEqual(resolution.resolvedTypeBindingsByFilePath.get("src/consumer.ts"), new Map());
+});
+
 function sourceFile(filePath, sourceText) {
   return {
     filePath,
@@ -201,4 +464,61 @@ function sourceFile(filePath, sourceText) {
 
 function expressionText(expression) {
   return expression?.getText();
+}
+
+function resolveTypeBindingForTest(symbolResolution, filePath, localName) {
+  return resolveTypeBinding({
+    symbolResolution,
+    filePath,
+    localName,
+  });
+}
+
+function resolveExportedTypeBindingForTest(symbolResolution, filePath, exportedName) {
+  return resolveExportedTypeBinding({
+    symbolResolution,
+    filePath,
+    exportedName,
+  });
+}
+
+function resolveTypeDeclarationForTest(parsedFiles, symbolResolution, filePath, localName) {
+  const resolvedDeclaration = resolveTypeDeclaration({
+    symbolResolution,
+    sourceFilesByFilePath: new Map(
+      parsedFiles.map((parsedFile) => [parsedFile.filePath, parsedFile.parsedSourceFile]),
+    ),
+    filePath,
+    localName,
+  });
+  return resolvedDeclaration
+    ? {
+        kind: resolvedDeclaration.kind,
+        declarationText: resolvedDeclaration.declaration.getText(),
+        binding: resolvedDeclaration.binding,
+      }
+    : undefined;
+}
+
+function resolveExportedTypeDeclarationForTest(
+  parsedFiles,
+  symbolResolution,
+  filePath,
+  exportedName,
+) {
+  const resolvedDeclaration = resolveExportedTypeDeclaration({
+    symbolResolution,
+    sourceFilesByFilePath: new Map(
+      parsedFiles.map((parsedFile) => [parsedFile.filePath, parsedFile.parsedSourceFile]),
+    ),
+    filePath,
+    exportedName,
+  });
+  return resolvedDeclaration
+    ? {
+        kind: resolvedDeclaration.kind,
+        declarationText: resolvedDeclaration.declaration.getText(),
+        binding: resolvedDeclaration.binding,
+      }
+    : undefined;
 }

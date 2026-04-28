@@ -6,8 +6,9 @@ import {
   collectTopLevelHelperDefinitions,
 } from "./collection/discovery/collectExportedHelperDefinitions.js";
 import { collectSameFileComponents } from "./collection/discovery/collectSameFileComponents.js";
-import { createFiniteTypeEvidenceCache } from "./collection/shared/finiteTypeEvidence.js";
+import { createFiniteTypeInterpreterCache } from "./collection/shared/finiteTypeInterpreter.js";
 import type { ModuleFacts } from "../../module-facts/index.js";
+import type { ProjectBindingResolution } from "../../symbol-resolution/index.js";
 import type {
   LocalHelperDefinition,
   SameFileComponentDefinition,
@@ -27,10 +28,12 @@ export function buildProjectRenderDefinitions(input: {
     parsedSourceFile: ts.SourceFile;
   }>;
   moduleFacts: ModuleFacts;
+  symbolResolution: ProjectBindingResolution;
 }): ProjectRenderDefinitions {
-  const finiteTypeEvidenceCache = createFiniteTypeEvidenceCache({
+  const finiteTypeInterpreterCache = createFiniteTypeInterpreterCache({
     moduleFacts: input.moduleFacts,
     parsedFiles: input.parsedFiles,
+    symbolResolution: input.symbolResolution,
   });
   const componentDefinitionsByFilePath = new Map<string, SameFileComponentDefinition[]>(
     input.parsedFiles.map((parsedFile) => [
@@ -38,7 +41,7 @@ export function buildProjectRenderDefinitions(input: {
       collectSameFileComponents({
         filePath: parsedFile.filePath,
         parsedSourceFile: parsedFile.parsedSourceFile,
-        finiteTypeEvidenceCache,
+        finiteTypeInterpreterCache,
       }),
     ]),
   );
@@ -60,7 +63,7 @@ export function buildProjectRenderDefinitions(input: {
         collectExportedHelperDefinitions({
           filePath: parsedFile.filePath,
           parsedSourceFile: parsedFile.parsedSourceFile,
-          finiteTypeEvidenceCache,
+          finiteTypeInterpreterCache,
         }),
       ]),
     ),
@@ -70,7 +73,7 @@ export function buildProjectRenderDefinitions(input: {
         collectTopLevelHelperDefinitions({
           filePath: parsedFile.filePath,
           parsedSourceFile: parsedFile.parsedSourceFile,
-          finiteTypeEvidenceCache,
+          finiteTypeInterpreterCache,
         }),
       ]),
     ),

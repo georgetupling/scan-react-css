@@ -7,8 +7,8 @@ import type {
 } from "../shared/types.js";
 import {
   collectFiniteStringValuesByProperty,
-  type FiniteTypeEvidenceCache,
-} from "../shared/finiteTypeEvidence.js";
+  type FiniteTypeInterpreterCache,
+} from "../shared/finiteTypeInterpreter.js";
 import { unwrapExpression } from "../shared/utils.js";
 import { summarizeExpressionReturningBody } from "./summarizeExpressionReturningBody.js";
 
@@ -18,7 +18,7 @@ export function summarizeTopLevelHelperDefinition(input: {
   parsedSourceFile: ts.SourceFile;
   parameters: readonly ts.ParameterDeclaration[];
   body: ts.ConciseBody;
-  finiteTypeEvidenceCache?: FiniteTypeEvidenceCache;
+  finiteTypeInterpreterCache?: FiniteTypeInterpreterCache;
 }): LocalHelperDefinition | undefined {
   return summarizeLocalHelperDefinition({
     helperName: input.helperName,
@@ -26,7 +26,7 @@ export function summarizeTopLevelHelperDefinition(input: {
     parsedSourceFile: input.parsedSourceFile,
     parameters: input.parameters,
     body: input.body,
-    finiteTypeEvidenceCache: input.finiteTypeEvidenceCache,
+    finiteTypeInterpreterCache: input.finiteTypeInterpreterCache,
   });
 }
 
@@ -35,7 +35,7 @@ export function summarizeFunctionExpressionHelperDefinition(
   filePath: string,
   parsedSourceFile: ts.SourceFile,
   initializer: ts.Expression,
-  finiteTypeEvidenceCache?: FiniteTypeEvidenceCache,
+  finiteTypeInterpreterCache?: FiniteTypeInterpreterCache,
 ): LocalHelperDefinition | undefined {
   const unwrapped = unwrapExpression(initializer);
   if (!ts.isArrowFunction(unwrapped) && !ts.isFunctionExpression(unwrapped)) {
@@ -48,7 +48,7 @@ export function summarizeFunctionExpressionHelperDefinition(
     parsedSourceFile,
     parameters: unwrapped.parameters,
     body: unwrapped.body,
-    finiteTypeEvidenceCache,
+    finiteTypeInterpreterCache,
   });
 }
 
@@ -58,7 +58,7 @@ export function summarizeLocalHelperDefinition(input: {
   parsedSourceFile: ts.SourceFile;
   parameters: readonly ts.ParameterDeclaration[];
   body: ts.ConciseBody;
-  finiteTypeEvidenceCache?: FiniteTypeEvidenceCache;
+  finiteTypeInterpreterCache?: FiniteTypeInterpreterCache;
 }): LocalHelperDefinition | undefined {
   const parameterNames: string[] = [];
   const parameterBindings: HelperParameterBinding[] = [];
@@ -81,7 +81,7 @@ export function summarizeLocalHelperDefinition(input: {
     if (ts.isIdentifier(parameter.name)) {
       const finiteStringValuesByProperty = collectFiniteStringValuesByProperty(
         parameter,
-        input.finiteTypeEvidenceCache,
+        input.finiteTypeInterpreterCache,
       );
       parameterNames.push(parameter.name.text);
       parameterBindings.push({
@@ -95,7 +95,7 @@ export function summarizeLocalHelperDefinition(input: {
     if (ts.isObjectBindingPattern(parameter.name)) {
       const properties = collectDestructuredHelperProperties(
         parameter,
-        input.finiteTypeEvidenceCache,
+        input.finiteTypeInterpreterCache,
       );
       if (!properties) {
         return undefined;
@@ -131,11 +131,11 @@ export function summarizeLocalHelperDefinition(input: {
 
 function collectDestructuredHelperProperties(
   parameter: ts.ParameterDeclaration,
-  finiteTypeEvidenceCache?: FiniteTypeEvidenceCache,
+  finiteTypeInterpreterCache?: FiniteTypeInterpreterCache,
 ): DestructuredPropBinding[] | undefined {
   const finiteStringValuesByProperty = collectFiniteStringValuesByProperty(
     parameter,
-    finiteTypeEvidenceCache,
+    finiteTypeInterpreterCache,
   );
   const properties: DestructuredPropBinding[] = [];
 

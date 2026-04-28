@@ -39,6 +39,7 @@ export function buildRenderModel(input: RenderModelBuildInput): RenderModel {
   const renderDefinitions = buildProjectRenderDefinitions({
     parsedFiles: input.parsedFiles,
     moduleFacts: input.moduleFacts,
+    symbolResolution: input.symbolResolution,
   });
   const renderBindings = buildProjectRenderBindings({
     filePaths,

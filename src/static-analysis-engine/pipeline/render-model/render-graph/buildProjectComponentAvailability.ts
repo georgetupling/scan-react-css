@@ -1,6 +1,6 @@
 import type { AnalysisTrace } from "../../../types/analysis.js";
 import type {
-  ResolvedImportedComponentBinding,
+  ResolvedImportedBinding,
   ResolvedNamespaceMemberResult,
   ResolvedNamespaceImport,
 } from "../../symbol-resolution/types.js";
@@ -19,7 +19,7 @@ export function buildProjectComponentAvailability(input: {
   filePaths: string[];
   componentDefinitionsByFilePath: Map<string, SameFileComponentDefinition[]>;
   exportedComponentsByFilePath: Map<string, Map<string, SameFileComponentDefinition>>;
-  resolvedImportedComponentBindingsByFilePath: Map<string, ResolvedImportedComponentBinding[]>;
+  resolvedImportedComponentBindingsByFilePath: Map<string, ResolvedImportedBinding[]>;
   resolvedNamespaceImportsByFilePath: Map<string, ResolvedNamespaceImport[]>;
 }): ProjectComponentAvailability {
   return {
@@ -62,7 +62,7 @@ export function buildProjectComponentAvailability(input: {
 
 function buildAvailableComponentsForFile(input: {
   localDefinitions: SameFileComponentDefinition[];
-  resolvedImportedComponentBindings: ResolvedImportedComponentBinding[];
+  resolvedImportedComponentBindings: ResolvedImportedBinding[];
   exportedComponentsByFilePath: Map<string, Map<string, SameFileComponentDefinition>>;
 }): Map<string, SameFileComponentDefinition> {
   const availableComponents = new Map<string, SameFileComponentDefinition>(

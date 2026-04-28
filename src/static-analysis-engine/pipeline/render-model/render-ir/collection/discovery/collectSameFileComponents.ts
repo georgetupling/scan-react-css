@@ -1,14 +1,14 @@
 import ts from "typescript";
 import { isExported, toSourceAnchor, unwrapExpression } from "../shared/utils.js";
 import type { SameFileComponentDefinition } from "../shared/types.js";
-import type { FiniteTypeEvidenceCache } from "../shared/finiteTypeEvidence.js";
+import type { FiniteTypeInterpreterCache } from "../shared/finiteTypeInterpreter.js";
 import { summarizeParameterBinding } from "../summarization/summarizeParameterBinding.js";
 import { summarizeComponentBody } from "../summarization/summarizeComponentBody.js";
 
 export function collectSameFileComponents(input: {
   filePath: string;
   parsedSourceFile: ts.SourceFile;
-  finiteTypeEvidenceCache?: FiniteTypeEvidenceCache;
+  finiteTypeInterpreterCache?: FiniteTypeInterpreterCache;
 }): SameFileComponentDefinition[] {
   const components: SameFileComponentDefinition[] = [];
 
@@ -16,7 +16,7 @@ export function collectSameFileComponents(input: {
     if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
       const parameterBinding = summarizeParameterBinding(
         statement.parameters,
-        input.finiteTypeEvidenceCache,
+        input.finiteTypeInterpreterCache,
       );
       const bodySummary = summarizeComponentBody(statement.body, parameterBinding);
       if (!bodySummary) {
@@ -57,7 +57,7 @@ export function collectSameFileComponents(input: {
 
       const parameterBinding = summarizeParameterBinding(
         componentLikeExpression.parameters,
-        input.finiteTypeEvidenceCache,
+        input.finiteTypeInterpreterCache,
       );
       const bodySummary = summarizeComponentBody(componentLikeExpression.body, parameterBinding);
       if (!bodySummary) {
