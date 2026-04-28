@@ -9,7 +9,10 @@ import type {
   ProjectAnalysisBuildInput,
   ProjectAnalysisIndexes,
 } from "../types.js";
-import { getCssModuleBindingsForFile } from "../../symbol-resolution/index.js";
+import {
+  getCssModuleBindingsForFile,
+  getSymbolResolutionFilePaths,
+} from "../../symbol-resolution/index.js";
 import {
   compareById,
   createCssModuleAliasId,
@@ -28,7 +31,9 @@ export function buildCssModuleImports(
   input: ProjectAnalysisBuildInput,
   indexes: ProjectAnalysisIndexes,
 ): CssModuleImportAnalysis[] {
-  return [...input.symbolResolution.symbolsByFilePath.keys()]
+  return getSymbolResolutionFilePaths({
+    symbolResolution: input.symbolResolution,
+  })
     .flatMap(
       (filePath) =>
         getCssModuleBindingsForFile({
@@ -91,7 +96,9 @@ export function buildCssModuleMemberReferences(input: {
   }
 
   const cssModuleBindingsByFilePath = new Map(
-    [...input.projectInput.symbolResolution.symbolsByFilePath.keys()].map((filePath) => [
+    getSymbolResolutionFilePaths({
+      symbolResolution: input.projectInput.symbolResolution,
+    }).map((filePath) => [
       filePath,
       getCssModuleBindingsForFile({
         symbolResolution: input.projectInput.symbolResolution,

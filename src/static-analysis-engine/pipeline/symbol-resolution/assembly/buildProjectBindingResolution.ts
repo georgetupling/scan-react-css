@@ -4,6 +4,7 @@ import type { ParsedProjectFile } from "../../../entry/stages/types.js";
 import { getAllResolvedModuleFacts, type ModuleFacts } from "../../module-facts/index.js";
 import { createModuleFactsModuleId } from "../../module-facts/normalize/moduleIds.js";
 import type { EngineSymbolId } from "../../../types/core.js";
+import { attachSymbolResolutionInternals } from "../internals.js";
 import { collectExportedExpressionBindings } from "../collectExportedExpressionBindings.js";
 import { collectTopLevelSymbols } from "../collection/collectTopLevelSymbols.js";
 import type {
@@ -172,33 +173,37 @@ export function buildProjectBindingResolution(input: {
     }
   }
 
-  return {
-    symbols,
-    symbolsByFilePath,
-    resolvedImportedBindingsByFilePath,
-    resolvedImportedComponentBindingsByFilePath,
-    resolvedTypeBindingsByFilePath,
-    resolvedExportedTypeBindingsByFilePath,
-    resolvedNamespaceImportsByFilePath,
-    resolvedCssModuleImportsByFilePath,
-    resolvedCssModuleNamespaceBindingsByFilePath,
-    resolvedCssModuleMemberBindingsByFilePath,
-    resolvedCssModuleMemberReferencesByFilePath,
-    resolvedCssModuleBindingDiagnosticsByFilePath,
-    exportedExpressionBindingsByFilePath,
-    importedExpressionBindingsByFilePath: new Map(
-      [...symbolsByFilePath.keys()].map((filePath) => [
-        filePath,
-        collectTransitiveImportedExpressionBindings({
+  return attachSymbolResolutionInternals({
+    symbolResolution: {
+      symbols,
+    },
+    internals: {
+      symbolsByFilePath,
+      resolvedImportedBindingsByFilePath,
+      resolvedImportedComponentBindingsByFilePath,
+      resolvedTypeBindingsByFilePath,
+      resolvedExportedTypeBindingsByFilePath,
+      resolvedNamespaceImportsByFilePath,
+      resolvedCssModuleImportsByFilePath,
+      resolvedCssModuleNamespaceBindingsByFilePath,
+      resolvedCssModuleMemberBindingsByFilePath,
+      resolvedCssModuleMemberReferencesByFilePath,
+      resolvedCssModuleBindingDiagnosticsByFilePath,
+      exportedExpressionBindingsByFilePath,
+      importedExpressionBindingsByFilePath: new Map(
+        [...symbolsByFilePath.keys()].map((filePath) => [
           filePath,
-          resolvedImportedBindingsByFilePath,
-          exportedExpressionBindingsByFilePath,
-          visitedFilePaths: new Set([filePath]),
-          currentDepth: 0,
-        }),
-      ]),
-    ),
-  };
+          collectTransitiveImportedExpressionBindings({
+            filePath,
+            resolvedImportedBindingsByFilePath,
+            exportedExpressionBindingsByFilePath,
+            visitedFilePaths: new Set([filePath]),
+            currentDepth: 0,
+          }),
+        ]),
+      ),
+    },
+  });
 }
 
 function collectProjectSymbols(input: {

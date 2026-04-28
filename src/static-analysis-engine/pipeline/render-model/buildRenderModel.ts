@@ -7,6 +7,13 @@ import {
   buildProjectRenderDefinitions,
   buildSameFileRenderSubtrees,
 } from "./render-ir/index.js";
+import {
+  getExportedExpressionBindingsForFile,
+  getImportedBindingsForFile,
+  getImportedComponentBindingsForFile,
+  getImportedExpressionBindingsForFile,
+  getNamespaceImportsForFile,
+} from "../symbol-resolution/index.js";
 import type { UnsupportedClassReferenceDiagnostic } from "./class-reference-diagnostics/index.js";
 import type { RenderGraph } from "./render-graph/index.js";
 import type {
@@ -43,27 +50,72 @@ export function buildRenderModel(input: RenderModelBuildInput): RenderModel {
   });
   const renderBindings = buildProjectRenderBindings({
     filePaths,
-    exportedExpressionBindingsByFilePath:
-      input.symbolResolution.exportedExpressionBindingsByFilePath,
-    resolvedImportedBindingsByFilePath: input.symbolResolution.resolvedImportedBindingsByFilePath,
+    exportedExpressionBindingsByFilePath: new Map(
+      filePaths.map((filePath) => [
+        filePath,
+        getExportedExpressionBindingsForFile({
+          symbolResolution: input.symbolResolution,
+          filePath,
+        }),
+      ]),
+    ),
+    resolvedImportedBindingsByFilePath: new Map(
+      filePaths.map((filePath) => [
+        filePath,
+        getImportedBindingsForFile({
+          symbolResolution: input.symbolResolution,
+          filePath,
+        }),
+      ]),
+    ),
     exportedHelperDefinitionsByFilePath: renderDefinitions.exportedHelperDefinitionsByFilePath,
-    resolvedNamespaceImportsByFilePath: input.symbolResolution.resolvedNamespaceImportsByFilePath,
+    resolvedNamespaceImportsByFilePath: new Map(
+      filePaths.map((filePath) => [
+        filePath,
+        getNamespaceImportsForFile({
+          symbolResolution: input.symbolResolution,
+          filePath,
+        }),
+      ]),
+    ),
   });
   const componentAvailability = buildProjectComponentAvailability({
     filePaths,
     componentDefinitionsByFilePath: renderDefinitions.componentDefinitionsByFilePath,
     exportedComponentsByFilePath: renderDefinitions.exportedComponentsByFilePath,
-    resolvedImportedComponentBindingsByFilePath:
-      input.symbolResolution.resolvedImportedComponentBindingsByFilePath,
-    resolvedNamespaceImportsByFilePath: input.symbolResolution.resolvedNamespaceImportsByFilePath,
+    resolvedImportedComponentBindingsByFilePath: new Map(
+      filePaths.map((filePath) => [
+        filePath,
+        getImportedComponentBindingsForFile({
+          symbolResolution: input.symbolResolution,
+          filePath,
+        }),
+      ]),
+    ),
+    resolvedNamespaceImportsByFilePath: new Map(
+      filePaths.map((filePath) => [
+        filePath,
+        getNamespaceImportsForFile({
+          symbolResolution: input.symbolResolution,
+          filePath,
+        }),
+      ]),
+    ),
   });
   const renderSubtrees = buildRenderSubtrees({
     componentDefinitionsByFilePath: renderDefinitions.componentDefinitionsByFilePath,
     topLevelHelperDefinitionsByFilePath: renderDefinitions.topLevelHelperDefinitionsByFilePath,
     topLevelExpressionBindingsByFilePath: renderDefinitions.topLevelExpressionBindingsByFilePath,
     componentsByFilePath: componentAvailability.componentsByFilePath,
-    importedExpressionBindingsByFilePath:
-      input.symbolResolution.importedExpressionBindingsByFilePath,
+    importedExpressionBindingsByFilePath: new Map(
+      filePaths.map((filePath) => [
+        filePath,
+        getImportedExpressionBindingsForFile({
+          symbolResolution: input.symbolResolution,
+          filePath,
+        }),
+      ]),
+    ),
     importedHelperDefinitionsByFilePath: renderBindings.importedHelperDefinitionsByFilePath,
     importedNamespaceExpressionBindingsByFilePath:
       renderBindings.importedNamespaceExpressionBindingsByFilePath,

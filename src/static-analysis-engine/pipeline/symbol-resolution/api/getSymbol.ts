@@ -1,4 +1,5 @@
 import type { EngineSymbol, ProjectBindingResolution, SymbolSpace } from "../types.js";
+import { getSymbolResolutionInternals } from "../internals.js";
 import { findSymbolByLocalNameAndSpace } from "./shared.js";
 
 export function getSymbol(input: {
@@ -8,7 +9,7 @@ export function getSymbol(input: {
   symbolSpace: SymbolSpace;
 }): EngineSymbol | undefined {
   return findSymbolByLocalNameAndSpace({
-    symbolsByFilePath: input.symbolResolution.symbolsByFilePath,
+    symbolsByFilePath: getSymbolResolutionInternals(input.symbolResolution).symbolsByFilePath,
     filePath: input.filePath,
     localName: input.localName,
     symbolSpace: input.symbolSpace,

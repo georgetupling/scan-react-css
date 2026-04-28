@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 import { collectSourceDeclarationIndex } from "../collection/collectSourceDeclarations.js";
+import { getSymbolResolutionInternals } from "../internals.js";
 import type { ProjectBindingResolution, ResolvedTypeBinding } from "../types.js";
 import { findTypeSymbolByLocalName } from "./shared.js";
 
@@ -21,7 +22,8 @@ export function resolveTypeBinding(input: {
   filePath: string;
   localName: string;
 }): ResolvedTypeBinding | undefined {
-  const resolvedImportedTypeBinding = input.symbolResolution.resolvedTypeBindingsByFilePath
+  const internals = getSymbolResolutionInternals(input.symbolResolution);
+  const resolvedImportedTypeBinding = internals.resolvedTypeBindingsByFilePath
     .get(input.filePath)
     ?.get(input.localName);
   if (resolvedImportedTypeBinding) {
@@ -29,7 +31,7 @@ export function resolveTypeBinding(input: {
   }
 
   const localTypeSymbol = findTypeSymbolByLocalName({
-    symbolsByFilePath: input.symbolResolution.symbolsByFilePath,
+    symbolsByFilePath: internals.symbolsByFilePath,
     filePath: input.filePath,
     localName: input.localName,
   });
@@ -52,8 +54,8 @@ export function resolveExportedTypeBinding(input: {
   filePath: string;
   exportedName: string;
 }): ResolvedTypeBinding | undefined {
-  return input.symbolResolution.resolvedExportedTypeBindingsByFilePath
-    .get(input.filePath)
+  return getSymbolResolutionInternals(input.symbolResolution)
+    .resolvedExportedTypeBindingsByFilePath.get(input.filePath)
     ?.get(input.exportedName);
 }
 

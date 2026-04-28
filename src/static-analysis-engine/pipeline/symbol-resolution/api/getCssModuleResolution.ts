@@ -7,6 +7,7 @@ import type {
   ResolvedCssModuleMemberReference,
   ResolvedCssModuleNamespaceBinding,
 } from "../types.js";
+import { getSymbolResolutionInternals } from "../internals.js";
 
 export type ResolvedCssModuleBindingsForFile = {
   imports: ResolvedCssModuleImport[];
@@ -21,8 +22,8 @@ export function resolveCssModuleNamespace(input: {
   filePath: string;
   localName: string;
 }): ResolvedCssModuleNamespaceBinding | undefined {
-  return input.symbolResolution.resolvedCssModuleNamespaceBindingsByFilePath
-    .get(input.filePath)
+  return getSymbolResolutionInternals(input.symbolResolution)
+    .resolvedCssModuleNamespaceBindingsByFilePath.get(input.filePath)
     ?.get(input.localName);
 }
 
@@ -31,8 +32,8 @@ export function resolveCssModuleMember(input: {
   filePath: string;
   localName: string;
 }): ResolvedCssModuleMemberBinding | undefined {
-  return input.symbolResolution.resolvedCssModuleMemberBindingsByFilePath
-    .get(input.filePath)
+  return getSymbolResolutionInternals(input.symbolResolution)
+    .resolvedCssModuleMemberBindingsByFilePath.get(input.filePath)
     ?.get(input.localName);
 }
 
@@ -42,8 +43,9 @@ export function resolveCssModuleMemberAccess(input: {
   localName: string;
   memberName: string;
 }): ResolvedCssModuleMemberAccessResult | undefined {
+  const internals = getSymbolResolutionInternals(input.symbolResolution);
   const resolvedReference = (
-    input.symbolResolution.resolvedCssModuleMemberReferencesByFilePath.get(input.filePath) ?? []
+    internals.resolvedCssModuleMemberReferencesByFilePath.get(input.filePath) ?? []
   ).find(
     (reference) =>
       reference.localName === input.localName &&
@@ -67,7 +69,7 @@ export function resolveCssModuleMemberAccess(input: {
   }
 
   const unresolvedDiagnostic = (
-    input.symbolResolution.resolvedCssModuleBindingDiagnosticsByFilePath.get(input.filePath) ?? []
+    internals.resolvedCssModuleBindingDiagnosticsByFilePath.get(input.filePath) ?? []
   ).find(
     (diagnostic) =>
       diagnostic.localName === input.localName &&
@@ -102,28 +104,21 @@ export function getCssModuleBindingsForFile(input: {
   symbolResolution: ProjectBindingResolution;
   filePath: string;
 }): ResolvedCssModuleBindingsForFile {
+  const internals = getSymbolResolutionInternals(input.symbolResolution);
   return {
-    imports: [
-      ...(input.symbolResolution.resolvedCssModuleImportsByFilePath.get(input.filePath) ?? []),
-    ],
+    imports: [...(internals.resolvedCssModuleImportsByFilePath.get(input.filePath) ?? [])],
     namespaceBindings: [
-      ...(input.symbolResolution.resolvedCssModuleNamespaceBindingsByFilePath
-        .get(input.filePath)
-        ?.values() ?? []),
-    ],
-    memberBindings: [
-      ...(input.symbolResolution.resolvedCssModuleMemberBindingsByFilePath
-        .get(input.filePath)
-        ?.values() ?? []),
-    ],
-    memberReferences: [
-      ...(input.symbolResolution.resolvedCssModuleMemberReferencesByFilePath.get(input.filePath) ??
+      ...(internals.resolvedCssModuleNamespaceBindingsByFilePath.get(input.filePath)?.values() ??
         []),
     ],
+    memberBindings: [
+      ...(internals.resolvedCssModuleMemberBindingsByFilePath.get(input.filePath)?.values() ?? []),
+    ],
+    memberReferences: [
+      ...(internals.resolvedCssModuleMemberReferencesByFilePath.get(input.filePath) ?? []),
+    ],
     diagnostics: [
-      ...(input.symbolResolution.resolvedCssModuleBindingDiagnosticsByFilePath.get(
-        input.filePath,
-      ) ?? []),
+      ...(internals.resolvedCssModuleBindingDiagnosticsByFilePath.get(input.filePath) ?? []),
     ],
   };
 }

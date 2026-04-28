@@ -7,7 +7,10 @@ import {
   buildModuleFacts,
   buildProjectBindingResolution,
   collectTopLevelSymbols,
+  getExportedExpressionBindingsForFile,
   getCssModuleBindingsForFile,
+  getImportedExpressionBindingsForFile,
+  getNamespaceImportsForFile,
   getSymbol,
   resolveCssModuleMember,
   resolveCssModuleMemberAccess,
@@ -49,28 +52,38 @@ test("symbol resolution owns exported expression bindings and imported expressio
   });
 
   assert.deepEqual(
-    [...(resolution.exportedExpressionBindingsByFilePath.get("src/tokens.ts") ?? []).keys()],
+    [
+      ...getExportedExpressionBindingsForFile({
+        symbolResolution: resolution,
+        filePath: "src/tokens.ts",
+      }).keys(),
+    ],
     ["publicToken", "buttonTokens"],
   );
   assert.equal(
     expressionText(
-      resolution.exportedExpressionBindingsByFilePath
-        .get("src/defaultIdentifier.ts")
-        ?.get("default"),
+      getExportedExpressionBindingsForFile({
+        symbolResolution: resolution,
+        filePath: "src/defaultIdentifier.ts",
+      }).get("default"),
     ),
     '"default-token"',
   );
   assert.equal(
     expressionText(
-      resolution.exportedExpressionBindingsByFilePath
-        .get("src/defaultExpression.ts")
-        ?.get("default"),
+      getExportedExpressionBindingsForFile({
+        symbolResolution: resolution,
+        filePath: "src/defaultExpression.ts",
+      }).get("default"),
     ),
     '"literal-default"',
   );
   assert.equal(
     expressionText(
-      resolution.importedExpressionBindingsByFilePath.get("src/consumer.ts")?.get("publicToken"),
+      getImportedExpressionBindingsForFile({
+        symbolResolution: resolution,
+        filePath: "src/consumer.ts",
+      }).get("publicToken"),
     ),
     '"public-token"',
   );
@@ -174,7 +187,10 @@ test("symbol resolution preserves unresolved namespace members as structured res
     includeTraces: false,
   });
 
-  const namespaceImport = resolution.resolvedNamespaceImportsByFilePath.get("src/consumer.ts")?.[0];
+  const namespaceImport = getNamespaceImportsForFile({
+    symbolResolution: resolution,
+    filePath: "src/consumer.ts",
+  })[0];
   assert.equal(namespaceImport?.localName, "api");
   assert.deepEqual([...(namespaceImport?.members.keys() ?? [])], ["broken", "ok"]);
   assert.deepEqual(namespaceImport?.members.get("ok"), {
@@ -384,7 +400,7 @@ test("symbol resolution degrades type-only imports that target value exports", (
     resolveTypeDeclarationForTest(parsedFiles, resolution, "src/consumer.ts", "buttonTone"),
     undefined,
   );
-  assert.deepEqual(resolution.resolvedTypeBindingsByFilePath.get("src/consumer.ts"), new Map());
+  assert.equal(resolveTypeBindingForTest(resolution, "src/consumer.ts", "buttonTone"), undefined);
 });
 
 test("symbol resolution resolves CSS Module namespace, alias, destructuring, and member access", () => {
@@ -561,9 +577,10 @@ test("symbol resolution records unsupported CSS Module binding diagnostics", () 
   });
 
   assert.deepEqual(
-    (resolution.resolvedCssModuleBindingDiagnosticsByFilePath.get("src/Button.tsx") ?? []).map(
-      (diagnostic) => diagnostic.reason,
-    ),
+    getCssModuleBindingsForFile({
+      symbolResolution: resolution,
+      filePath: "src/Button.tsx",
+    }).diagnostics.map((diagnostic) => diagnostic.reason),
     [
       "computed-css-module-destructuring",
       "computed-css-module-member",

@@ -2,6 +2,14 @@ export { collectTopLevelSymbols, createSymbolId } from "./collection/collectTopL
 export { buildProjectBindingResolution } from "./assembly/buildProjectBindingResolution.js";
 export { getSymbol } from "./api/getSymbol.js";
 export {
+  getExportedExpressionBindingsForFile,
+  getImportedBindingsForFile,
+  getImportedComponentBindingsForFile,
+  getImportedExpressionBindingsForFile,
+  getNamespaceImportsForFile,
+  getSymbolResolutionFilePaths,
+} from "./api/getValueResolution.js";
+export {
   getCssModuleBindingsForFile,
   resolveCssModuleMember,
   resolveCssModuleMemberAccess,

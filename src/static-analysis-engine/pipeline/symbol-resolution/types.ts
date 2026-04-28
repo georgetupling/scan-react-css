@@ -1,5 +1,3 @@
-import ts from "typescript";
-
 import type { AnalysisTrace } from "../../types/analysis.js";
 import type { EngineModuleId, EngineSymbolId, SourceAnchor } from "../../types/core.js";
 
@@ -180,23 +178,4 @@ export type ResolvedCssModuleMemberAccessResult =
 
 export type ProjectBindingResolution = {
   symbols: Map<EngineSymbolId, EngineSymbol>;
-  symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
-  resolvedImportedBindingsByFilePath: Map<string, ResolvedImportedBinding[]>;
-  resolvedImportedComponentBindingsByFilePath: Map<string, ResolvedImportedBinding[]>;
-  resolvedTypeBindingsByFilePath: Map<string, Map<string, ResolvedTypeBinding>>;
-  resolvedExportedTypeBindingsByFilePath: Map<string, Map<string, ResolvedTypeBinding>>;
-  resolvedNamespaceImportsByFilePath: Map<string, ResolvedNamespaceImport[]>;
-  resolvedCssModuleImportsByFilePath: Map<string, ResolvedCssModuleImport[]>;
-  resolvedCssModuleNamespaceBindingsByFilePath: Map<
-    string,
-    Map<string, ResolvedCssModuleNamespaceBinding>
-  >;
-  resolvedCssModuleMemberBindingsByFilePath: Map<
-    string,
-    Map<string, ResolvedCssModuleMemberBinding>
-  >;
-  resolvedCssModuleMemberReferencesByFilePath: Map<string, ResolvedCssModuleMemberReference[]>;
-  resolvedCssModuleBindingDiagnosticsByFilePath: Map<string, ResolvedCssModuleBindingDiagnostic[]>;
-  exportedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
-  importedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
 };
