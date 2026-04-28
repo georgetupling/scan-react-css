@@ -1,4 +1,3 @@
-import type { ModuleGraph } from "../module-graph/types.js";
 import type { RenderGraph } from "../render-model/render-graph/types.js";
 import type { RenderSubtree } from "../render-model/render-ir/index.js";
 import type { SelectorSourceInput } from "../selector-analysis/types.js";
@@ -15,7 +14,6 @@ import { buildContextRecords } from "./contextRecords.js";
 
 export function buildStylesheetReachabilityRecord(input: {
   cssSource: SelectorSourceInput;
-  moduleGraph: ModuleGraph;
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];
   knownCssFilePaths: Set<string>;

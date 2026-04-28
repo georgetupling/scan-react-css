@@ -1,4 +1,5 @@
 import type { RenderGraphEdge } from "../../render-model/render-graph/types.js";
+import { getAllResolvedModuleFacts } from "../../module-facts/index.js";
 import type {
   ComponentRenderRelation,
   ModuleImportRelation,
@@ -13,20 +14,18 @@ export function buildModuleImports(
 ): ModuleImportRelation[] {
   const imports: ModuleImportRelation[] = [];
 
-  for (const moduleNode of input.moduleGraph.modulesById.values()) {
-    if (moduleNode.kind !== "source") {
-      continue;
-    }
-
-    const sourceFileId = indexes.sourceFileIdByPath.get(normalizeProjectPath(moduleNode.filePath));
+  for (const moduleFacts of getAllResolvedModuleFacts({
+    moduleFacts: input.projectResolution,
+  })) {
+    const sourceFileId = indexes.sourceFileIdByPath.get(normalizeProjectPath(moduleFacts.filePath));
     if (!sourceFileId) {
       continue;
     }
 
-    for (const importRecord of moduleNode.imports) {
+    for (const importRecord of moduleFacts.imports) {
       imports.push({
         fromSourceFileId: sourceFileId,
-        toModuleId: importRecord.resolvedModuleId,
+        toModuleId: importRecord.resolution.resolvedModuleId,
         specifier: importRecord.specifier,
         importKind: importRecord.importKind,
       });

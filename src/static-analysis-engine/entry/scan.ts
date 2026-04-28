@@ -5,10 +5,9 @@ import type { AnalysisProgressCallback, StaticAnalysisEngineResult } from "../ty
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
 import { runCssModuleAnalysisStage } from "./stages/cssModuleAnalysisStage.js";
 import { runExternalCssStage } from "./stages/externalCssStage.js";
-import { runModuleGraphStage } from "./stages/moduleGraphStage.js";
+import { runModuleFactsStage } from "./stages/moduleFactsStage.js";
 import { runParseStage } from "./stages/parseStage.js";
 import { runProjectAnalysisStage } from "./stages/projectAnalysisStage.js";
-import { runProjectResolutionStage } from "./stages/projectResolutionStage.js";
 import { runReachabilityStage } from "./stages/reachabilityStage.js";
 import { runRenderModelStage } from "./stages/renderModelStage.js";
 import { runRuntimeDomStage } from "./stages/runtimeDomStage.js";
@@ -59,20 +58,10 @@ export function analyzeProjectSourceTexts(input: {
   const parseStage = runAnalysisStage(progress, "parse", "Parsing source files", () =>
     runParseStage(input.sourceFiles),
   );
-  const projectResolutionStage = runAnalysisStage(
-    progress,
-    "project-resolution",
-    "Indexing project resolution data",
-    () =>
-      runProjectResolutionStage({
-        parsedFiles: parseStage.parsedFiles,
-        projectRoot: input.projectRoot,
-      }),
-  );
-  const moduleGraphStage = runAnalysisStage(progress, "module-graph", "Building module graph", () =>
-    runModuleGraphStage({
+  const moduleFactsStage = runAnalysisStage(progress, "module-facts", "Building module facts", () =>
+    runModuleFactsStage({
       parsedFiles: parseStage.parsedFiles,
-      projectResolution: projectResolutionStage.projectResolution,
+      projectRoot: input.projectRoot,
     }),
   );
   const symbolResolutionStage = runAnalysisStage(
@@ -82,8 +71,7 @@ export function analyzeProjectSourceTexts(input: {
     () =>
       runSymbolResolutionStage({
         parsedFiles: parseStage.parsedFiles,
-        moduleGraph: moduleGraphStage.moduleGraph,
-        projectResolution: projectResolutionStage.projectResolution,
+        moduleFacts: moduleFactsStage.moduleFacts,
         includeTraces,
       }),
   );
@@ -91,7 +79,7 @@ export function analyzeProjectSourceTexts(input: {
     runRenderModelStage({
       parsedFiles: parseStage.parsedFiles,
       symbolResolution: symbolResolutionStage,
-      projectResolution: projectResolutionStage.projectResolution,
+      moduleFacts: moduleFactsStage.moduleFacts,
       includeTraces,
     }),
   );
@@ -117,7 +105,7 @@ export function analyzeProjectSourceTexts(input: {
     () =>
       runCssModuleAnalysisStage({
         parsedFiles: parseStage.parsedFiles,
-        moduleGraph: moduleGraphStage.moduleGraph,
+        moduleFacts: moduleFactsStage.moduleFacts,
         cssFiles: cssAnalysisStage.cssFiles,
         options: input.cssModules,
         includeTraces,
@@ -138,7 +126,7 @@ export function analyzeProjectSourceTexts(input: {
     "Building reachability graph",
     () =>
       runReachabilityStage({
-        moduleGraph: moduleGraphStage.moduleGraph,
+        moduleFacts: moduleFactsStage.moduleFacts,
         renderGraph: renderModelStage.renderGraph,
         renderSubtrees: renderModelStage.renderSubtrees,
         selectorCssSources: input.selectorCssSources ?? [],
@@ -165,7 +153,7 @@ export function analyzeProjectSourceTexts(input: {
     "Building project analysis",
     () =>
       runProjectAnalysisStage({
-        moduleGraph: moduleGraphStage.moduleGraph,
+        moduleFacts: moduleFactsStage.moduleFacts,
         cssFiles: cssAnalysisStage.cssFiles,
         cssModules: cssModuleAnalysisStage.cssModules,
         externalCssSummary: externalCssStage.externalCssSummary,

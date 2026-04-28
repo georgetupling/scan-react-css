@@ -1,4 +1,5 @@
 import type { ClassExpressionSummary } from "../../render-model/abstract-values/types.js";
+import { getAllResolvedModuleFacts } from "../../module-facts/index.js";
 import type { ReachabilityAvailability } from "../../reachability/types.js";
 import type { SelectorQueryResult } from "../../selector-analysis/types.js";
 import type { AnalysisTrace } from "../../../types/analysis.js";
@@ -37,13 +38,15 @@ export function getStylesheetOrigin(
 
 export function isExternalStylesheet(filePath: string, input: ProjectAnalysisBuildInput): boolean {
   const normalizedFilePath = normalizeProjectPath(filePath);
-  for (const moduleNode of input.moduleGraph.modulesById.values()) {
+  for (const moduleFacts of getAllResolvedModuleFacts({
+    moduleFacts: input.projectResolution,
+  })) {
     if (
-      moduleNode.kind === "source" &&
-      moduleNode.imports.some(
-        (importRecord) =>
-          importRecord.importKind === "external-css" &&
-          normalizeProjectPath(importRecord.specifier) === normalizedFilePath,
+      moduleFacts.imports.some(
+        (importFact) =>
+          (importFact.importKind === "external-css" ||
+            (importFact.importKind === "css" && importFact.resolution.status === "external")) &&
+          normalizeProjectPath(importFact.specifier) === normalizedFilePath,
       )
     ) {
       return true;

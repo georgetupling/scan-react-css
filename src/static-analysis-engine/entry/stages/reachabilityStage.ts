@@ -1,13 +1,13 @@
-import type { ModuleGraph } from "../../pipeline/module-graph/index.js";
 import { buildReachabilitySummary } from "../../pipeline/reachability/index.js";
 import type { ExternalCssSummary } from "../../pipeline/external-css/index.js";
+import type { ModuleFacts } from "../../pipeline/module-facts/index.js";
 import type { RenderGraph } from "../../pipeline/render-model/render-graph/index.js";
 import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.js";
 import type { SelectorSourceInput } from "../../pipeline/selector-analysis/index.js";
 import type { ReachabilityStageResult } from "./types.js";
 
 export function runReachabilityStage(input: {
-  moduleGraph: ModuleGraph;
+  moduleFacts: ModuleFacts;
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];
   selectorCssSources: SelectorSourceInput[];
@@ -16,7 +16,7 @@ export function runReachabilityStage(input: {
 }): ReachabilityStageResult {
   return {
     reachabilitySummary: buildReachabilitySummary({
-      moduleGraph: input.moduleGraph,
+      projectResolution: input.moduleFacts,
       renderGraph: input.renderGraph,
       renderSubtrees: input.renderSubtrees,
       cssSources: input.selectorCssSources,

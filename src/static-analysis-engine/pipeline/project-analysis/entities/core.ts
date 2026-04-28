@@ -1,5 +1,6 @@
 import type { RenderGraphNode } from "../../render-model/render-graph/types.js";
 import type { RenderSubtree } from "../../render-model/render-ir/types.js";
+import { getAllResolvedModuleFacts } from "../../module-facts/index.js";
 import type {
   ClassContextAnalysis,
   ClassDefinitionAnalysis,
@@ -38,10 +39,10 @@ export function buildSourceFiles(
   const sourceFiles: SourceFileAnalysis[] = [];
   const sourcePaths = new Set<string>();
 
-  for (const moduleNode of input.moduleGraph.modulesById.values()) {
-    if (moduleNode.kind === "source") {
-      sourcePaths.add(normalizeProjectPath(moduleNode.filePath));
-    }
+  for (const moduleFacts of getAllResolvedModuleFacts({
+    moduleFacts: input.projectResolution,
+  })) {
+    sourcePaths.add(normalizeProjectPath(moduleFacts.filePath));
   }
 
   for (const renderSubtree of input.renderSubtrees) {

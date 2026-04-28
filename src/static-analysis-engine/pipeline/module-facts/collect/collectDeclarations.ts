@@ -1,10 +1,8 @@
 import ts from "typescript";
 
-import type { ProjectResolutionFileDeclarationIndex } from "./types.js";
+import type { ModuleFactsDeclarationIndex } from "../types.js";
 
-export function collectDeclarations(
-  sourceFile: ts.SourceFile,
-): ProjectResolutionFileDeclarationIndex {
+export function collectDeclarations(sourceFile: ts.SourceFile): ModuleFactsDeclarationIndex {
   const declarations = createEmptyDeclarationIndex();
 
   for (const statement of sourceFile.statements) {
@@ -14,7 +12,7 @@ export function collectDeclarations(
   return declarations;
 }
 
-export function createEmptyDeclarationIndex(): ProjectResolutionFileDeclarationIndex {
+export function createEmptyDeclarationIndex(): ModuleFactsDeclarationIndex {
   return {
     typeAliases: new Map(),
     interfaces: new Map(),
@@ -26,7 +24,7 @@ export function createEmptyDeclarationIndex(): ProjectResolutionFileDeclarationI
 
 function collectDeclaration(
   statement: ts.Statement,
-  declarations: ProjectResolutionFileDeclarationIndex,
+  declarations: ModuleFactsDeclarationIndex,
 ): void {
   if (ts.isTypeAliasDeclaration(statement)) {
     declarations.typeAliases.set(statement.name.text, statement);

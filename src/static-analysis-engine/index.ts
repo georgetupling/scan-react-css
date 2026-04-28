@@ -1,12 +1,20 @@
 export { analyzeProjectSourceTexts, analyzeSourceText } from "./entry/scan.js";
 export { analyzeCssSources } from "./pipeline/css-analysis/index.js";
 export { analyzeCssModules } from "./pipeline/css-modules/index.js";
-export { parseSourceFile } from "./pipeline/parse/index.js";
+export { buildModuleFacts } from "./pipeline/module-facts/buildModuleFacts.js";
 export {
-  buildModuleGraphFromSource,
-  buildModuleGraphFromSources,
-  createModuleId,
-} from "./pipeline/module-graph/index.js";
+  collectAvailableExportedNames,
+  getAllResolvedModuleFacts,
+  getAnalyzedModuleFilePaths,
+  getDirectSourceImportFacts,
+  getDirectStylesheetImportFacts,
+  getResolvedModuleFacts,
+  resolveModuleFactExport,
+  resolveModuleFactReExportTargetFilePath,
+  resolveModuleFactSourceSpecifier,
+  resolveSourceSpecifier,
+} from "./pipeline/module-facts/index.js";
+export { parseSourceFile } from "./pipeline/parse/index.js";
 export { collectTopLevelSymbols, createSymbolId } from "./pipeline/symbol-resolution/index.js";
 export { summarizeClassNameExpression, toAbstractClassSet } from "./pipeline/render-model/index.js";
 export { buildExternalCssSummary } from "./pipeline/external-css/index.js";
@@ -84,14 +92,18 @@ export type {
   StylesheetReachabilityRecord,
 } from "./pipeline/reachability/index.js";
 export type {
-  ModuleExportEdge,
-  ModuleExportRecord,
-  ModuleGraph,
-  ModuleImportEdge,
-  ModuleImportKind,
-  ModuleImportRecord,
-  ModuleNode,
-} from "./pipeline/module-graph/index.js";
+  ModuleFacts,
+  ModuleFactsCssSemantics,
+  ModuleFactsDeclarationIndex,
+  ModuleFactsExportRecord,
+  ModuleFactsImportKind,
+  ModuleFactsImportRecord,
+  ModuleFactsTypescriptResolution,
+  ResolvedModuleExportFact,
+  ResolvedModuleFacts,
+  ResolvedModuleImportFact,
+  ResolvedTopLevelBindingFact,
+} from "./pipeline/module-facts/index.js";
 export type { EngineSymbol, SymbolKind } from "./pipeline/symbol-resolution/index.js";
 export type {
   AbstractClassSet,

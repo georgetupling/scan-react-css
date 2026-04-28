@@ -1,4 +1,8 @@
-import type { ModuleGraph } from "../module-graph/types.js";
+import {
+  getDirectStylesheetImportFacts,
+  getAllResolvedModuleFacts,
+  type ModuleFacts,
+} from "../module-facts/index.js";
 import type { ExternalCssSummary } from "../external-css/types.js";
 import type { SelectorSourceInput } from "../selector-analysis/types.js";
 import type { StylesheetReachabilityContextRecord, StylesheetReachabilityRecord } from "./types.js";
@@ -16,33 +20,42 @@ import {
 } from "./sortAndKeys.js";
 
 export function collectDirectCssImportersByStylesheetPath(input: {
-  moduleGraph: ModuleGraph;
+  projectResolution: ModuleFacts;
   knownCssFilePaths: Set<string>;
   packageCssImportBySpecifier: Map<string, string>;
+  sourcePackageCssImports: ExternalCssSummary["packageCssImports"];
 }): Map<string, string[]> {
   const importersByStylesheetPath = new Map<string, Set<string>>();
 
-  for (const moduleNode of input.moduleGraph.modulesById.values()) {
-    if (moduleNode.kind !== "source") {
-      continue;
-    }
-
-    const sourceFilePath = normalizeProjectPath(moduleNode.filePath) ?? moduleNode.filePath;
-    for (const importRecord of moduleNode.imports) {
+  for (const moduleFacts of getAllResolvedModuleFacts({
+    moduleFacts: input.projectResolution,
+  })) {
+    const sourceFilePath = normalizeProjectPath(moduleFacts.filePath) ?? moduleFacts.filePath;
+    for (const importFact of getDirectStylesheetImportFacts({
+      moduleFacts: input.projectResolution,
+      filePath: moduleFacts.filePath,
+    })) {
       const stylesheetPath =
-        importRecord.importKind === "css"
-          ? resolveCssImportPath({
-              fromFilePath: moduleNode.filePath,
-              specifier: importRecord.specifier,
+        importFact.importKind === "css" && importFact.resolution.status === "resolved"
+          ? (normalizeProjectPath(importFact.resolution.resolvedFilePath) ??
+            resolveCssImportPath({
+              fromFilePath: moduleFacts.filePath,
+              specifier: importFact.specifier,
               knownCssFilePaths: input.knownCssFilePaths,
-            })
-          : importRecord.importKind === "external-css"
+            }))
+          : importFact.importKind === "css" && importFact.resolution.status === "external"
             ? (input.packageCssImportBySpecifier.get(
-                createPackageCssImportKey(moduleNode.filePath, importRecord.specifier),
+                createPackageCssImportKey(moduleFacts.filePath, importFact.specifier),
               ) ??
-              normalizeProjectPath(importRecord.specifier) ??
-              importRecord.specifier)
-            : undefined;
+              normalizeProjectPath(importFact.specifier) ??
+              importFact.specifier)
+            : importFact.importKind === "external-css"
+              ? (input.packageCssImportBySpecifier.get(
+                  createPackageCssImportKey(moduleFacts.filePath, importFact.specifier),
+                ) ??
+                normalizeProjectPath(importFact.specifier) ??
+                importFact.specifier)
+              : undefined;
 
       if (!stylesheetPath) {
         continue;
@@ -52,6 +65,20 @@ export function collectDirectCssImportersByStylesheetPath(input: {
       importers.add(sourceFilePath);
       importersByStylesheetPath.set(stylesheetPath, importers);
     }
+  }
+
+  for (const importRecord of input.sourcePackageCssImports) {
+    if (importRecord.importerKind !== "source") {
+      continue;
+    }
+
+    const stylesheetPath =
+      normalizeProjectPath(importRecord.resolvedFilePath) ?? importRecord.resolvedFilePath;
+    const sourceFilePath =
+      normalizeProjectPath(importRecord.importerFilePath) ?? importRecord.importerFilePath;
+    const importers = importersByStylesheetPath.get(stylesheetPath) ?? new Set<string>();
+    importers.add(sourceFilePath);
+    importersByStylesheetPath.set(stylesheetPath, importers);
   }
 
   return new Map(

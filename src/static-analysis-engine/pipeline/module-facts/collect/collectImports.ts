@@ -1,16 +1,16 @@
 import ts from "typescript";
 
 import type {
-  ProjectResolutionImportKind,
-  ProjectResolutionImportName,
-  ProjectResolutionImportRecord,
-} from "./types.js";
+  ModuleFactsImportKind,
+  ModuleFactsImportName,
+  ModuleFactsImportRecord,
+} from "../types.js";
 
 export function collectImports(
   filePath: string,
   sourceFile: ts.SourceFile,
-): ProjectResolutionImportRecord[] {
-  const imports: ProjectResolutionImportRecord[] = [];
+): ModuleFactsImportRecord[] {
+  const imports: ModuleFactsImportRecord[] = [];
 
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
@@ -30,13 +30,13 @@ export function collectImports(
   return imports.sort(compareImportRecords);
 }
 
-function collectImportNames(statement: ts.ImportDeclaration): ProjectResolutionImportName[] {
+function collectImportNames(statement: ts.ImportDeclaration): ModuleFactsImportName[] {
   const importClause = statement.importClause;
   if (!importClause) {
     return [];
   }
 
-  const importNames: ProjectResolutionImportName[] = [];
+  const importNames: ModuleFactsImportName[] = [];
   if (importClause.name) {
     importNames.push({
       kind: "default",
@@ -76,8 +76,8 @@ function collectImportNames(statement: ts.ImportDeclaration): ProjectResolutionI
 
 function classifyImportKind(
   specifier: string,
-  importNames: ProjectResolutionImportName[],
-): ProjectResolutionImportKind {
+  importNames: ModuleFactsImportName[],
+): ModuleFactsImportKind {
   if (importNames.length > 0 && importNames.every((importName) => importName.typeOnly)) {
     return "type-only";
   }
@@ -102,8 +102,8 @@ function classifyImportKind(
 }
 
 function compareImportRecords(
-  left: ProjectResolutionImportRecord,
-  right: ProjectResolutionImportRecord,
+  left: ModuleFactsImportRecord,
+  right: ModuleFactsImportRecord,
 ): number {
   return (
     left.specifier.localeCompare(right.specifier) ||
@@ -112,8 +112,8 @@ function compareImportRecords(
 }
 
 function compareImportNames(
-  left: ProjectResolutionImportName | undefined,
-  right: ProjectResolutionImportName | undefined,
+  left: ModuleFactsImportName | undefined,
+  right: ModuleFactsImportName | undefined,
 ): number {
   if (!left && !right) {
     return 0;

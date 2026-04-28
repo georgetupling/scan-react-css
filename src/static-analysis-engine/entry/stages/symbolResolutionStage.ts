@@ -1,22 +1,20 @@
-import type { ModuleGraph } from "../../pipeline/module-graph/index.js";
 import {
   buildProjectBindingResolution,
   collectTopLevelSymbols,
 } from "../../pipeline/symbol-resolution/index.js";
 import type { EngineSymbol } from "../../pipeline/symbol-resolution/index.js";
-import { createModuleId } from "../../pipeline/module-graph/index.js";
+import { createModuleFactsModuleId } from "../../pipeline/module-facts/index.js";
 import type { EngineSymbolId } from "../../types/core.js";
 import type {
+  ModuleFactsStageResult,
   ParsedProjectFile,
-  ProjectResolutionStageResult,
   ProjectSymbolCollection,
   SymbolResolutionStageResult,
 } from "./types.js";
 
 export function runSymbolResolutionStage(input: {
   parsedFiles: ParsedProjectFile[];
-  moduleGraph: ModuleGraph;
-  projectResolution: ProjectResolutionStageResult["projectResolution"];
+  moduleFacts: ModuleFactsStageResult["moduleFacts"];
   includeTraces?: boolean;
 }): SymbolResolutionStageResult {
   const collectedSymbols = collectProjectSymbols({
@@ -24,9 +22,8 @@ export function runSymbolResolutionStage(input: {
   });
 
   return buildProjectBindingResolution({
-    moduleGraph: input.moduleGraph,
     symbolsByFilePath: collectedSymbols.symbolsByFilePath,
-    projectResolution: input.projectResolution,
+    projectResolution: input.moduleFacts,
     includeTraces: input.includeTraces,
   });
 }
@@ -38,7 +35,7 @@ function collectProjectSymbols(input: {
   const symbolsByFilePath = new Map<string, Map<EngineSymbolId, EngineSymbol>>();
 
   for (const parsedFile of input.parsedFiles) {
-    const moduleId = createModuleId(parsedFile.filePath);
+    const moduleId = createModuleFactsModuleId(parsedFile.filePath);
     const fileSymbols = collectTopLevelSymbols({
       filePath: parsedFile.filePath,
       parsedSourceFile: parsedFile.parsedSourceFile,

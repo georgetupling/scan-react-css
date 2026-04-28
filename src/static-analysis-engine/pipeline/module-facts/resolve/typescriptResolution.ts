@@ -1,14 +1,14 @@
 import path from "node:path";
 import ts from "typescript";
 
-import { normalizeFilePath } from "./pathUtils.js";
-import type { ProjectResolutionTypescriptResolution } from "./types.js";
+import { normalizeFilePath } from "../shared/pathUtils.js";
+import type { ModuleFactsTypescriptResolution } from "../types.js";
 
 export function buildTypescriptResolution(input: {
   projectRoot?: string;
   filePaths: Iterable<string>;
   compilerOptions?: ts.CompilerOptions;
-}): ProjectResolutionTypescriptResolution | undefined {
+}): ModuleFactsTypescriptResolution | undefined {
   if (!input.projectRoot && !input.compilerOptions) {
     return undefined;
   }
@@ -42,7 +42,7 @@ export function buildTypescriptResolution(input: {
 }
 
 export function resolveTypescriptModuleSpecifier(input: {
-  typescriptResolution: ProjectResolutionTypescriptResolution;
+  typescriptResolution: ModuleFactsTypescriptResolution;
   fromFilePath: string;
   specifier: string;
 }): string | undefined {

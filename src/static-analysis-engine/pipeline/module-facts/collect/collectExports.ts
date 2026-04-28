@@ -1,15 +1,12 @@
 import ts from "typescript";
 
-import type {
-  ProjectResolutionExportRecord,
-  ProjectResolutionFileDeclarationIndex,
-} from "./types.js";
+import type { ModuleFactsDeclarationIndex, ModuleFactsExportRecord } from "../types.js";
 
 export function collectExports(
   filePath: string,
   sourceFile: ts.SourceFile,
-): ProjectResolutionExportRecord[] {
-  const exports: ProjectResolutionExportRecord[] = [];
+): ModuleFactsExportRecord[] {
+  const exports: ModuleFactsExportRecord[] = [];
 
   for (const statement of sourceFile.statements) {
     if (ts.isExportDeclaration(statement)) {
@@ -39,8 +36,8 @@ export function collectExports(
 }
 
 export function applyExportEvidenceToDeclarations(
-  declarations: ProjectResolutionFileDeclarationIndex,
-  exports: ProjectResolutionExportRecord[],
+  declarations: ModuleFactsDeclarationIndex,
+  exports: ModuleFactsExportRecord[],
 ): void {
   for (const exportRecord of exports) {
     if (exportRecord.localName) {
@@ -55,7 +52,7 @@ export function applyExportEvidenceToDeclarations(
 function collectDeclarationExports(
   filePath: string,
   statement: ts.Statement,
-): ProjectResolutionExportRecord[] {
+): ModuleFactsExportRecord[] {
   if (ts.isFunctionDeclaration(statement) && statement.name) {
     return [
       createLocalExportRecord({
@@ -154,7 +151,7 @@ function collectDeclarationExports(
 function collectExportDeclaration(
   filePath: string,
   statement: ts.ExportDeclaration,
-): ProjectResolutionExportRecord[] {
+): ModuleFactsExportRecord[] {
   const specifier =
     statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
       ? statement.moduleSpecifier.text
@@ -210,7 +207,7 @@ function createLocalExportRecord(input: {
   exportedName: string;
   localName: string;
   declarationKind: "type" | "value";
-}): ProjectResolutionExportRecord {
+}): ModuleFactsExportRecord {
   return {
     filePath: input.filePath,
     exportedName: input.exportedName,
@@ -254,8 +251,8 @@ function hasDefaultModifier(statement: ts.Statement): boolean {
 }
 
 function compareExportRecords(
-  left: ProjectResolutionExportRecord,
-  right: ProjectResolutionExportRecord,
+  left: ModuleFactsExportRecord,
+  right: ModuleFactsExportRecord,
 ): number {
   return (
     left.exportedName.localeCompare(right.exportedName) ||

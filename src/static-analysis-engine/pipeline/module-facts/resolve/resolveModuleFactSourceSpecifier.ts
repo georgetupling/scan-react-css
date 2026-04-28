@@ -1,14 +1,14 @@
 import { resolveSourceSpecifier } from "./resolveSourceSpecifier.js";
 import { resolveTypescriptModuleSpecifier } from "./typescriptResolution.js";
-import type { ProjectResolution } from "./types.js";
+import type { ModuleFacts } from "../types.js";
 
-export function resolveProjectSourceSpecifier(input: {
-  projectResolution: ProjectResolution;
+export function resolveModuleFactSourceSpecifier(input: {
+  moduleFacts: ModuleFacts;
   fromFilePath: string;
   specifier: string;
 }): string | undefined {
   const cacheKey = `${input.fromFilePath}\0${input.specifier}\0source`;
-  const cached = input.projectResolution.caches.moduleSpecifiers.get(cacheKey);
+  const cached = input.moduleFacts.caches.moduleSpecifiers.get(cacheKey);
   if (cached) {
     return cached.status === "resolved" ? cached.value : undefined;
   }
@@ -17,20 +17,20 @@ export function resolveProjectSourceSpecifier(input: {
     resolveSourceSpecifier({
       fromFilePath: input.fromFilePath,
       specifier: input.specifier,
-      knownFilePaths: input.projectResolution.parsedSourceFilesByFilePath,
+      knownFilePaths: input.moduleFacts.parsedSourceFilesByFilePath,
       includeTypeScriptExtensionAlternates: true,
       workspacePackageEntryPointsByPackageName:
-        input.projectResolution.workspacePackageEntryPointsByPackageName,
+        input.moduleFacts.workspacePackageEntryPointsByPackageName,
     }) ??
-    (input.projectResolution.typescriptResolution
+    (input.moduleFacts.typescriptResolution
       ? resolveTypescriptModuleSpecifier({
-          typescriptResolution: input.projectResolution.typescriptResolution,
+          typescriptResolution: input.moduleFacts.typescriptResolution,
           fromFilePath: input.fromFilePath,
           specifier: input.specifier,
         })
       : undefined);
 
-  input.projectResolution.caches.moduleSpecifiers.set(
+  input.moduleFacts.caches.moduleSpecifiers.set(
     cacheKey,
     resolvedFilePath
       ? {

@@ -1,8 +1,8 @@
 import path from "node:path";
 
-import type { ParsedProjectFile } from "../../entry/stages/types.js";
-import type { WorkspacePackageEntryPoint } from "./types.js";
-import { normalizeFilePath } from "./pathUtils.js";
+import type { ParsedProjectFile } from "../../../entry/stages/types.js";
+import type { WorkspacePackageEntryPoint } from "../types.js";
+import { normalizeFilePath } from "../shared/pathUtils.js";
 
 export function collectWorkspacePackageEntryPoints(
   parsedFiles: ParsedProjectFile[],

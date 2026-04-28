@@ -496,7 +496,6 @@ type ScanDiagnostic = {
     | "discovery"
     | "loading"
     | "parse"
-    | "module-graph"
     | "symbol-resolution"
     | "render-ir"
     | "selector-analysis"

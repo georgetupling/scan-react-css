@@ -1,4 +1,4 @@
-import type { ModuleGraph } from "../module-graph/types.js";
+import type { ModuleFacts } from "../module-facts/index.js";
 import type { RenderGraph } from "../render-model/render-graph/types.js";
 import type { RenderSubtree } from "../render-model/render-ir/index.js";
 import type { ExternalCssSummary } from "../external-css/types.js";
@@ -17,7 +17,7 @@ import { computeBatchedComponentAvailability } from "./componentAvailability.js"
 import { buildStylesheetReachabilityRecord } from "./stylesheetRecords.js";
 
 export function buildReachabilitySummary(input: {
-  moduleGraph: ModuleGraph;
+  projectResolution: ModuleFacts;
   renderGraph: RenderGraph;
   renderSubtrees: RenderSubtree[];
   cssSources: SelectorSourceInput[];
@@ -50,11 +50,12 @@ export function buildReachabilitySummary(input: {
         normalizeProjectPath(importRecord.resolvedFilePath) ?? importRecord.resolvedFilePath,
       ]),
   );
-  const analyzedSourceFilePaths = collectAnalyzedSourceFilePaths(input.moduleGraph);
+  const analyzedSourceFilePaths = collectAnalyzedSourceFilePaths(input.projectResolution);
   const directCssImportersByStylesheetPath = collectDirectCssImportersByStylesheetPath({
-    moduleGraph: input.moduleGraph,
+    projectResolution: input.projectResolution,
     knownCssFilePaths,
     packageCssImportBySpecifier,
+    sourcePackageCssImports: input.externalCssSummary.packageCssImports,
   });
   const reachabilityGraphContext = buildReachabilityGraphContext({
     renderGraph: input.renderGraph,
@@ -70,7 +71,6 @@ export function buildReachabilitySummary(input: {
   const stylesheets = input.cssSources.map((cssSource) =>
     buildStylesheetReachabilityRecord({
       cssSource,
-      moduleGraph: input.moduleGraph,
       renderGraph: input.renderGraph,
       renderSubtrees: input.renderSubtrees,
       knownCssFilePaths,

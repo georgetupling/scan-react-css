@@ -1,7 +1,7 @@
 import { buildRenderModel } from "../../pipeline/render-model/index.js";
 import type {
+  ModuleFactsStageResult,
   ParsedProjectFile,
-  ProjectResolutionStageResult,
   RenderModelStageResult,
   SymbolResolutionStageResult,
 } from "./types.js";
@@ -9,8 +9,11 @@ import type {
 export function runRenderModelStage(input: {
   parsedFiles: ParsedProjectFile[];
   symbolResolution: SymbolResolutionStageResult;
-  projectResolution: ProjectResolutionStageResult["projectResolution"];
+  moduleFacts: ModuleFactsStageResult["moduleFacts"];
   includeTraces?: boolean;
 }): RenderModelStageResult {
-  return buildRenderModel(input);
+  return buildRenderModel({
+    ...input,
+    projectResolution: input.moduleFacts,
+  });
 }

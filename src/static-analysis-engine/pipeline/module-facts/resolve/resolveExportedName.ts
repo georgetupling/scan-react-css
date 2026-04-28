@@ -1,34 +1,34 @@
-import { MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH } from "../../libraries/policy/index.js";
-import type { AnalysisTrace } from "../../types/analysis.js";
-import type { SourceAnchor } from "../../types/core.js";
-import { normalizeFilePath } from "./pathUtils.js";
-import { resolveProjectSourceSpecifier } from "./resolveProjectSourceSpecifier.js";
-import type { ProjectResolution, ProjectResolutionExportRecord } from "./types.js";
+import { MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH } from "../../../libraries/policy/index.js";
+import type { AnalysisTrace } from "../../../types/analysis.js";
+import type { SourceAnchor } from "../../../types/core.js";
+import { normalizeFilePath } from "../shared/pathUtils.js";
+import { resolveModuleFactSourceSpecifier } from "./resolveModuleFactSourceSpecifier.js";
+import type { ModuleFacts, ModuleFactsExportRecord } from "../types.js";
 
-export type ResolvedProjectResolutionExport = {
+export type ResolvedModuleFactExport = {
   targetFilePath: string;
   targetExportName: string;
   targetLocalName?: string;
 };
 
-export type ResolveProjectResolutionExportResult = {
-  resolvedExport?: ResolvedProjectResolutionExport;
+export type ResolveModuleFactExportResult = {
+  resolvedExport?: ResolvedModuleFactExport;
   traces: AnalysisTrace[];
   reason?: string;
 };
 
-export function resolveProjectExport(input: {
-  projectResolution: ProjectResolution;
+export function resolveModuleFactExport(input: {
+  moduleFacts: ModuleFacts;
   filePath: string;
   exportedName: string;
   visitedExports: Set<string>;
   currentDepth: number;
   importAnchor?: SourceAnchor;
   includeTraces?: boolean;
-}): ResolveProjectResolutionExportResult {
+}): ResolveModuleFactExportResult {
   const filePath = normalizeFilePath(input.filePath);
   const includeTraces = input.includeTraces ?? true;
-  const exportRecords = input.projectResolution.exportsByFilePath.get(filePath);
+  const exportRecords = input.moduleFacts.exportsByFilePath.get(filePath);
 
   if (!exportRecords) {
     return {
@@ -99,8 +99,8 @@ export function resolveProjectExport(input: {
   }
 
   for (const exportRecord of exportRecords) {
-    const targetFilePath = resolveReExportTargetFilePath({
-      projectResolution: input.projectResolution,
+    const targetFilePath = resolveModuleFactReExportTargetFilePath({
+      moduleFacts: input.moduleFacts,
       exportRecord,
     });
     if (!targetFilePath) {
@@ -114,7 +114,7 @@ export function resolveProjectExport(input: {
         continue;
       }
 
-      const resolvedValue = resolveProjectExport({
+      const resolvedValue = resolveModuleFactExport({
         ...input,
         filePath: targetFilePath,
         exportedName: sourceExportedName,
@@ -153,7 +153,7 @@ export function resolveProjectExport(input: {
       continue;
     }
 
-    const resolvedValue = resolveProjectExport({
+    const resolvedValue = resolveModuleFactExport({
       ...input,
       filePath: targetFilePath,
       exportedName: input.exportedName,
@@ -203,13 +203,13 @@ export function resolveProjectExport(input: {
 }
 
 export function collectAvailableExportedNames(input: {
-  projectResolution: ProjectResolution;
+  moduleFacts: ModuleFacts;
   filePath: string;
   visitedFilePaths: Set<string>;
   currentDepth: number;
 }): Set<string> {
   const filePath = normalizeFilePath(input.filePath);
-  const exportRecords = input.projectResolution.exportsByFilePath.get(filePath);
+  const exportRecords = input.moduleFacts.exportsByFilePath.get(filePath);
   const exportedNames = new Set<string>(
     exportRecords?.map((exportRecord) => exportRecord.exportedName) ?? [],
   );
@@ -223,8 +223,8 @@ export function collectAvailableExportedNames(input: {
       continue;
     }
 
-    const targetFilePath = resolveReExportTargetFilePath({
-      projectResolution: input.projectResolution,
+    const targetFilePath = resolveModuleFactReExportTargetFilePath({
+      moduleFacts: input.moduleFacts,
       exportRecord,
     });
     if (!targetFilePath || input.visitedFilePaths.has(targetFilePath)) {
@@ -245,27 +245,27 @@ export function collectAvailableExportedNames(input: {
   return exportedNames;
 }
 
-export function resolveReExportTargetFilePath(input: {
-  projectResolution: ProjectResolution;
-  exportRecord: ProjectResolutionExportRecord;
+export function resolveModuleFactReExportTargetFilePath(input: {
+  moduleFacts: ModuleFacts;
+  exportRecord: ModuleFactsExportRecord;
 }): string | undefined {
   if (!input.exportRecord.specifier) {
     return undefined;
   }
 
   const cacheKey = `${input.exportRecord.filePath}\0${input.exportRecord.specifier}\0re-export`;
-  const cached = input.projectResolution.caches.moduleSpecifiers.get(cacheKey);
+  const cached = input.moduleFacts.caches.moduleSpecifiers.get(cacheKey);
   if (cached) {
     return cached.status === "resolved" ? cached.value : undefined;
   }
 
-  const targetFilePath = resolveProjectSourceSpecifier({
-    projectResolution: input.projectResolution,
+  const targetFilePath = resolveModuleFactSourceSpecifier({
+    moduleFacts: input.moduleFacts,
     fromFilePath: input.exportRecord.filePath,
     specifier: input.exportRecord.specifier,
   });
 
-  input.projectResolution.caches.moduleSpecifiers.set(
+  input.moduleFacts.caches.moduleSpecifiers.set(
     cacheKey,
     targetFilePath
       ? {

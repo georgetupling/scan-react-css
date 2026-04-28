@@ -3,7 +3,7 @@ import type { ParsedProjectFile } from "../../entry/stages/types.js";
 import type { AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
 import type { ExperimentalCssFileAnalysis } from "../css-analysis/types.js";
-import type { ModuleGraph } from "../module-graph/types.js";
+import { getAllResolvedModuleFacts, type ModuleFacts } from "../module-facts/index.js";
 import type {
   CssModuleAnalysis,
   CssModuleAnalysisOptions,
@@ -16,7 +16,7 @@ import type {
 
 export function analyzeCssModules(input: {
   parsedFiles: ParsedProjectFile[];
-  moduleGraph: ModuleGraph;
+  projectResolution: ModuleFacts;
   cssFiles: ExperimentalCssFileAnalysis[];
   options?: CssModuleAnalysisOptions;
   includeTraces?: boolean;
@@ -50,7 +50,7 @@ function normalizeCssModuleAnalysisOptions(
 }
 
 function buildCssModuleImports(input: {
-  moduleGraph: ModuleGraph;
+  projectResolution: ModuleFacts;
   cssFiles: ExperimentalCssFileAnalysis[];
 }): CssModuleImportRecord[] {
   const imports: CssModuleImportRecord[] = [];
@@ -62,34 +62,32 @@ function buildCssModuleImports(input: {
       ),
   );
 
-  for (const moduleNode of input.moduleGraph.modulesById.values()) {
-    if (moduleNode.kind !== "source") {
-      continue;
-    }
+  for (const moduleFacts of getAllResolvedModuleFacts({
+    moduleFacts: input.projectResolution,
+  })) {
+    const sourceFilePath = normalizeProjectPath(moduleFacts.filePath);
 
-    const sourceFilePath = normalizeProjectPath(moduleNode.filePath);
-
-    for (const importRecord of moduleNode.imports) {
-      if (importRecord.importKind !== "css") {
+    for (const importFact of moduleFacts.imports) {
+      if (importFact.importKind !== "css") {
         continue;
       }
 
       const stylesheetFilePath = resolveCssModuleSpecifier({
         fromFilePath: sourceFilePath,
-        specifier: importRecord.specifier,
+        specifier: importFact.specifier,
         knownCssModuleFilePaths: cssModuleFilePaths,
       });
       if (!stylesheetFilePath) {
         continue;
       }
 
-      for (const importedName of importRecord.importedNames) {
+      for (const importedBinding of importFact.importedBindings) {
         imports.push({
           sourceFilePath,
           stylesheetFilePath,
-          specifier: importRecord.specifier,
-          localName: importedName.localName,
-          importKind: getCssModuleImportKind(importedName.importedName),
+          specifier: importFact.specifier,
+          localName: importedBinding.localName,
+          importKind: getCssModuleImportKind(importedBinding.importedName),
         });
       }
     }

@@ -1,9 +1,9 @@
 import ts from "typescript";
 import {
-  resolveProjectSourceSpecifier,
-  type ProjectResolution,
-} from "../../../../project-resolution/index.js";
-import { normalizeFilePath } from "../../../../project-resolution/pathUtils.js";
+  resolveModuleFactSourceSpecifier,
+  type ModuleFacts,
+} from "../../../../module-facts/index.js";
+import { normalizeFilePath } from "../../../../module-facts/shared/pathUtils.js";
 
 type LocalTypeEvidence = {
   filePath: string;
@@ -32,13 +32,13 @@ type TypeResolutionState = {
 };
 
 export type FiniteTypeEvidenceCache = {
-  projectResolution: ProjectResolution;
+  projectResolution: ModuleFacts;
   evidenceByFilePath: Map<string, LocalTypeEvidence>;
   resolvedExportedTypesByKey: Map<string, ResolvedTypeDeclaration | undefined>;
 };
 
 export function createFiniteTypeEvidenceCache(
-  projectResolution: ProjectResolution,
+  projectResolution: ModuleFacts,
 ): FiniteTypeEvidenceCache {
   return {
     projectResolution,
@@ -747,8 +747,8 @@ function resolveProjectLocalSourceSpecifier(
     return undefined;
   }
 
-  return resolveProjectSourceSpecifier({
-    projectResolution: cache.projectResolution,
+  return resolveModuleFactSourceSpecifier({
+    moduleFacts: cache.projectResolution,
     fromFilePath,
     specifier,
   });

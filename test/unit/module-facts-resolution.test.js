@@ -6,16 +6,16 @@ import test from "node:test";
 
 import ts from "typescript";
 
-import { buildProjectResolution } from "../../dist/static-analysis-engine/pipeline/project-resolution/buildProjectResolution.js";
 import {
+  buildModuleFacts,
   collectAvailableExportedNames,
-  resolveProjectExport,
-} from "../../dist/static-analysis-engine/pipeline/project-resolution/resolveExportedName.js";
-import { resolveProjectSourceSpecifier } from "../../dist/static-analysis-engine/pipeline/project-resolution/resolveProjectSourceSpecifier.js";
-import { resolveSourceSpecifier } from "../../dist/static-analysis-engine/pipeline/project-resolution/resolveSourceSpecifier.js";
+  resolveModuleFactExport,
+  resolveModuleFactSourceSpecifier,
+  resolveSourceSpecifier,
+} from "../../dist/static-analysis-engine.js";
 
 test("project resolution indexes imports, exports, declarations, and workspace entrypoints", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile(
         "packages/domain/src/index.ts",
@@ -160,7 +160,7 @@ test("project resolution indexes imports, exports, declarations, and workspace e
 });
 
 test("project resolution initializes shared caches without doing expensive resolution work", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [sourceFile("src/App.tsx", "export const App = () => null;")],
   });
 
@@ -170,7 +170,7 @@ test("project resolution initializes shared caches without doing expensive resol
 });
 
 test("project resolution indexes exported expression bindings", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile(
         "src/tokens.ts",
@@ -214,7 +214,7 @@ test("project resolution indexes exported expression bindings", () => {
 });
 
 test("project resolution indexes exported enums and namespace declarations", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile(
         "src/tokens.ts",
@@ -287,15 +287,15 @@ test("project resolution indexes exported enums and namespace declarations", () 
 });
 
 test("project resolution resolves direct and named re-exports", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile("src/index.ts", 'export { primaryButton as button } from "./tokens.ts";'),
       sourceFile("src/tokens.ts", 'export const primaryButton = "btn--primary";'),
     ],
   });
 
-  const result = resolveProjectExport({
-    projectResolution: resolution,
+  const result = resolveModuleFactExport({
+    moduleFacts: resolution,
     filePath: "src/index.ts",
     exportedName: "button",
     visitedExports: new Set(["src/index.ts:button"]),
@@ -314,15 +314,15 @@ test("project resolution resolves direct and named re-exports", () => {
 });
 
 test("project resolution resolves star re-exports with TypeScript extension alternates", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile("src/index.ts", 'export * from "./roles.js";'),
       sourceFile("src/roles.ts", 'export const memberRole = "owner";'),
     ],
   });
 
-  const result = resolveProjectExport({
-    projectResolution: resolution,
+  const result = resolveModuleFactExport({
+    moduleFacts: resolution,
     filePath: "src/index.ts",
     exportedName: "memberRole",
     visitedExports: new Set(["src/index.ts:memberRole"]),
@@ -341,7 +341,7 @@ test("project resolution resolves star re-exports with TypeScript extension alte
 });
 
 test("project resolution indexes namespace re-exports as available exported names", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile("src/index.ts", 'export * as tokens from "./tokens.ts";'),
       sourceFile("src/tokens.ts", 'export const primary = "btn";'),
@@ -369,7 +369,7 @@ test("project resolution indexes namespace re-exports as available exported name
   assert.deepEqual(
     [
       ...collectAvailableExportedNames({
-        projectResolution: resolution,
+        moduleFacts: resolution,
         filePath: "src/index.ts",
         visitedFilePaths: new Set(["src/index.ts"]),
         currentDepth: 0,
@@ -380,15 +380,15 @@ test("project resolution indexes namespace re-exports as available exported name
 });
 
 test("project resolution resolves default re-exports", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile("src/index.ts", 'export { default as Button } from "./Button.tsx";'),
       sourceFile("src/Button.tsx", "export default function Button() { return null; }"),
     ],
   });
 
-  const result = resolveProjectExport({
-    projectResolution: resolution,
+  const result = resolveModuleFactExport({
+    moduleFacts: resolution,
     filePath: "src/index.ts",
     exportedName: "Button",
     visitedExports: new Set(["src/index.ts:Button"]),
@@ -407,15 +407,15 @@ test("project resolution resolves default re-exports", () => {
 });
 
 test("project resolution resolves type-only re-exports through barrels", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile("src/index.ts", 'export type { ButtonProps } from "./types.ts";'),
       sourceFile("src/types.ts", 'export type ButtonProps = { variant?: "primary" };'),
     ],
   });
 
-  const result = resolveProjectExport({
-    projectResolution: resolution,
+  const result = resolveModuleFactExport({
+    moduleFacts: resolution,
     filePath: "src/index.ts",
     exportedName: "ButtonProps",
     visitedExports: new Set(["src/index.ts:ButtonProps"]),
@@ -434,7 +434,7 @@ test("project resolution resolves type-only re-exports through barrels", () => {
 });
 
 test("project resolution pins supported ESM re-export forms", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile(
         "src/index.ts",
@@ -547,7 +547,7 @@ test("project resolution pins supported ESM re-export forms", () => {
   assert.deepEqual(
     [
       ...collectAvailableExportedNames({
-        projectResolution: resolution,
+        moduleFacts: resolution,
         filePath: "src/index.ts",
         visitedFilePaths: new Set(["src/index.ts"]),
         currentDepth: 0,
@@ -558,7 +558,7 @@ test("project resolution pins supported ESM re-export forms", () => {
 });
 
 test("project resolution caches repeated source-specifier lookups", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile("src/App.tsx", 'import { token } from "./tokens.ts";'),
       sourceFile("src/tokens.ts", 'export const token = "btn";'),
@@ -566,16 +566,16 @@ test("project resolution caches repeated source-specifier lookups", () => {
   });
 
   assert.equal(
-    resolveProjectSourceSpecifier({
-      projectResolution: resolution,
+    resolveModuleFactSourceSpecifier({
+      moduleFacts: resolution,
       fromFilePath: "src/App.tsx",
       specifier: "./tokens.ts",
     }),
     "src/tokens.ts",
   );
   assert.equal(
-    resolveProjectSourceSpecifier({
-      projectResolution: resolution,
+    resolveModuleFactSourceSpecifier({
+      moduleFacts: resolution,
       fromFilePath: "src/App.tsx",
       specifier: "./tokens.ts",
     }),
@@ -598,21 +598,21 @@ test("project resolution caches repeated source-specifier lookups", () => {
 });
 
 test("project resolution caches negative source-specifier lookups", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [sourceFile("src/App.tsx", 'import { token } from "./missing";')],
   });
 
   assert.equal(
-    resolveProjectSourceSpecifier({
-      projectResolution: resolution,
+    resolveModuleFactSourceSpecifier({
+      moduleFacts: resolution,
       fromFilePath: "src/App.tsx",
       specifier: "./missing",
     }),
     undefined,
   );
   assert.equal(
-    resolveProjectSourceSpecifier({
-      projectResolution: resolution,
+    resolveModuleFactSourceSpecifier({
+      moduleFacts: resolution,
       fromFilePath: "src/App.tsx",
       specifier: "./missing",
     }),
@@ -649,7 +649,7 @@ test("project resolution resolves package exports subpaths through TypeScript", 
       "utf8",
     );
 
-    const resolution = buildProjectResolution({
+    const resolution = buildModuleFacts({
       parsedFiles: [
         sourceFile("src/App.tsx", 'import { buttonClass } from "pkg/button";'),
         sourceFile("node_modules/pkg/src/button.ts", 'export const buttonClass = "btn";'),
@@ -662,8 +662,8 @@ test("project resolution resolves package exports subpaths through TypeScript", 
     });
 
     assert.equal(
-      resolveProjectSourceSpecifier({
-        projectResolution: resolution,
+      resolveModuleFactSourceSpecifier({
+        moduleFacts: resolution,
         fromFilePath: "src/App.tsx",
         specifier: "pkg/button",
       }),
@@ -675,7 +675,7 @@ test("project resolution resolves package exports subpaths through TypeScript", 
 });
 
 test("project resolution resolves tsconfig path aliases with fallback targets", () => {
-  const resolution = buildProjectResolution({
+  const resolution = buildModuleFacts({
     parsedFiles: [
       sourceFile("src/App.tsx", 'import { buttonClass } from "@app/tokens";'),
       sourceFile("src/generated/tokens.ts", 'export const buttonClass = "btn";'),
@@ -692,8 +692,8 @@ test("project resolution resolves tsconfig path aliases with fallback targets", 
   });
 
   assert.equal(
-    resolveProjectSourceSpecifier({
-      projectResolution: resolution,
+    resolveModuleFactSourceSpecifier({
+      moduleFacts: resolution,
       fromFilePath: "src/App.tsx",
       specifier: "@app/tokens",
     }),
@@ -722,7 +722,7 @@ test("project resolution rejects TypeScript-resolved modules that were not parse
       "utf8",
     );
 
-    const resolution = buildProjectResolution({
+    const resolution = buildModuleFacts({
       parsedFiles: [sourceFile("src/App.tsx", 'import { buttonClass } from "unparsed-lib";')],
       projectRoot,
       compilerOptions: {
@@ -732,8 +732,8 @@ test("project resolution rejects TypeScript-resolved modules that were not parse
     });
 
     assert.equal(
-      resolveProjectSourceSpecifier({
-        projectResolution: resolution,
+      resolveModuleFactSourceSpecifier({
+        moduleFacts: resolution,
         fromFilePath: "src/App.tsx",
         specifier: "unparsed-lib",
       }),
@@ -823,8 +823,8 @@ function expressionText(expression) {
 }
 
 function resolveExportForTest(projectResolution, exportedName) {
-  return resolveProjectExport({
-    projectResolution,
+  return resolveModuleFactExport({
+    moduleFacts: projectResolution,
     filePath: "src/index.ts",
     exportedName,
     visitedExports: new Set([`src/index.ts:${exportedName}`]),

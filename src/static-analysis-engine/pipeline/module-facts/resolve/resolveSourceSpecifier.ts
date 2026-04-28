@@ -1,4 +1,4 @@
-import { normalizeFilePath } from "./pathUtils.js";
+import { normalizeFilePath } from "../shared/pathUtils.js";
 
 export type ResolveSourceSpecifierInput = {
   fromFilePath: string;

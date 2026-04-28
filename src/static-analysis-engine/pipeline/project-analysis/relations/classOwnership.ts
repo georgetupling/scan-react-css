@@ -1,4 +1,5 @@
 import type { AnalysisTrace } from "../../../types/analysis.js";
+import { getAllResolvedModuleFacts } from "../../module-facts/index.js";
 import type {
   ClassDefinitionAnalysis,
   ClassOwnershipAnalysis,
@@ -101,26 +102,25 @@ export function buildImporterComponentsByStylesheetId(input: {
   const importerComponentsByStylesheetId = new Map<ProjectAnalysisId, ComponentAnalysis[]>();
   const stylesheetIdByPath = new Map(input.indexes.stylesheetIdByPath);
 
-  for (const moduleNode of input.input.moduleGraph.modulesById.values()) {
-    if (moduleNode.kind !== "source") {
-      continue;
-    }
-
+  for (const moduleFacts of getAllResolvedModuleFacts({
+    moduleFacts: input.input.projectResolution,
+  })) {
     const sourceFileId = input.indexes.sourceFileIdByPath.get(
-      normalizeProjectPath(moduleNode.filePath),
+      normalizeProjectPath(moduleFacts.filePath),
     );
     if (!sourceFileId) {
       continue;
     }
 
-    for (const importRecord of moduleNode.imports) {
+    for (const importRecord of moduleFacts.imports) {
       if (importRecord.importKind !== "css") {
         continue;
       }
 
       const stylesheetId = resolveStylesheetImportId({
-        fromFilePath: moduleNode.filePath,
+        fromFilePath: moduleFacts.filePath,
         specifier: importRecord.specifier,
+        resolvedFilePath: importRecord.resolution.resolvedFilePath,
         stylesheetIdByPath,
       });
       if (!stylesheetId) {
@@ -174,8 +174,16 @@ export function buildClassConsumerSummary(input: {
 export function resolveStylesheetImportId(input: {
   fromFilePath: string;
   specifier: string;
+  resolvedFilePath?: string;
   stylesheetIdByPath: Map<string, ProjectAnalysisId>;
 }): ProjectAnalysisId | undefined {
+  if (input.resolvedFilePath) {
+    const stylesheetId = input.stylesheetIdByPath.get(normalizeProjectPath(input.resolvedFilePath));
+    if (stylesheetId) {
+      return stylesheetId;
+    }
+  }
+
   if (!input.specifier.startsWith(".")) {
     return undefined;
   }

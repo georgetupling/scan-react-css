@@ -2,8 +2,8 @@ import type { UnsupportedClassReferenceDiagnostic } from "../../pipeline/render-
 import type { ExperimentalCssFileAnalysis } from "../../pipeline/css-analysis/index.js";
 import type { CssModuleAnalysis } from "../../pipeline/css-modules/index.js";
 import type { ExternalCssSummary } from "../../pipeline/external-css/index.js";
-import type { ModuleGraph } from "../../pipeline/module-graph/index.js";
 import { buildProjectAnalysis } from "../../pipeline/project-analysis/index.js";
+import type { ModuleFacts } from "../../pipeline/module-facts/index.js";
 import type { ReachabilitySummary } from "../../pipeline/reachability/index.js";
 import type { RenderGraph } from "../../pipeline/render-model/render-graph/index.js";
 import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.js";
@@ -11,7 +11,7 @@ import type { RuntimeDomClassReference } from "../../pipeline/runtime-dom/index.
 import type { ProjectAnalysisStageResult, SelectorAnalysisStageResult } from "./types.js";
 
 export function runProjectAnalysisStage(input: {
-  moduleGraph: ModuleGraph;
+  moduleFacts: ModuleFacts;
   cssFiles: ExperimentalCssFileAnalysis[];
   cssModules: CssModuleAnalysis;
   externalCssSummary: ExternalCssSummary;
@@ -24,6 +24,9 @@ export function runProjectAnalysisStage(input: {
   includeTraces?: boolean;
 }): ProjectAnalysisStageResult {
   return {
-    projectAnalysis: buildProjectAnalysis(input),
+    projectAnalysis: buildProjectAnalysis({
+      ...input,
+      projectResolution: input.moduleFacts,
+    }),
   };
 }

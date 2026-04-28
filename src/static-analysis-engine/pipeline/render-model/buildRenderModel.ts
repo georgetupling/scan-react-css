@@ -15,7 +15,7 @@ import type {
   SameFileComponentDefinition,
 } from "./render-ir/index.js";
 import type { ProjectBindingResolution } from "../symbol-resolution/index.js";
-import type { ProjectResolution } from "../project-resolution/index.js";
+import type { ModuleFacts } from "../module-facts/index.js";
 
 export type RenderModelBuildInput = {
   parsedFiles: Array<{
@@ -23,7 +23,7 @@ export type RenderModelBuildInput = {
     parsedSourceFile: ts.SourceFile;
   }>;
   symbolResolution: ProjectBindingResolution;
-  projectResolution: ProjectResolution;
+  projectResolution: ModuleFacts;
   includeTraces?: boolean;
 };
 

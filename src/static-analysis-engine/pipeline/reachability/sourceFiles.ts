@@ -1,9 +1,8 @@
-import type { ModuleGraph } from "../module-graph/types.js";
+import { getAnalyzedModuleFilePaths, type ModuleFacts } from "../module-facts/index.js";
 import { normalizeProjectPath } from "./pathUtils.js";
 
-export function collectAnalyzedSourceFilePaths(moduleGraph: ModuleGraph): string[] {
-  return [...moduleGraph.modulesById.values()]
-    .filter((moduleNode) => moduleNode.kind === "source")
-    .map((moduleNode) => normalizeProjectPath(moduleNode.filePath) ?? moduleNode.filePath)
+export function collectAnalyzedSourceFilePaths(projectResolution: ModuleFacts): string[] {
+  return getAnalyzedModuleFilePaths({ moduleFacts: projectResolution })
+    .map((filePath) => normalizeProjectPath(filePath) ?? filePath)
     .sort((left, right) => left.localeCompare(right));
 }
