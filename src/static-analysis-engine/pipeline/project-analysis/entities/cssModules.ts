@@ -9,6 +9,7 @@ import type {
   ProjectAnalysisBuildInput,
   ProjectAnalysisIndexes,
 } from "../types.js";
+import { getCssModuleBindingsForFile } from "../../symbol-resolution/index.js";
 import {
   compareById,
   createCssModuleAliasId,
@@ -27,8 +28,14 @@ export function buildCssModuleImports(
   input: ProjectAnalysisBuildInput,
   indexes: ProjectAnalysisIndexes,
 ): CssModuleImportAnalysis[] {
-  return [...input.symbolResolution.resolvedCssModuleImportsByFilePath.values()]
-    .flatMap((imports) => imports)
+  return [...input.symbolResolution.symbolsByFilePath.keys()]
+    .flatMap(
+      (filePath) =>
+        getCssModuleBindingsForFile({
+          symbolResolution: input.symbolResolution,
+          filePath,
+        }).imports,
+    )
     .map((cssModuleImport) => {
       const sourceFilePath = normalizeProjectPath(cssModuleImport.sourceFilePath);
       const stylesheetFilePath = normalizeProjectPath(cssModuleImport.stylesheetFilePath);
@@ -83,11 +90,19 @@ export function buildCssModuleMemberReferences(input: {
     );
   }
 
+  const cssModuleBindingsByFilePath = new Map(
+    [...input.projectInput.symbolResolution.symbolsByFilePath.keys()].map((filePath) => [
+      filePath,
+      getCssModuleBindingsForFile({
+        symbolResolution: input.projectInput.symbolResolution,
+        filePath,
+      }),
+    ]),
+  );
+
   return {
-    aliases: [
-      ...input.projectInput.symbolResolution.resolvedCssModuleNamespaceBindingsByFilePath.values(),
-    ]
-      .flatMap((bindingsByLocalName) => [...bindingsByLocalName.values()])
+    aliases: [...cssModuleBindingsByFilePath.values()]
+      .flatMap((bindings) => bindings.namespaceBindings)
       .filter((binding) => binding.sourceKind === "alias")
       .map((alias) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
@@ -115,10 +130,8 @@ export function buildCssModuleMemberReferences(input: {
       })
       .filter((alias): alias is CssModuleAliasAnalysis => Boolean(alias))
       .sort(compareById),
-    destructuredBindings: [
-      ...input.projectInput.symbolResolution.resolvedCssModuleMemberBindingsByFilePath.values(),
-    ]
-      .flatMap((bindingsByLocalName) => [...bindingsByLocalName.values()])
+    destructuredBindings: [...cssModuleBindingsByFilePath.values()]
+      .flatMap((bindings) => bindings.memberBindings)
       .map((binding) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
           createCssModuleImportLookupKey({
@@ -151,10 +164,8 @@ export function buildCssModuleMemberReferences(input: {
       })
       .filter((binding): binding is CssModuleDestructuredBindingAnalysis => Boolean(binding))
       .sort(compareById),
-    memberReferences: [
-      ...input.projectInput.symbolResolution.resolvedCssModuleMemberReferencesByFilePath.values(),
-    ]
-      .flatMap((references) => references)
+    memberReferences: [...cssModuleBindingsByFilePath.values()]
+      .flatMap((bindings) => bindings.memberReferences)
       .map((reference) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
           createCssModuleImportLookupKey({
@@ -186,10 +197,8 @@ export function buildCssModuleMemberReferences(input: {
       })
       .filter((reference): reference is CssModuleMemberReferenceAnalysis => Boolean(reference))
       .sort(compareById),
-    diagnostics: [
-      ...input.projectInput.symbolResolution.resolvedCssModuleBindingDiagnosticsByFilePath.values(),
-    ]
-      .flatMap((diagnostics) => diagnostics)
+    diagnostics: [...cssModuleBindingsByFilePath.values()]
+      .flatMap((bindings) => bindings.diagnostics)
       .map((diagnostic) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
           createCssModuleImportLookupKey({

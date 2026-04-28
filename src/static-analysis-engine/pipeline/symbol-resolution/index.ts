@@ -1,16 +1,20 @@
 export { collectTopLevelSymbols, createSymbolId } from "./collection/collectTopLevelSymbols.js";
 export { buildProjectBindingResolution } from "./assembly/buildProjectBindingResolution.js";
+export { getSymbol } from "./api/getSymbol.js";
 export {
-  getSymbol,
+  getCssModuleBindingsForFile,
   resolveCssModuleMember,
   resolveCssModuleMemberAccess,
   resolveCssModuleNamespace,
+} from "./api/getCssModuleResolution.js";
+export type { ResolvedCssModuleBindingsForFile } from "./api/getCssModuleResolution.js";
+export {
   resolveExportedTypeDeclaration,
   resolveExportedTypeBinding,
   resolveTypeDeclaration,
   resolveTypeBinding,
-} from "./api/getSymbolResolution.js";
-export type { ResolvedTypeDeclaration } from "./api/getSymbolResolution.js";
+} from "./api/getTypeResolution.js";
+export type { ResolvedTypeDeclaration } from "./api/getTypeResolution.js";
 export type {
   EngineSymbol,
   ProjectBindingResolution,

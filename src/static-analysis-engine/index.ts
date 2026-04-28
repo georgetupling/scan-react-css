@@ -17,6 +17,7 @@ export {
   buildProjectBindingResolution,
   collectTopLevelSymbols,
   createSymbolId,
+  getCssModuleBindingsForFile,
   getSymbol,
   resolveCssModuleMember,
   resolveCssModuleMemberAccess,
@@ -103,6 +104,7 @@ export type {
 export type {
   EngineSymbol,
   ProjectBindingResolution,
+  ResolvedCssModuleBindingsForFile,
   ResolvedCssModuleBindingDiagnostic,
   ResolvedCssModuleImport,
   ResolvedCssModuleMemberAccessResult,

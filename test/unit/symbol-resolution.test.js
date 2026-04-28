@@ -7,6 +7,7 @@ import {
   buildModuleFacts,
   buildProjectBindingResolution,
   collectTopLevelSymbols,
+  getCssModuleBindingsForFile,
   getSymbol,
   resolveCssModuleMember,
   resolveCssModuleMemberAccess,
@@ -409,6 +410,28 @@ test("symbol resolution resolves CSS Module namespace, alias, destructuring, and
     moduleFacts,
     includeTraces: false,
   });
+  const cssModuleBindings = getCssModuleBindingsForFile({
+    symbolResolution: resolution,
+    filePath: "src/Button.tsx",
+  });
+
+  assert.deepEqual(
+    cssModuleBindings.imports.map((binding) => binding.localName),
+    ["styles"],
+  );
+  assert.deepEqual(
+    cssModuleBindings.namespaceBindings.map((binding) => binding.localName),
+    ["styles", "s"],
+  );
+  assert.deepEqual(
+    cssModuleBindings.memberBindings.map((binding) => binding.localName),
+    ["root", "buttonClass"],
+  );
+  assert.deepEqual(
+    cssModuleBindings.memberReferences.map((binding) => binding.memberName),
+    ["button", "root", "root", "tone"],
+  );
+  assert.deepEqual(cssModuleBindings.diagnostics, []);
 
   assert.deepEqual(resolveCssModuleNamespaceForTest(resolution, "src/Button.tsx", "styles"), {
     sourceFilePath: "src/Button.tsx",
