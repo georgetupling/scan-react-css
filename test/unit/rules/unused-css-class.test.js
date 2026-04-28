@@ -503,11 +503,11 @@ test("unused-css-class resolves finite variants through imported const-derived t
 test("unused-css-class resolves const-derived variants through workspace package barrels", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
-      "packages/domain/src/index.ts",
+      "packages/@loremaster/domain/src/index.ts",
       ['export * from "./worlds.enums.js";', ""].join("\n"),
     )
     .withSourceFile(
-      "packages/domain/src/worlds.enums.ts",
+      "packages/@loremaster/domain/src/worlds.enums.ts",
       [
         "export const WORLD_ROLES = ['owner', 'editor', 'reader'] as const;",
         "export type WorldRole = (typeof WORLD_ROLES)[number];",
@@ -515,11 +515,11 @@ test("unused-css-class resolves const-derived variants through workspace package
       ].join("\n"),
     )
     .withSourceFile(
-      "packages/api-contracts/src/index.ts",
+      "packages/@loremaster/api-contracts/src/index.ts",
       ['export * from "./worlds/world-members.contract.js";', ""].join("\n"),
     )
     .withSourceFile(
-      "packages/api-contracts/src/worlds/world-members.contract.ts",
+      "packages/@loremaster/api-contracts/src/worlds/world-members.contract.ts",
       [
         'import type { WorldRole } from "@loremaster/domain";',
         "export type WorldMemberRole = WorldRole;",

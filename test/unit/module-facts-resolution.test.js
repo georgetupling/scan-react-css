@@ -18,7 +18,7 @@ test("module facts expose resolved imports and exports for workspace barrels", (
   const moduleFacts = buildModuleFacts({
     parsedFiles: [
       sourceFile(
-        "packages/domain/src/index.ts",
+        "packages/@loremaster/domain/src/index.ts",
         `
           export * from "./worlds.enums.js";
           export type { WorldRole as DomainWorldRole } from "./worlds.enums.js";
@@ -37,7 +37,7 @@ test("module facts expose resolved imports and exports for workspace barrels", (
         `,
       ),
       sourceFile(
-        "packages/domain/src/worlds.enums.ts",
+        "packages/@loremaster/domain/src/worlds.enums.ts",
         `
           export const WORLD_ROLES = ["owner", "editor", "viewer"] as const;
           export type WorldRole = (typeof WORLD_ROLES)[number];
@@ -87,8 +87,8 @@ test("module facts expose resolved imports and exports for workspace barrels", (
         importKind: "type-only",
         resolution: {
           status: "resolved",
-          resolvedFilePath: "packages/domain/src/index.ts",
-          resolvedModuleId: "module:packages/domain/src/index.ts",
+          resolvedFilePath: "packages/@loremaster/domain/src/index.ts",
+          resolvedModuleId: "module:packages/@loremaster/domain/src/index.ts",
           confidence: "heuristic",
         },
       },
@@ -97,7 +97,7 @@ test("module facts expose resolved imports and exports for workspace barrels", (
 
   const barrelFacts = getResolvedModuleFacts({
     moduleFacts,
-    filePath: "packages/domain/src/index.ts",
+    filePath: "packages/@loremaster/domain/src/index.ts",
   });
   assert.ok(barrelFacts);
   assert.deepEqual(
@@ -121,8 +121,8 @@ test("module facts expose resolved imports and exports for workspace barrels", (
         reexport: {
           status: "resolved",
           specifier: "./worlds.enums.js",
-          resolvedFilePath: "packages/domain/src/worlds.enums.ts",
-          resolvedModuleId: "module:packages/domain/src/worlds.enums.ts",
+          resolvedFilePath: "packages/@loremaster/domain/src/worlds.enums.ts",
+          resolvedModuleId: "module:packages/@loremaster/domain/src/worlds.enums.ts",
           confidence: "exact",
         },
       },
@@ -136,8 +136,8 @@ test("module facts expose resolved imports and exports for workspace barrels", (
         reexport: {
           status: "resolved",
           specifier: "./worlds.enums.js",
-          resolvedFilePath: "packages/domain/src/worlds.enums.ts",
-          resolvedModuleId: "module:packages/domain/src/worlds.enums.ts",
+          resolvedFilePath: "packages/@loremaster/domain/src/worlds.enums.ts",
+          resolvedModuleId: "module:packages/@loremaster/domain/src/worlds.enums.ts",
           confidence: "exact",
         },
       },
@@ -459,7 +459,7 @@ test("source specifier resolver can use unique workspace package entrypoint evid
       specifier: "@loremaster/domain",
       knownFilePaths: new Set(["packages/domain/src/index.ts"]),
       workspacePackageEntryPointsByPackageName: new Map([
-        ["domain", ["packages/domain/src/index.ts"]],
+        ["@loremaster/domain", ["packages/domain/src/index.ts"]],
       ]),
     }),
     "packages/domain/src/index.ts",
@@ -471,10 +471,24 @@ test("source specifier resolver can use unique workspace package entrypoint evid
       specifier: "@loremaster/domain",
       knownFilePaths: new Set(["packages/domain/src/index.ts", "libs/domain/src/index.ts"]),
       workspacePackageEntryPointsByPackageName: new Map([
-        ["domain", ["packages/domain/src/index.ts", "libs/domain/src/index.ts"]],
+        ["@loremaster/domain", ["packages/domain/src/index.ts", "libs/domain/src/index.ts"]],
       ]),
     }),
     undefined,
+  );
+});
+
+test("source specifier resolver preserves scoped package names for subpath imports", () => {
+  assert.equal(
+    resolveSourceSpecifier({
+      fromFilePath: "src/MemberRoleBadge.tsx",
+      specifier: "@loremaster/domain/button",
+      knownFilePaths: new Set(["packages/domain/src/index.ts"]),
+      workspacePackageEntryPointsByPackageName: new Map([
+        ["@loremaster/domain", ["packages/domain/src/index.ts"]],
+      ]),
+    }),
+    "packages/domain/src/index.ts",
   );
 });
 

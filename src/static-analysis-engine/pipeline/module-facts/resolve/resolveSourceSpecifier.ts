@@ -109,7 +109,11 @@ function getPackageNameFromSpecifier(specifier: string): string | undefined {
     return undefined;
   }
 
-  return segments[0].startsWith("@") ? segments[1] : segments[0];
+  if (segments[0].startsWith("@")) {
+    return segments.length >= 2 ? `${segments[0]}/${segments[1]}` : undefined;
+  }
+
+  return segments[0];
 }
 
 function normalizeSegments(segments: string[]): string {

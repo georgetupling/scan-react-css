@@ -53,7 +53,20 @@ function inferWorkspacePackageName(filePath: string): string | undefined {
   }
 
   if (parentName === "src") {
-    return segments.at(-3);
+    const packageName = segments.at(-3);
+    const scopeName = segments.at(-4);
+    if (packageName?.startsWith("@")) {
+      return undefined;
+    }
+    if (scopeName?.startsWith("@") && packageName) {
+      return `${scopeName}/${packageName}`;
+    }
+    return packageName;
+  }
+
+  const scopeName = segments.at(-3);
+  if (scopeName?.startsWith("@")) {
+    return `${scopeName}/${parentName}`;
   }
 
   return parentName;
