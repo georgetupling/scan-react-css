@@ -1,3 +1,4 @@
+export { collectExportedExpressionBindings } from "./collectExportedExpressionBindings.js";
 export { collectTopLevelSymbols, createSymbolId } from "./collectSymbols.js";
 export {
   buildProjectBindingResolution,

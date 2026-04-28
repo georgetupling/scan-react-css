@@ -22,6 +22,7 @@ export function runSymbolResolutionStage(input: {
   });
 
   return buildProjectBindingResolution({
+    parsedFiles: input.parsedFiles,
     symbolsByFilePath: collectedSymbols.symbolsByFilePath,
     projectResolution: input.moduleFacts,
     includeTraces: input.includeTraces,

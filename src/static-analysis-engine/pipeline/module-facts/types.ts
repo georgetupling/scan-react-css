@@ -170,7 +170,6 @@ export type ModuleFacts = {
   importsByFilePath: Map<string, ModuleFactsImportRecord[]>;
   exportsByFilePath: Map<string, ModuleFactsExportRecord[]>;
   declarationsByFilePath: Map<string, ModuleFactsDeclarationIndex>;
-  exportedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
   resolvedModuleFactsByFilePath: Map<string, ResolvedModuleFacts>;
   workspacePackageEntryPointsByPackageName: Map<string, WorkspacePackageEntryPoint[]>;
   typescriptResolution?: ModuleFactsTypescriptResolution;

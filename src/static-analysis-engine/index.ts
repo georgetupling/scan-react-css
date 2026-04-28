@@ -15,7 +15,11 @@ export {
   resolveSourceSpecifier,
 } from "./pipeline/module-facts/index.js";
 export { parseSourceFile } from "./pipeline/parse/index.js";
-export { collectTopLevelSymbols, createSymbolId } from "./pipeline/symbol-resolution/index.js";
+export {
+  buildProjectBindingResolution,
+  collectTopLevelSymbols,
+  createSymbolId,
+} from "./pipeline/symbol-resolution/index.js";
 export { summarizeClassNameExpression, toAbstractClassSet } from "./pipeline/render-model/index.js";
 export { buildExternalCssSummary } from "./pipeline/external-css/index.js";
 export { analyzeRuntimeDomClasses } from "./pipeline/runtime-dom/index.js";
@@ -104,7 +108,15 @@ export type {
   ResolvedModuleImportFact,
   ResolvedTopLevelBindingFact,
 } from "./pipeline/module-facts/index.js";
-export type { EngineSymbol, SymbolKind } from "./pipeline/symbol-resolution/index.js";
+export type {
+  EngineSymbol,
+  ProjectBindingResolution,
+  ResolvedImportedBinding,
+  ResolvedImportedComponentBinding,
+  ResolvedNamespaceImport,
+  ResolvedProjectExport,
+  SymbolKind,
+} from "./pipeline/symbol-resolution/index.js";
 export type {
   AbstractClassSet,
   AbstractValue,

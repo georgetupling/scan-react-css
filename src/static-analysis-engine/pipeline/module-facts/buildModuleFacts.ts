@@ -2,7 +2,6 @@ import type ts from "typescript";
 
 import type { ParsedProjectFile } from "../../entry/stages/types.js";
 import { collectDeclarations } from "./collect/collectDeclarations.js";
-import { collectExportedExpressionBindings } from "./collect/collectExportedExpressionBindings.js";
 import { applyExportEvidenceToDeclarations, collectExports } from "./collect/collectExports.js";
 import { collectImports } from "./collect/collectImports.js";
 import { buildResolvedModuleFacts } from "./normalize/buildResolvedModuleFacts.js";
@@ -29,7 +28,6 @@ export function buildModuleFacts(input: {
   const importsByFilePath = new Map<string, ModuleFactsImportRecord[]>();
   const exportsByFilePath = new Map<string, ModuleFactsExportRecord[]>();
   const declarationsByFilePath = new Map<string, ModuleFactsDeclarationIndex>();
-  const exportedExpressionBindingsByFilePath = new Map<string, Map<string, ts.Expression>>();
 
   for (const parsedFile of sortedParsedFiles) {
     const filePath = normalizeFilePath(parsedFile.filePath);
@@ -42,10 +40,6 @@ export function buildModuleFacts(input: {
 
     exportsByFilePath.set(filePath, exports);
     declarationsByFilePath.set(filePath, declarations);
-    exportedExpressionBindingsByFilePath.set(
-      filePath,
-      collectExportedExpressionBindings(parsedFile.parsedSourceFile),
-    );
   }
 
   const moduleFacts: ModuleFacts = {
@@ -53,7 +47,6 @@ export function buildModuleFacts(input: {
     importsByFilePath,
     exportsByFilePath,
     declarationsByFilePath,
-    exportedExpressionBindingsByFilePath,
     resolvedModuleFactsByFilePath: new Map(),
     workspacePackageEntryPointsByPackageName: collectWorkspacePackageEntryPoints(sortedParsedFiles),
     typescriptResolution: buildTypescriptResolution({

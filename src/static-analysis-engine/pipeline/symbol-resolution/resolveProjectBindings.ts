@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 import { MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH } from "../../libraries/policy/index.js";
+import type { ParsedProjectFile } from "../../entry/stages/types.js";
 import {
   collectAvailableExportedNames,
   createModuleFactsModuleId,
@@ -14,6 +15,7 @@ import {
 } from "../module-facts/index.js";
 import type { AnalysisTrace } from "../../types/analysis.js";
 import type { EngineSymbolId } from "../../types/core.js";
+import { collectExportedExpressionBindings } from "./collectExportedExpressionBindings.js";
 import type {
   EngineSymbol,
   ProjectBindingResolution,
@@ -24,6 +26,7 @@ import type {
 } from "./types.js";
 
 export function buildProjectBindingResolution(input: {
+  parsedFiles: ParsedProjectFile[];
   symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   projectResolution: ModuleFacts;
   includeTraces?: boolean;
@@ -47,8 +50,12 @@ export function buildProjectBindingResolution(input: {
     ]),
   );
   const symbols = new Map<EngineSymbolId, EngineSymbol>();
-  const exportedExpressionBindingsByFilePath =
-    input.projectResolution.exportedExpressionBindingsByFilePath;
+  const exportedExpressionBindingsByFilePath = new Map<string, Map<string, ts.Expression>>(
+    input.parsedFiles.map((parsedFile) => [
+      parsedFile.filePath,
+      collectExportedExpressionBindings(parsedFile.parsedSourceFile),
+    ]),
+  );
 
   for (const moduleFacts of getAllResolvedModuleFacts({
     moduleFacts: input.projectResolution,
