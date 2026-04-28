@@ -123,6 +123,69 @@ test("symbol resolution derives exported names from module facts and collects ri
   assert.equal(symbolsByLocalName.get("Theme")?.kind, "namespace");
 });
 
+test("symbol resolution preserves unresolved namespace members as structured results", () => {
+  const parsedFiles = [
+    sourceFile(
+      "src/source.ts",
+      `
+        export const ok = "ok";
+      `,
+    ),
+    sourceFile(
+      "src/barrel.ts",
+      `
+        export { ok, missing as broken } from "./source.ts";
+      `,
+    ),
+    sourceFile(
+      "src/consumer.ts",
+      `
+        import * as api from "./barrel.ts";
+      `,
+    ),
+  ];
+  const moduleFacts = buildModuleFacts({
+    parsedFiles,
+  });
+
+  const symbolsByFilePath = new Map(
+    parsedFiles.map((parsedFile) => [
+      parsedFile.filePath,
+      collectTopLevelSymbols({
+        filePath: parsedFile.filePath,
+        parsedSourceFile: parsedFile.parsedSourceFile,
+        moduleId: `module:${parsedFile.filePath}`,
+        moduleFacts,
+      }),
+    ]),
+  );
+
+  const resolution = buildProjectBindingResolution({
+    parsedFiles,
+    symbolsByFilePath,
+    moduleFacts,
+    includeTraces: false,
+  });
+
+  const namespaceImport = resolution.resolvedNamespaceImportsByFilePath.get("src/consumer.ts")?.[0];
+  assert.equal(namespaceImport?.localName, "api");
+  assert.deepEqual([...(namespaceImport?.members.keys() ?? [])], ["broken", "ok"]);
+  assert.deepEqual(namespaceImport?.members.get("ok"), {
+    kind: "resolved",
+    target: {
+      targetModuleId: "module:src/source.ts",
+      targetFilePath: "src/source.ts",
+      targetExportName: "ok",
+      targetSymbolId: "symbol:module:src/source.ts:ok",
+    },
+  });
+  assert.deepEqual(namespaceImport?.members.get("broken"), {
+    kind: "unresolved",
+    reason: "export-not-found",
+    traces: [],
+  });
+});
+
 function sourceFile(filePath, sourceText) {
   return {
     filePath,

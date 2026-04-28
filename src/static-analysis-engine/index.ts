@@ -104,8 +104,10 @@ export type {
   ProjectBindingResolution,
   ResolvedImportedBinding,
   ResolvedImportedComponentBinding,
+  ResolvedNamespaceMemberResult,
   ResolvedNamespaceImport,
   ResolvedProjectExport,
+  SymbolResolutionReason,
   SymbolKind,
 } from "./pipeline/symbol-resolution/index.js";
 export type {

@@ -6,8 +6,13 @@ import {
   type ModuleFacts,
 } from "../../module-facts/index.js";
 import type { EngineSymbolId } from "../../../types/core.js";
-import type { EngineSymbol, ResolvedNamespaceImport, ResolvedProjectExport } from "../types.js";
+import type {
+  EngineSymbol,
+  ResolvedNamespaceImport,
+  ResolvedNamespaceMemberResult,
+} from "../types.js";
 import { createSymbolResolutionTrace } from "../traces/createSymbolResolutionTrace.js";
+import { normalizeValueResolutionReason } from "./resolveImportedBindings.js";
 import { resolveImportedModuleFactExport } from "./resolveProjectExport.js";
 
 export function resolveNamespaceImportsForFile(input: {
@@ -39,11 +44,12 @@ export function resolveNamespaceImportsForFile(input: {
       if (importedBinding.importedName === "*") {
         namespaceImports.push({
           localName: importedBinding.localName,
-          exports: resolveNamespaceBundle({
+          members: resolveNamespaceBundle({
             filePath: importedFilePath,
             moduleFacts: input.moduleFacts,
             symbolsByFilePath: input.symbolsByFilePath,
             currentDepth: 0,
+            includeTraces,
           }),
           traces: includeTraces
             ? [
@@ -69,6 +75,7 @@ export function resolveNamespaceImportsForFile(input: {
         symbolsByFilePath: input.symbolsByFilePath,
         visitedNamespaceExports: new Set([`${importedFilePath}:${importedBinding.importedName}`]),
         currentDepth: 0,
+        includeTraces,
       });
       if (!resolvedNamespaceImport) {
         continue;
@@ -76,7 +83,7 @@ export function resolveNamespaceImportsForFile(input: {
 
       namespaceImports.push({
         localName: importedBinding.localName,
-        exports: resolvedNamespaceImport,
+        members: resolvedNamespaceImport,
         traces: includeTraces
           ? [
               createSymbolResolutionTrace({
@@ -104,7 +111,8 @@ function resolveNamedNamespaceImport(input: {
   symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   visitedNamespaceExports: Set<string>;
   currentDepth: number;
-}): Map<string, ResolvedProjectExport> | undefined {
+  includeTraces: boolean;
+}): Map<string, ResolvedNamespaceMemberResult> | undefined {
   if (input.currentDepth >= MAX_CROSS_FILE_IMPORT_PROPAGATION_DEPTH) {
     return undefined;
   }
@@ -132,6 +140,7 @@ function resolveNamedNamespaceImport(input: {
       moduleFacts: input.moduleFacts,
       symbolsByFilePath: input.symbolsByFilePath,
       currentDepth: input.currentDepth + 1,
+      includeTraces: input.includeTraces,
     });
   }
 
@@ -158,6 +167,7 @@ function resolveNamedNamespaceImport(input: {
       exportedName: sourceExportedName,
       visitedNamespaceExports: new Set([...input.visitedNamespaceExports, exportKey]),
       currentDepth: input.currentDepth + 1,
+      includeTraces: input.includeTraces,
     });
     if (resolvedBundle) {
       return resolvedBundle;
@@ -172,14 +182,15 @@ function resolveNamespaceBundle(input: {
   moduleFacts: ModuleFacts;
   symbolsByFilePath?: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   currentDepth: number;
-}): Map<string, ResolvedProjectExport> {
+  includeTraces: boolean;
+}): Map<string, ResolvedNamespaceMemberResult> {
   const exportedNames = collectAvailableExportedNames({
     filePath: input.filePath,
     moduleFacts: input.moduleFacts,
     visitedFilePaths: new Set([input.filePath]),
     currentDepth: input.currentDepth,
   });
-  const resolvedBindings = new Map<string, ResolvedProjectExport>();
+  const resolvedBindings = new Map<string, ResolvedNamespaceMemberResult>();
 
   for (const exportedName of exportedNames) {
     if (exportedName === "*") {
@@ -193,10 +204,21 @@ function resolveNamespaceBundle(input: {
       symbolsByFilePath: input.symbolsByFilePath,
       visitedExports: new Set([`${input.filePath}:${exportedName}`]),
       currentDepth: input.currentDepth,
+      includeTraces: input.includeTraces,
     });
     if (resolvedExport.resolvedExport) {
-      resolvedBindings.set(exportedName, resolvedExport.resolvedExport);
+      resolvedBindings.set(exportedName, {
+        kind: "resolved",
+        target: resolvedExport.resolvedExport,
+      });
+      continue;
     }
+
+    resolvedBindings.set(exportedName, {
+      kind: "unresolved",
+      reason: normalizeValueResolutionReason(resolvedExport.reason),
+      traces: resolvedExport.traces,
+    });
   }
 
   return resolvedBindings;

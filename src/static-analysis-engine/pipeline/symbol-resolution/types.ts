@@ -34,9 +34,20 @@ export type EngineSymbol = {
         traces?: AnalysisTrace[];
       }
     | { kind: "synthetic" }
-    | { kind: "unresolved"; reason: string; traces?: AnalysisTrace[] };
+    | { kind: "unresolved"; reason: SymbolResolutionReason; traces?: AnalysisTrace[] };
   metadata?: Record<string, unknown>;
 };
+
+export type SymbolResolutionReason =
+  | "target-module-not-found"
+  | "export-not-found"
+  | "binding-not-found"
+  | "external-module"
+  | "budget-exceeded"
+  | "cycle-detected"
+  | "ambiguous-star-export"
+  | "unsupported-import-form"
+  | "unresolved-imported-binding";
 
 export type ResolvedProjectExport = {
   targetModuleId: EngineModuleId;
@@ -57,9 +68,20 @@ export type ResolvedImportedBinding = {
 
 export type ResolvedImportedComponentBinding = ResolvedImportedBinding;
 
+export type ResolvedNamespaceMemberResult =
+  | {
+      kind: "resolved";
+      target: ResolvedProjectExport;
+    }
+  | {
+      kind: "unresolved";
+      reason: SymbolResolutionReason;
+      traces?: AnalysisTrace[];
+    };
+
 export type ResolvedNamespaceImport = {
   localName: string;
-  exports: Map<string, ResolvedProjectExport>;
+  members: Map<string, ResolvedNamespaceMemberResult>;
   traces: AnalysisTrace[];
 };
 

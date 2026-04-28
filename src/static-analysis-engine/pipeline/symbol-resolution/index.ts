@@ -8,7 +8,9 @@ export type {
   ProjectBindingResolution,
   ResolvedImportedBinding,
   ResolvedImportedComponentBinding,
+  ResolvedNamespaceMemberResult,
   ResolvedNamespaceImport,
   ResolvedProjectExport,
+  SymbolResolutionReason,
   SymbolKind,
 } from "./types.js";

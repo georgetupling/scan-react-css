@@ -5,7 +5,7 @@ import {
 } from "../../module-facts/index.js";
 import type { AnalysisTrace } from "../../../types/analysis.js";
 import type { EngineSymbolId } from "../../../types/core.js";
-import type { EngineSymbol, ResolvedImportedBinding } from "../types.js";
+import type { EngineSymbol, ResolvedImportedBinding, SymbolResolutionReason } from "../types.js";
 import { resolveImportedModuleFactExport } from "./resolveProjectExport.js";
 
 export function resolveImportedBindingsForFile(input: {
@@ -77,7 +77,7 @@ export function resolveImportedBindingFailureForSymbol(input: {
   moduleFacts: ModuleFacts;
   filePath: string;
   includeTraces?: boolean;
-}): { reason: string; traces: AnalysisTrace[] } | undefined {
+}): { reason: SymbolResolutionReason; traces: AnalysisTrace[] } | undefined {
   if (input.symbol.resolution.kind !== "imported") {
     return undefined;
   }
@@ -120,10 +120,26 @@ export function resolveImportedBindingFailureForSymbol(input: {
     }
 
     return {
-      reason: result.reason ?? "unresolved-imported-binding",
+      reason: normalizeValueResolutionReason(result.reason),
       traces: result.traces,
     };
   }
 
   return undefined;
+}
+
+export function normalizeValueResolutionReason(reason?: string): SymbolResolutionReason {
+  switch (reason) {
+    case "target-module-not-found":
+    case "export-not-found":
+    case "binding-not-found":
+    case "external-module":
+    case "budget-exceeded":
+    case "cycle-detected":
+    case "ambiguous-star-export":
+    case "unsupported-import-form":
+      return reason;
+    default:
+      return "unresolved-imported-binding";
+  }
 }

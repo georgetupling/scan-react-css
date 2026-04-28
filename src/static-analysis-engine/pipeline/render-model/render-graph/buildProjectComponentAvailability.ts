@@ -1,6 +1,7 @@
 import type { AnalysisTrace } from "../../../types/analysis.js";
 import type {
   ResolvedImportedComponentBinding,
+  ResolvedNamespaceMemberResult,
   ResolvedNamespaceImport,
 } from "../../symbol-resolution/types.js";
 import type { SameFileComponentDefinition } from "../render-ir/index.js";
@@ -89,8 +90,11 @@ function buildResolvedNamespaceBindingsForFile<T>(input: {
   const namespaceBindings = new Map<string, Map<string, T>>();
   for (const namespaceImport of input.resolvedNamespaceImports) {
     const resolvedBindings = new Map<string, T>();
-    for (const [exportName, resolvedExport] of namespaceImport.exports.entries()) {
-      const resolvedValue = input.getResolvedValue(resolvedExport);
+    for (const [exportName, memberResult] of namespaceImport.members.entries()) {
+      const resolvedValue = getResolvedNamespaceMemberValue({
+        memberResult,
+        getResolvedValue: input.getResolvedValue,
+      });
       if (resolvedValue) {
         resolvedBindings.set(exportName, resolvedValue);
       }
@@ -100,4 +104,15 @@ function buildResolvedNamespaceBindingsForFile<T>(input: {
   }
 
   return namespaceBindings;
+}
+
+function getResolvedNamespaceMemberValue<T>(input: {
+  memberResult: ResolvedNamespaceMemberResult;
+  getResolvedValue: (input: { targetFilePath: string; targetExportName: string }) => T | undefined;
+}): T | undefined {
+  if (input.memberResult.kind !== "resolved") {
+    return undefined;
+  }
+
+  return input.getResolvedValue(input.memberResult.target);
 }
