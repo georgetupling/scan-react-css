@@ -61,6 +61,9 @@ export function analyzeProjectSourceTexts(input: {
   const moduleFactsStage = runAnalysisStage(progress, "module-facts", "Building module facts", () =>
     runModuleFactsStage({
       parsedFiles: parseStage.parsedFiles,
+      stylesheetFilePaths: (input.selectorCssSources ?? [])
+        .map((cssSource) => cssSource.filePath)
+        .filter((filePath): filePath is string => Boolean(filePath)),
       projectRoot: input.projectRoot,
     }),
   );

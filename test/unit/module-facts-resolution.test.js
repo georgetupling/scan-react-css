@@ -47,6 +47,7 @@ test("module facts expose resolved imports and exports for workspace barrels", (
         `,
       ),
     ],
+    stylesheetFilePaths: ["src/MemberRoleBadge.css", "src/MemberRoleBadge.module.css"],
   });
 
   const componentFacts = getResolvedModuleFacts({

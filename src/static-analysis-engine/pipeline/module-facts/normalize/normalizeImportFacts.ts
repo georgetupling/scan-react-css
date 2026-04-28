@@ -83,12 +83,17 @@ function resolveImportFact(input: {
         fromFilePath: input.filePath,
         specifier: input.importRecord.specifier,
       });
-      return {
-        status: "resolved",
-        resolvedFilePath,
-        resolvedModuleId: createModuleFactsModuleId(resolvedFilePath),
-        confidence: "exact",
-      };
+      return input.moduleFacts.knownStylesheetFilePaths.has(resolvedFilePath)
+        ? {
+            status: "resolved",
+            resolvedFilePath,
+            resolvedModuleId: createModuleFactsModuleId(resolvedFilePath),
+            confidence: "exact",
+          }
+        : {
+            status: "unresolved",
+            reason: "stylesheet-specifier-not-found",
+          };
     }
 
     return {

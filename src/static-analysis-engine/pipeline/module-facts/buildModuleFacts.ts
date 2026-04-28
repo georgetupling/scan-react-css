@@ -19,6 +19,7 @@ import type {
 
 export function buildModuleFacts(input: {
   parsedFiles: ParsedProjectFile[];
+  stylesheetFilePaths?: Iterable<string>;
   projectRoot?: string;
   compilerOptions?: ts.CompilerOptions;
 }): ModuleFacts {
@@ -30,6 +31,7 @@ export function buildModuleFacts(input: {
 
 function buildModuleFactsStore(input: {
   parsedFiles: ParsedProjectFile[];
+  stylesheetFilePaths?: Iterable<string>;
   projectRoot?: string;
   compilerOptions?: ts.CompilerOptions;
 }): ModuleFactsStore {
@@ -59,6 +61,9 @@ function buildModuleFactsStore(input: {
     importsByFilePath,
     exportsByFilePath,
     declarationsByFilePath,
+    knownStylesheetFilePaths: new Set(
+      [...(input.stylesheetFilePaths ?? [])].map((filePath) => normalizeFilePath(filePath)),
+    ),
     resolvedModuleFactsByFilePath: new Map(),
     workspacePackageEntryPointsByPackageName: collectWorkspacePackageEntryPoints(sortedParsedFiles),
     typescriptResolution: buildTypescriptResolution({

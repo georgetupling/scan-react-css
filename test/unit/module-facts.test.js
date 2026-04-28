@@ -25,6 +25,7 @@ test("module facts expose normalized per-file imports, exports, and top-level bi
       ),
       sourceFile("src/theme.ts", 'export const themeName = "light";'),
     ],
+    stylesheetFilePaths: ["src/App.module.css", "src/reset.css"],
   });
 
   const appFacts = getResolvedModuleFacts({
@@ -178,6 +179,19 @@ test("module facts preserve unresolved source import status", () => {
   });
   assert.equal(appFacts?.imports[0]?.resolution.status, "unresolved");
   assert.equal(appFacts?.imports[0]?.resolution.reason, "source-specifier-not-found");
+});
+
+test("module facts preserve unresolved stylesheet import status", () => {
+  const moduleFacts = buildModuleFacts({
+    parsedFiles: [sourceFile("src/App.tsx", 'import "./missing.css";')],
+  });
+
+  const appFacts = getResolvedModuleFacts({
+    moduleFacts,
+    filePath: "src/App.tsx",
+  });
+  assert.equal(appFacts?.imports[0]?.resolution.status, "unresolved");
+  assert.equal(appFacts?.imports[0]?.resolution.reason, "stylesheet-specifier-not-found");
 });
 
 function sourceFile(filePath, sourceText) {

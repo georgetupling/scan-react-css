@@ -174,6 +174,7 @@ export type ModuleFactsStore = ModuleFacts & {
   importsByFilePath: Map<string, ModuleFactsImportRecord[]>;
   exportsByFilePath: Map<string, ModuleFactsExportRecord[]>;
   declarationsByFilePath: Map<string, ModuleFactsDeclarationIndex>;
+  knownStylesheetFilePaths: ReadonlySet<string>;
   workspacePackageEntryPointsByPackageName: Map<string, WorkspacePackageEntryPoint[]>;
   typescriptResolution?: ModuleFactsTypescriptResolution;
   caches: ModuleFactsCaches;
