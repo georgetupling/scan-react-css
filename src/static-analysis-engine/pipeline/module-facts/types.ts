@@ -138,8 +138,6 @@ export type ModuleFactsCacheEntry<T> = {
 
 export type ModuleFactsCaches = {
   moduleSpecifiers: Map<string, ModuleFactsCacheEntry<string>>;
-  importedBindings: Map<string, ModuleFactsCacheEntry<unknown>>;
-  finiteTypeEvidence: Map<string, ModuleFactsCacheEntry<readonly string[]>>;
 };
 
 export type ModuleFactsTypescriptResolution = {
