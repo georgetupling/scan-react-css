@@ -10,11 +10,7 @@ import type { ModuleFacts } from "../../pipeline/module-facts/index.js";
 import type { RenderGraph } from "../../pipeline/render-model/render-graph/index.js";
 import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.js";
 import type { SelectorQueryResult } from "../../pipeline/selector-analysis/index.js";
-import type {
-  EngineSymbol,
-  ProjectBindingResolution,
-} from "../../pipeline/symbol-resolution/index.js";
-import type { EngineSymbolId } from "../../types/core.js";
+import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/index.js";
 
 export type ParseStageResult = {
   parsedFiles: ParsedProjectFile[];
@@ -23,11 +19,6 @@ export type ParseStageResult = {
 export type ParsedProjectFile = {
   filePath: string;
   parsedSourceFile: ts.SourceFile;
-};
-
-export type ProjectSymbolCollection = {
-  symbols: Map<EngineSymbolId, EngineSymbol>;
-  symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
 };
 
 export type SymbolResolutionStageResult = ProjectBindingResolution;

@@ -41,21 +41,8 @@ test("symbol resolution owns exported expression bindings and imported expressio
     parsedFiles,
   });
 
-  const symbolsByFilePath = new Map(
-    parsedFiles.map((parsedFile) => [
-      parsedFile.filePath,
-      collectTopLevelSymbols({
-        filePath: parsedFile.filePath,
-        parsedSourceFile: parsedFile.parsedSourceFile,
-        moduleId: `module:${parsedFile.filePath}`,
-        moduleFacts,
-      }),
-    ]),
-  );
-
   const resolution = buildProjectBindingResolution({
     parsedFiles,
-    symbolsByFilePath,
     moduleFacts,
     includeTraces: false,
   });
@@ -132,7 +119,6 @@ test("symbol resolution derives exported names from module facts and collects ri
 
   const resolution = buildProjectBindingResolution({
     parsedFiles,
-    symbolsByFilePath: new Map([["src/library.tsx", symbols]]),
     moduleFacts,
     includeTraces: false,
   });
@@ -181,21 +167,8 @@ test("symbol resolution preserves unresolved namespace members as structured res
     parsedFiles,
   });
 
-  const symbolsByFilePath = new Map(
-    parsedFiles.map((parsedFile) => [
-      parsedFile.filePath,
-      collectTopLevelSymbols({
-        filePath: parsedFile.filePath,
-        parsedSourceFile: parsedFile.parsedSourceFile,
-        moduleId: `module:${parsedFile.filePath}`,
-        moduleFacts,
-      }),
-    ]),
-  );
-
   const resolution = buildProjectBindingResolution({
     parsedFiles,
-    symbolsByFilePath,
     moduleFacts,
     includeTraces: false,
   });
@@ -246,21 +219,8 @@ test("symbol resolution resolves imported type bindings through type re-export b
     parsedFiles,
   });
 
-  const symbolsByFilePath = new Map(
-    parsedFiles.map((parsedFile) => [
-      parsedFile.filePath,
-      collectTopLevelSymbols({
-        filePath: parsedFile.filePath,
-        parsedSourceFile: parsedFile.parsedSourceFile,
-        moduleId: `module:${parsedFile.filePath}`,
-        moduleFacts,
-      }),
-    ]),
-  );
-
   const resolution = buildProjectBindingResolution({
     parsedFiles,
-    symbolsByFilePath,
     moduleFacts,
     includeTraces: false,
   });
@@ -343,21 +303,8 @@ test("symbol resolution resolves local type declarations through helper APIs", (
     parsedFiles,
   });
 
-  const symbolsByFilePath = new Map(
-    parsedFiles.map((parsedFile) => [
-      parsedFile.filePath,
-      collectTopLevelSymbols({
-        filePath: parsedFile.filePath,
-        parsedSourceFile: parsedFile.parsedSourceFile,
-        moduleId: `module:${parsedFile.filePath}`,
-        moduleFacts,
-      }),
-    ]),
-  );
-
   const resolution = buildProjectBindingResolution({
     parsedFiles,
-    symbolsByFilePath,
     moduleFacts,
     includeTraces: false,
   });
@@ -425,21 +372,8 @@ test("symbol resolution degrades type-only imports that target value exports", (
     parsedFiles,
   });
 
-  const symbolsByFilePath = new Map(
-    parsedFiles.map((parsedFile) => [
-      parsedFile.filePath,
-      collectTopLevelSymbols({
-        filePath: parsedFile.filePath,
-        parsedSourceFile: parsedFile.parsedSourceFile,
-        moduleId: `module:${parsedFile.filePath}`,
-        moduleFacts,
-      }),
-    ]),
-  );
-
   const resolution = buildProjectBindingResolution({
     parsedFiles,
-    symbolsByFilePath,
     moduleFacts,
     includeTraces: false,
   });
@@ -470,21 +404,8 @@ test("symbol resolution resolves CSS Module namespace, alias, destructuring, and
     stylesheetFilePaths: ["src/Button.module.css"],
   });
 
-  const symbolsByFilePath = new Map(
-    parsedFiles.map((parsedFile) => [
-      parsedFile.filePath,
-      collectTopLevelSymbols({
-        filePath: parsedFile.filePath,
-        parsedSourceFile: parsedFile.parsedSourceFile,
-        moduleId: `module:${parsedFile.filePath}`,
-        moduleFacts,
-      }),
-    ]),
-  );
-
   const resolution = buildProjectBindingResolution({
     parsedFiles,
-    symbolsByFilePath,
     moduleFacts,
     includeTraces: false,
   });
@@ -610,21 +531,8 @@ test("symbol resolution records unsupported CSS Module binding diagnostics", () 
     stylesheetFilePaths: ["src/Button.module.css"],
   });
 
-  const symbolsByFilePath = new Map(
-    parsedFiles.map((parsedFile) => [
-      parsedFile.filePath,
-      collectTopLevelSymbols({
-        filePath: parsedFile.filePath,
-        parsedSourceFile: parsedFile.parsedSourceFile,
-        moduleId: `module:${parsedFile.filePath}`,
-        moduleFacts,
-      }),
-    ]),
-  );
-
   const resolution = buildProjectBindingResolution({
     parsedFiles,
-    symbolsByFilePath,
     moduleFacts,
     includeTraces: false,
   });

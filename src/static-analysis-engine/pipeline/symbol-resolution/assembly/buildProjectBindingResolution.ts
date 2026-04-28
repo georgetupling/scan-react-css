@@ -2,8 +2,10 @@ import ts from "typescript";
 
 import type { ParsedProjectFile } from "../../../entry/stages/types.js";
 import { getAllResolvedModuleFacts, type ModuleFacts } from "../../module-facts/index.js";
+import { createModuleFactsModuleId } from "../../module-facts/normalize/moduleIds.js";
 import type { EngineSymbolId } from "../../../types/core.js";
 import { collectExportedExpressionBindings } from "../collectExportedExpressionBindings.js";
+import { collectTopLevelSymbols } from "../collection/collectTopLevelSymbols.js";
 import type {
   EngineSymbol,
   ProjectBindingResolution,
@@ -24,7 +26,6 @@ import { collectResolvedCssModuleBindings } from "../css-module-resolution/resol
 
 export function buildProjectBindingResolution(input: {
   parsedFiles: ParsedProjectFile[];
-  symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   moduleFacts: ModuleFacts;
   includeTraces?: boolean;
   knownCssModuleFilePaths?: ReadonlySet<string>;
@@ -49,7 +50,12 @@ export function buildProjectBindingResolution(input: {
     knownCssModuleFilePaths: input.knownCssModuleFilePaths,
     includeTraces,
   });
-  const symbolsByFilePath = cloneSymbolsByFilePath(input.symbolsByFilePath);
+  const symbolsByFilePath = cloneSymbolsByFilePath(
+    collectProjectSymbols({
+      parsedFiles: input.parsedFiles,
+      moduleFacts: input.moduleFacts,
+    }),
+  );
   const symbols = new Map<EngineSymbolId, EngineSymbol>();
   const resolvedExportedTypeBindingsByFilePath = collectResolvedExportedTypeBindings({
     moduleFacts: input.moduleFacts,
@@ -193,6 +199,23 @@ export function buildProjectBindingResolution(input: {
       ]),
     ),
   };
+}
+
+function collectProjectSymbols(input: {
+  parsedFiles: ParsedProjectFile[];
+  moduleFacts: ModuleFacts;
+}): Map<string, Map<EngineSymbolId, EngineSymbol>> {
+  return new Map(
+    input.parsedFiles.map((parsedFile) => [
+      parsedFile.filePath,
+      collectTopLevelSymbols({
+        filePath: parsedFile.filePath,
+        parsedSourceFile: parsedFile.parsedSourceFile,
+        moduleId: createModuleFactsModuleId(parsedFile.filePath),
+        moduleFacts: input.moduleFacts,
+      }),
+    ]),
+  );
 }
 
 function cloneSymbolsByFilePath(
