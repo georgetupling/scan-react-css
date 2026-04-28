@@ -50,6 +50,13 @@ export type SymbolResolutionReason =
   | "cycle-detected"
   | "ambiguous-star-export"
   | "unsupported-import-form"
+  | "unsupported-css-module-binding"
+  | "computed-css-module-member"
+  | "computed-css-module-destructuring"
+  | "nested-css-module-destructuring"
+  | "rest-css-module-destructuring"
+  | "reassignable-css-module-alias"
+  | "self-referential-css-module-alias"
   | "unresolved-imported-binding";
 
 export type ResolvedProjectExport = {
@@ -95,6 +102,82 @@ export type ResolvedNamespaceImport = {
   traces: AnalysisTrace[];
 };
 
+export type ResolvedCssModuleImport = {
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  specifier: string;
+  localName: string;
+  importKind: "default" | "namespace" | "named";
+};
+
+export type ResolvedCssModuleNamespaceBinding = {
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  specifier: string;
+  localName: string;
+  originLocalName: string;
+  importKind: "default" | "namespace";
+  sourceKind: "import" | "alias";
+  location: SourceAnchor;
+  rawExpressionText: string;
+  traces: AnalysisTrace[];
+};
+
+export type ResolvedCssModuleMemberBinding = {
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  specifier: string;
+  localName: string;
+  originLocalName: string;
+  memberName: string;
+  sourceKind: "destructured-binding";
+  location: SourceAnchor;
+  rawExpressionText: string;
+  traces: AnalysisTrace[];
+};
+
+export type ResolvedCssModuleMemberReference = {
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  specifier: string;
+  localName: string;
+  originLocalName: string;
+  memberName: string;
+  accessKind: "property" | "string-literal-element" | "destructured-binding";
+  location: SourceAnchor;
+  rawExpressionText: string;
+  traces: AnalysisTrace[];
+};
+
+export type ResolvedCssModuleBindingDiagnostic = {
+  sourceFilePath: string;
+  stylesheetFilePath: string;
+  specifier: string;
+  localName: string;
+  originLocalName: string;
+  reason:
+    | "computed-css-module-member"
+    | "computed-css-module-destructuring"
+    | "nested-css-module-destructuring"
+    | "rest-css-module-destructuring"
+    | "reassignable-css-module-alias"
+    | "self-referential-css-module-alias";
+  location: SourceAnchor;
+  rawExpressionText: string;
+  traces: AnalysisTrace[];
+};
+
+export type ResolvedCssModuleMemberAccessResult =
+  | {
+      kind: "resolved";
+      reference: ResolvedCssModuleMemberReference;
+    }
+  | {
+      kind: "unresolved";
+      reason: SymbolResolutionReason;
+      traces?: AnalysisTrace[];
+    };
+
 export type ProjectBindingResolution = {
   symbols: Map<EngineSymbolId, EngineSymbol>;
   symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
@@ -103,6 +186,17 @@ export type ProjectBindingResolution = {
   resolvedTypeBindingsByFilePath: Map<string, Map<string, ResolvedTypeBinding>>;
   resolvedExportedTypeBindingsByFilePath: Map<string, Map<string, ResolvedTypeBinding>>;
   resolvedNamespaceImportsByFilePath: Map<string, ResolvedNamespaceImport[]>;
+  resolvedCssModuleImportsByFilePath: Map<string, ResolvedCssModuleImport[]>;
+  resolvedCssModuleNamespaceBindingsByFilePath: Map<
+    string,
+    Map<string, ResolvedCssModuleNamespaceBinding>
+  >;
+  resolvedCssModuleMemberBindingsByFilePath: Map<
+    string,
+    Map<string, ResolvedCssModuleMemberBinding>
+  >;
+  resolvedCssModuleMemberReferencesByFilePath: Map<string, ResolvedCssModuleMemberReference[]>;
+  resolvedCssModuleBindingDiagnosticsByFilePath: Map<string, ResolvedCssModuleBindingDiagnostic[]>;
   exportedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
   importedExpressionBindingsByFilePath: Map<string, Map<string, ts.Expression>>;
 };

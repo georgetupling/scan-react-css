@@ -20,12 +20,14 @@ import {
   collectResolvedExportedTypeBindings,
   resolveImportedTypeBindingsForFile,
 } from "../type-resolution/resolveTypeBindings.js";
+import { collectResolvedCssModuleBindings } from "../css-module-resolution/resolveCssModuleBindings.js";
 
 export function buildProjectBindingResolution(input: {
   parsedFiles: ParsedProjectFile[];
   symbolsByFilePath: Map<string, Map<EngineSymbolId, EngineSymbol>>;
   moduleFacts: ModuleFacts;
   includeTraces?: boolean;
+  knownCssModuleFilePaths?: ReadonlySet<string>;
 }): ProjectBindingResolution {
   const includeTraces = input.includeTraces ?? true;
   const resolvedImportedBindingsByFilePath = new Map<string, ResolvedImportedBinding[]>();
@@ -35,6 +37,18 @@ export function buildProjectBindingResolution(input: {
     Map<string, import("../types.js").ResolvedTypeBinding>
   >();
   const resolvedNamespaceImportsByFilePath = new Map<string, ResolvedNamespaceImport[]>();
+  const {
+    resolvedCssModuleImportsByFilePath,
+    resolvedCssModuleNamespaceBindingsByFilePath,
+    resolvedCssModuleMemberBindingsByFilePath,
+    resolvedCssModuleMemberReferencesByFilePath,
+    resolvedCssModuleBindingDiagnosticsByFilePath,
+  } = collectResolvedCssModuleBindings({
+    parsedFiles: input.parsedFiles,
+    moduleFacts: input.moduleFacts,
+    knownCssModuleFilePaths: input.knownCssModuleFilePaths,
+    includeTraces,
+  });
   const symbolsByFilePath = cloneSymbolsByFilePath(input.symbolsByFilePath);
   const symbols = new Map<EngineSymbolId, EngineSymbol>();
   const resolvedExportedTypeBindingsByFilePath = collectResolvedExportedTypeBindings({
@@ -160,6 +174,11 @@ export function buildProjectBindingResolution(input: {
     resolvedTypeBindingsByFilePath,
     resolvedExportedTypeBindingsByFilePath,
     resolvedNamespaceImportsByFilePath,
+    resolvedCssModuleImportsByFilePath,
+    resolvedCssModuleNamespaceBindingsByFilePath,
+    resolvedCssModuleMemberBindingsByFilePath,
+    resolvedCssModuleMemberReferencesByFilePath,
+    resolvedCssModuleBindingDiagnosticsByFilePath,
     exportedExpressionBindingsByFilePath,
     importedExpressionBindingsByFilePath: new Map(
       [...symbolsByFilePath.keys()].map((filePath) => [

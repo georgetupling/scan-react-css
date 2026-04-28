@@ -12,7 +12,10 @@ import type { RuntimeDomClassReference, RuntimeDomLibraryHint } from "../runtime
 import type { SelectorConstraint, SelectorQueryResult } from "../selector-analysis/types.js";
 import type { AnalysisConfidence, AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
-import type { CssModuleAnalysis } from "../css-modules/types.js";
+import type {
+  ProjectBindingResolution,
+  ResolvedCssModuleBindingDiagnostic,
+} from "../symbol-resolution/types.js";
 import type {
   CssAtRuleContextFact,
   CssClassContextFact,
@@ -21,6 +24,7 @@ import type {
 } from "../../types/css.js";
 
 export type ProjectAnalysisId = string;
+export type CssModuleLocalsConvention = "asIs" | "camelCase" | "camelCaseOnly";
 
 export type ProjectAnalysis = {
   meta: ProjectAnalysisMeta;
@@ -327,7 +331,7 @@ export type CssModuleReferenceDiagnosticAnalysis = {
   sourceFileId: ProjectAnalysisId;
   stylesheetId: ProjectAnalysisId;
   localName: string;
-  reason: import("../css-modules/types.js").CssModuleReferenceDiagnosticRecord["reason"];
+  reason: ResolvedCssModuleBindingDiagnostic["reason"];
   location: SourceAnchor;
   rawExpressionText: string;
   traces: AnalysisTrace[];
@@ -487,7 +491,8 @@ export type SerializableProjectAnalysisIndexes = {
 export type ProjectAnalysisBuildInput = {
   moduleFacts: ModuleFacts;
   cssFiles: import("../css-analysis/types.js").ExperimentalCssFileAnalysis[];
-  cssModules: CssModuleAnalysis;
+  symbolResolution: ProjectBindingResolution;
+  cssModuleLocalsConvention?: CssModuleLocalsConvention;
   externalCssSummary: ExternalCssSummary;
   reachabilitySummary: import("../reachability/types.js").ReachabilitySummary;
   renderGraph: import("../render-model/render-graph/types.js").RenderGraph;

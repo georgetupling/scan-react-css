@@ -108,7 +108,7 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
   const cssModuleMemberMatches = buildCssModuleMemberMatches({
     references: cssModuleMemberReferences,
     indexes,
-    localsConvention: input.cssModules.options.localsConvention,
+    localsConvention: input.cssModuleLocalsConvention,
     includeTraces,
   });
   const classOwnership = buildClassOwnership({

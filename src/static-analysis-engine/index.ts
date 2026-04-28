@@ -1,6 +1,5 @@
 export { analyzeProjectSourceTexts, analyzeSourceText } from "./entry/scan.js";
 export { analyzeCssSources } from "./pipeline/css-analysis/index.js";
-export { analyzeCssModules } from "./pipeline/css-modules/index.js";
 export { buildModuleFacts } from "./pipeline/module-facts/buildModuleFacts.js";
 export {
   collectAvailableExportedNames,
@@ -19,6 +18,9 @@ export {
   collectTopLevelSymbols,
   createSymbolId,
   getSymbol,
+  resolveCssModuleMember,
+  resolveCssModuleMemberAccess,
+  resolveCssModuleNamespace,
   resolveExportedTypeDeclaration,
   resolveExportedTypeBinding,
   resolveTypeDeclaration,
@@ -71,12 +73,6 @@ export type {
 } from "./types/runtime.js";
 export type { ExperimentalCssFileAnalysis } from "./pipeline/css-analysis/index.js";
 export type {
-  CssModuleAnalysis,
-  CssModuleImportRecord,
-  CssModuleMemberReferenceRecord,
-  CssModuleReferenceDiagnosticRecord,
-} from "./pipeline/css-modules/index.js";
-export type {
   ActiveExternalCssProvider,
   ExternalCssAnalysisInput,
   ExternalCssGlobalProviderConfig,
@@ -107,6 +103,12 @@ export type {
 export type {
   EngineSymbol,
   ProjectBindingResolution,
+  ResolvedCssModuleBindingDiagnostic,
+  ResolvedCssModuleImport,
+  ResolvedCssModuleMemberAccessResult,
+  ResolvedCssModuleMemberBinding,
+  ResolvedCssModuleMemberReference,
+  ResolvedCssModuleNamespaceBinding,
   ResolvedImportedBinding,
   ResolvedNamespaceMemberResult,
   ResolvedNamespaceImport,
@@ -151,6 +153,7 @@ export type {
   ClassReferenceOrigin,
   ComponentAnalysis,
   ComponentRenderRelation,
+  CssModuleLocalsConvention,
   CssModuleImportAnalysis,
   CssModuleMemberMatchRelation,
   CssModuleMemberReferenceAnalysis,

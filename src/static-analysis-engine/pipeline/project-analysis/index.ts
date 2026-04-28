@@ -13,6 +13,7 @@ export type {
   ClassReferenceOrigin,
   ComponentAnalysis,
   ComponentRenderRelation,
+  CssModuleLocalsConvention,
   CssModuleImportAnalysis,
   CssModuleMemberMatchRelation,
   CssModuleMemberReferenceAnalysis,

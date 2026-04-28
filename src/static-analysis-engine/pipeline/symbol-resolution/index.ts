@@ -3,6 +3,9 @@ export { collectTopLevelSymbols, createSymbolId } from "./collection/collectTopL
 export { buildProjectBindingResolution } from "./assembly/buildProjectBindingResolution.js";
 export {
   getSymbol,
+  resolveCssModuleMember,
+  resolveCssModuleMemberAccess,
+  resolveCssModuleNamespace,
   resolveExportedTypeDeclaration,
   resolveExportedTypeBinding,
   resolveTypeDeclaration,
@@ -14,6 +17,12 @@ export { resolveNamespaceImportsForFile } from "./value-resolution/resolveNamesp
 export type {
   EngineSymbol,
   ProjectBindingResolution,
+  ResolvedCssModuleBindingDiagnostic,
+  ResolvedCssModuleImport,
+  ResolvedCssModuleMemberAccessResult,
+  ResolvedCssModuleMemberBinding,
+  ResolvedCssModuleMemberReference,
+  ResolvedCssModuleNamespaceBinding,
   ResolvedImportedBinding,
   ResolvedNamespaceMemberResult,
   ResolvedNamespaceImport,

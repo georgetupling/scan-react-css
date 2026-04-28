@@ -1,9 +1,8 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
-import type { CssModuleAnalysisOptions } from "../pipeline/css-modules/index.js";
+import type { CssModuleLocalsConvention } from "../pipeline/project-analysis/index.js";
 import type { AnalysisProgressCallback, StaticAnalysisEngineResult } from "../types/runtime.js";
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
-import { runCssModuleAnalysisStage } from "./stages/cssModuleAnalysisStage.js";
 import { runExternalCssStage } from "./stages/externalCssStage.js";
 import { runModuleFactsStage } from "./stages/moduleFactsStage.js";
 import { runParseStage } from "./stages/parseStage.js";
@@ -20,7 +19,9 @@ export function analyzeSourceText(input: {
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
   externalCss?: ExternalCssAnalysisInput;
-  cssModules?: CssModuleAnalysisOptions;
+  cssModules?: {
+    localsConvention?: CssModuleLocalsConvention;
+  };
   onProgress?: AnalysisProgressCallback;
   includeTraces?: boolean;
 }): StaticAnalysisEngineResult {
@@ -49,7 +50,9 @@ export function analyzeProjectSourceTexts(input: {
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
   externalCss?: ExternalCssAnalysisInput;
-  cssModules?: CssModuleAnalysisOptions;
+  cssModules?: {
+    localsConvention?: CssModuleLocalsConvention;
+  };
   onProgress?: AnalysisProgressCallback;
   includeTraces?: boolean;
 }): StaticAnalysisEngineResult {
@@ -101,19 +104,6 @@ export function analyzeProjectSourceTexts(input: {
       selectorCssSources: input.selectorCssSources ?? [],
     }),
   );
-  const cssModuleAnalysisStage = runAnalysisStage(
-    progress,
-    "css-modules",
-    "Analyzing CSS Modules",
-    () =>
-      runCssModuleAnalysisStage({
-        parsedFiles: parseStage.parsedFiles,
-        moduleFacts: moduleFactsStage.moduleFacts,
-        cssFiles: cssAnalysisStage.cssFiles,
-        options: input.cssModules,
-        includeTraces,
-      }),
-  );
   const externalCssStage = runAnalysisStage(
     progress,
     "external-css",
@@ -158,7 +148,8 @@ export function analyzeProjectSourceTexts(input: {
       runProjectAnalysisStage({
         moduleFacts: moduleFactsStage.moduleFacts,
         cssFiles: cssAnalysisStage.cssFiles,
-        cssModules: cssModuleAnalysisStage.cssModules,
+        symbolResolution: symbolResolutionStage,
+        cssModuleLocalsConvention: input.cssModules?.localsConvention,
         externalCssSummary: externalCssStage.externalCssSummary,
         reachabilitySummary: reachabilityStage.reachabilitySummary,
         renderGraph: renderModelStage.renderGraph,

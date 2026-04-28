@@ -1,4 +1,5 @@
 import type {
+  CssModuleLocalsConvention,
   CssModuleAliasAnalysis,
   CssModuleDestructuredBindingAnalysis,
   CssModuleImportAnalysis,
@@ -26,7 +27,8 @@ export function buildCssModuleImports(
   input: ProjectAnalysisBuildInput,
   indexes: ProjectAnalysisIndexes,
 ): CssModuleImportAnalysis[] {
-  return input.cssModules.imports
+  return [...input.symbolResolution.resolvedCssModuleImportsByFilePath.values()]
+    .flatMap((imports) => imports)
     .map((cssModuleImport) => {
       const sourceFilePath = normalizeProjectPath(cssModuleImport.sourceFilePath);
       const stylesheetFilePath = normalizeProjectPath(cssModuleImport.stylesheetFilePath);
@@ -82,22 +84,30 @@ export function buildCssModuleMemberReferences(input: {
   }
 
   return {
-    aliases: input.projectInput.cssModules.aliases
+    aliases: [
+      ...input.projectInput.symbolResolution.resolvedCssModuleNamespaceBindingsByFilePath.values(),
+    ]
+      .flatMap((bindingsByLocalName) => [...bindingsByLocalName.values()])
+      .filter((binding) => binding.sourceKind === "alias")
       .map((alias) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
-          createCssModuleImportLookupKey(alias),
+          createCssModuleImportLookupKey({
+            sourceFilePath: alias.sourceFilePath,
+            stylesheetFilePath: alias.stylesheetFilePath,
+            localName: alias.originLocalName,
+          }),
         );
         if (!cssModuleImport) {
           return undefined;
         }
 
         return {
-          id: createCssModuleAliasId(alias.location, cssModuleImport.id, alias.aliasName),
+          id: createCssModuleAliasId(alias.location, cssModuleImport.id, alias.localName),
           importId: cssModuleImport.id,
           sourceFileId: cssModuleImport.sourceFileId,
           stylesheetId: cssModuleImport.stylesheetId,
-          localName: alias.localName,
-          aliasName: alias.aliasName,
+          localName: alias.originLocalName,
+          aliasName: alias.localName,
           location: normalizeAnchor(alias.location),
           rawExpressionText: alias.rawExpressionText,
           traces: input.includeTraces ? [...alias.traces] : [],
@@ -105,10 +115,17 @@ export function buildCssModuleMemberReferences(input: {
       })
       .filter((alias): alias is CssModuleAliasAnalysis => Boolean(alias))
       .sort(compareById),
-    destructuredBindings: input.projectInput.cssModules.destructuredBindings
+    destructuredBindings: [
+      ...input.projectInput.symbolResolution.resolvedCssModuleMemberBindingsByFilePath.values(),
+    ]
+      .flatMap((bindingsByLocalName) => [...bindingsByLocalName.values()])
       .map((binding) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
-          createCssModuleImportLookupKey(binding),
+          createCssModuleImportLookupKey({
+            sourceFilePath: binding.sourceFilePath,
+            stylesheetFilePath: binding.stylesheetFilePath,
+            localName: binding.originLocalName,
+          }),
         );
         if (!cssModuleImport) {
           return undefined;
@@ -119,14 +136,14 @@ export function buildCssModuleMemberReferences(input: {
             binding.location,
             cssModuleImport.id,
             binding.memberName,
-            binding.bindingName,
+            binding.localName,
           ),
           importId: cssModuleImport.id,
           sourceFileId: cssModuleImport.sourceFileId,
           stylesheetId: cssModuleImport.stylesheetId,
-          localName: binding.localName,
+          localName: binding.originLocalName,
           memberName: binding.memberName,
-          bindingName: binding.bindingName,
+          bindingName: binding.localName,
           location: normalizeAnchor(binding.location),
           rawExpressionText: binding.rawExpressionText,
           traces: input.includeTraces ? [...binding.traces] : [],
@@ -134,10 +151,17 @@ export function buildCssModuleMemberReferences(input: {
       })
       .filter((binding): binding is CssModuleDestructuredBindingAnalysis => Boolean(binding))
       .sort(compareById),
-    memberReferences: input.projectInput.cssModules.memberReferences
+    memberReferences: [
+      ...input.projectInput.symbolResolution.resolvedCssModuleMemberReferencesByFilePath.values(),
+    ]
+      .flatMap((references) => references)
       .map((reference) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
-          createCssModuleImportLookupKey(reference),
+          createCssModuleImportLookupKey({
+            sourceFilePath: reference.sourceFilePath,
+            stylesheetFilePath: reference.stylesheetFilePath,
+            localName: reference.originLocalName,
+          }),
         );
         if (!cssModuleImport) {
           return undefined;
@@ -152,7 +176,7 @@ export function buildCssModuleMemberReferences(input: {
           importId: cssModuleImport.id,
           sourceFileId: cssModuleImport.sourceFileId,
           stylesheetId: cssModuleImport.stylesheetId,
-          localName: reference.localName,
+          localName: reference.originLocalName,
           memberName: reference.memberName,
           accessKind: reference.accessKind,
           location: normalizeAnchor(reference.location),
@@ -162,10 +186,17 @@ export function buildCssModuleMemberReferences(input: {
       })
       .filter((reference): reference is CssModuleMemberReferenceAnalysis => Boolean(reference))
       .sort(compareById),
-    diagnostics: input.projectInput.cssModules.diagnostics
+    diagnostics: [
+      ...input.projectInput.symbolResolution.resolvedCssModuleBindingDiagnosticsByFilePath.values(),
+    ]
+      .flatMap((diagnostics) => diagnostics)
       .map((diagnostic) => {
         const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
-          createCssModuleImportLookupKey(diagnostic),
+          createCssModuleImportLookupKey({
+            sourceFilePath: diagnostic.sourceFilePath,
+            stylesheetFilePath: diagnostic.stylesheetFilePath,
+            localName: diagnostic.originLocalName,
+          }),
         );
         if (!cssModuleImport) {
           return undefined;
@@ -176,7 +207,7 @@ export function buildCssModuleMemberReferences(input: {
           importId: cssModuleImport.id,
           sourceFileId: cssModuleImport.sourceFileId,
           stylesheetId: cssModuleImport.stylesheetId,
-          localName: diagnostic.localName,
+          localName: diagnostic.originLocalName,
           reason: diagnostic.reason,
           location: normalizeAnchor(diagnostic.location),
           rawExpressionText: diagnostic.rawExpressionText,
@@ -193,7 +224,7 @@ export function buildCssModuleMemberReferences(input: {
 export function buildCssModuleMemberMatches(input: {
   references: CssModuleMemberReferenceAnalysis[];
   indexes: ProjectAnalysisIndexes;
-  localsConvention: ProjectAnalysisBuildInput["cssModules"]["options"]["localsConvention"];
+  localsConvention?: CssModuleLocalsConvention;
   includeTraces: boolean;
 }): CssModuleMemberMatchRelation[] {
   const matches: CssModuleMemberMatchRelation[] = [];
@@ -248,12 +279,13 @@ export function buildCssModuleMemberMatches(input: {
 
 export function getCssModuleExportNames(
   className: string,
-  localsConvention: ProjectAnalysisBuildInput["cssModules"]["options"]["localsConvention"],
+  localsConvention: CssModuleLocalsConvention | undefined,
 ): string[] {
+  const resolvedLocalsConvention = localsConvention ?? "camelCase";
   const exportNames =
-    localsConvention === "asIs"
+    resolvedLocalsConvention === "asIs"
       ? [className]
-      : localsConvention === "camelCaseOnly"
+      : resolvedLocalsConvention === "camelCaseOnly"
         ? [toCamelCaseClassName(className)]
         : [className, toCamelCaseClassName(className)];
 

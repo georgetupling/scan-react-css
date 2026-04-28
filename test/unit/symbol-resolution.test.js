@@ -8,6 +8,9 @@ import {
   buildProjectBindingResolution,
   collectTopLevelSymbols,
   getSymbol,
+  resolveCssModuleMember,
+  resolveCssModuleMemberAccess,
+  resolveCssModuleNamespace,
   resolveExportedTypeDeclaration,
   resolveExportedTypeBinding,
   resolveTypeDeclaration,
@@ -449,6 +452,198 @@ test("symbol resolution degrades type-only imports that target value exports", (
   assert.deepEqual(resolution.resolvedTypeBindingsByFilePath.get("src/consumer.ts"), new Map());
 });
 
+test("symbol resolution resolves CSS Module namespace, alias, destructuring, and member access", () => {
+  const parsedFiles = [
+    sourceFile(
+      "src/Button.tsx",
+      [
+        'import styles from "./Button.module.css";',
+        "const s = styles;",
+        "const { root, button: buttonClass } = s;",
+        'export function Button() { return <button className={s.root + styles["tone"] + buttonClass + root}>Button</button>; }',
+        "",
+      ].join("\n"),
+    ),
+  ];
+  const moduleFacts = buildModuleFacts({
+    parsedFiles,
+    stylesheetFilePaths: ["src/Button.module.css"],
+  });
+
+  const symbolsByFilePath = new Map(
+    parsedFiles.map((parsedFile) => [
+      parsedFile.filePath,
+      collectTopLevelSymbols({
+        filePath: parsedFile.filePath,
+        parsedSourceFile: parsedFile.parsedSourceFile,
+        moduleId: `module:${parsedFile.filePath}`,
+        moduleFacts,
+      }),
+    ]),
+  );
+
+  const resolution = buildProjectBindingResolution({
+    parsedFiles,
+    symbolsByFilePath,
+    moduleFacts,
+    includeTraces: false,
+  });
+
+  assert.deepEqual(resolveCssModuleNamespaceForTest(resolution, "src/Button.tsx", "styles"), {
+    sourceFilePath: "src/Button.tsx",
+    stylesheetFilePath: "src/Button.module.css",
+    specifier: "./Button.module.css",
+    localName: "styles",
+    originLocalName: "styles",
+    importKind: "default",
+    sourceKind: "import",
+    location: {
+      filePath: "src/Button.tsx",
+      startLine: 1,
+      startColumn: 8,
+      endLine: 1,
+      endColumn: 14,
+    },
+    rawExpressionText: "styles",
+    traces: [],
+  });
+  assert.deepEqual(resolveCssModuleNamespaceForTest(resolution, "src/Button.tsx", "s"), {
+    sourceFilePath: "src/Button.tsx",
+    stylesheetFilePath: "src/Button.module.css",
+    specifier: "./Button.module.css",
+    localName: "s",
+    originLocalName: "styles",
+    importKind: "default",
+    sourceKind: "alias",
+    location: {
+      filePath: "src/Button.tsx",
+      startLine: 2,
+      startColumn: 7,
+      endLine: 2,
+      endColumn: 17,
+    },
+    rawExpressionText: "s = styles",
+    traces: [],
+  });
+  assert.deepEqual(resolveCssModuleMemberForTest(resolution, "src/Button.tsx", "buttonClass"), {
+    sourceFilePath: "src/Button.tsx",
+    stylesheetFilePath: "src/Button.module.css",
+    specifier: "./Button.module.css",
+    localName: "buttonClass",
+    originLocalName: "styles",
+    memberName: "button",
+    sourceKind: "destructured-binding",
+    location: {
+      filePath: "src/Button.tsx",
+      startLine: 3,
+      startColumn: 15,
+      endLine: 3,
+      endColumn: 34,
+    },
+    rawExpressionText: "button: buttonClass",
+    traces: [],
+  });
+  assert.deepEqual(resolveCssModuleMemberAccessForTest(resolution, "src/Button.tsx", "s", "root"), {
+    kind: "resolved",
+    reference: {
+      sourceFilePath: "src/Button.tsx",
+      stylesheetFilePath: "src/Button.module.css",
+      specifier: "./Button.module.css",
+      localName: "s",
+      originLocalName: "styles",
+      memberName: "root",
+      accessKind: "property",
+      location: {
+        filePath: "src/Button.tsx",
+        startLine: 4,
+        startColumn: 54,
+        endLine: 4,
+        endColumn: 60,
+      },
+      rawExpressionText: "s.root",
+      traces: [],
+    },
+  });
+  assert.deepEqual(
+    resolveCssModuleMemberAccessForTest(resolution, "src/Button.tsx", "styles", "tone"),
+    {
+      kind: "resolved",
+      reference: {
+        sourceFilePath: "src/Button.tsx",
+        stylesheetFilePath: "src/Button.module.css",
+        specifier: "./Button.module.css",
+        localName: "styles",
+        originLocalName: "styles",
+        memberName: "tone",
+        accessKind: "string-literal-element",
+        location: {
+          filePath: "src/Button.tsx",
+          startLine: 4,
+          startColumn: 63,
+          endLine: 4,
+          endColumn: 77,
+        },
+        rawExpressionText: 'styles["tone"]',
+        traces: [],
+      },
+    },
+  );
+});
+
+test("symbol resolution records unsupported CSS Module binding diagnostics", () => {
+  const parsedFiles = [
+    sourceFile(
+      "src/Button.tsx",
+      [
+        'import styles from "./Button.module.css";',
+        "const name = 'root';",
+        "let s = styles;",
+        "const styles = styles;",
+        "const { [name]: computed, ...rest, nested: { inner } } = styles;",
+        "export function Button() { return <button className={styles[name]}>Button</button>; }",
+        "",
+      ].join("\n"),
+    ),
+  ];
+  const moduleFacts = buildModuleFacts({
+    parsedFiles,
+    stylesheetFilePaths: ["src/Button.module.css"],
+  });
+
+  const symbolsByFilePath = new Map(
+    parsedFiles.map((parsedFile) => [
+      parsedFile.filePath,
+      collectTopLevelSymbols({
+        filePath: parsedFile.filePath,
+        parsedSourceFile: parsedFile.parsedSourceFile,
+        moduleId: `module:${parsedFile.filePath}`,
+        moduleFacts,
+      }),
+    ]),
+  );
+
+  const resolution = buildProjectBindingResolution({
+    parsedFiles,
+    symbolsByFilePath,
+    moduleFacts,
+    includeTraces: false,
+  });
+
+  assert.deepEqual(
+    (resolution.resolvedCssModuleBindingDiagnosticsByFilePath.get("src/Button.tsx") ?? []).map(
+      (diagnostic) => diagnostic.reason,
+    ),
+    [
+      "computed-css-module-destructuring",
+      "computed-css-module-member",
+      "nested-css-module-destructuring",
+      "reassignable-css-module-alias",
+      "rest-css-module-destructuring",
+      "self-referential-css-module-alias",
+    ],
+  );
+});
+
 function sourceFile(filePath, sourceText) {
   return {
     filePath,
@@ -471,6 +666,31 @@ function resolveTypeBindingForTest(symbolResolution, filePath, localName) {
     symbolResolution,
     filePath,
     localName,
+  });
+}
+
+function resolveCssModuleNamespaceForTest(symbolResolution, filePath, localName) {
+  return resolveCssModuleNamespace({
+    symbolResolution,
+    filePath,
+    localName,
+  });
+}
+
+function resolveCssModuleMemberForTest(symbolResolution, filePath, localName) {
+  return resolveCssModuleMember({
+    symbolResolution,
+    filePath,
+    localName,
+  });
+}
+
+function resolveCssModuleMemberAccessForTest(symbolResolution, filePath, localName, memberName) {
+  return resolveCssModuleMemberAccess({
+    symbolResolution,
+    filePath,
+    localName,
+    memberName,
   });
 }
 
