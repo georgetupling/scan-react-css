@@ -46,14 +46,6 @@ export type ProjectFileRecord = {
   absolutePath: string;
 };
 
-export type ProjectDiscoveryResult = {
-  rootDir: string;
-  sourceFiles: ProjectFileRecord[];
-  cssFiles: ProjectFileRecord[];
-  htmlFiles: ProjectFileRecord[];
-  diagnostics: ScanDiagnostic[];
-};
-
 export type SeverityCounts = Record<RuleSeverity, number>;
 export type RuleCounts = Record<RuleId, number>;
 export type DiagnosticSeverityCounts = Record<ScanDiagnosticSeverity, number>;

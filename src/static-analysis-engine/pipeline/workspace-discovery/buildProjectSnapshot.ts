@@ -1,12 +1,12 @@
 import type { ResolvedScannerConfig } from "../../../config/index.js";
 import { loadScannerConfig } from "../../../config/index.js";
-import { discoverProjectFiles } from "../../../project/discovery.js";
 import { resolveRootDir } from "../../../project/pathUtils.js";
 import type { ScanDiagnostic, ScanProjectInput } from "../../../project/types.js";
 import { collectProjectBoundaries } from "./boundaries/collectProjectBoundaries.js";
 import { collectProjectResourceEdges } from "./edges/collectResourceEdges.js";
+import { discoverProjectFileRecords } from "./files/discoverProjectFileRecords.js";
+import { readCssFiles, readHtmlFiles, readSourceFiles } from "./files/readProjectFileContents.js";
 import { mergeStylesheets, toCssSources, toStylesheetFiles } from "./files/stylesheetInventory.js";
-import { readCssFiles, readHtmlFiles, readSourceFiles } from "./files/loadProjectFiles.js";
 import { collectHtmlResources } from "./html/htmlLinks.js";
 import { collectLinkedCssFiles } from "./html/htmlPathResolution.js";
 import { loadPackageCssImports } from "./packages/loadPackageCssImports.js";
@@ -31,7 +31,7 @@ export async function buildProjectSnapshot(input: {
     }),
   );
   const discovered = await input.runStage("discover-files", "Discovering project files", () =>
-    discoverProjectFiles({
+    discoverProjectFileRecords({
       ...input.scanInput,
       rootDir,
       discovery: config.discovery,

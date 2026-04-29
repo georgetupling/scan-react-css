@@ -1,8 +1,14 @@
 import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
-import type { DiscoveryConfig } from "../config/index.js";
-import type { ProjectDiscoveryResult, ProjectFileRecord, ScanDiagnostic } from "./types.js";
-import { normalizeProjectPath, resolveProjectFile, resolveRootDir } from "./pathUtils.js";
+
+import type { DiscoveryConfig } from "../../../../config/index.js";
+import {
+  normalizeProjectPath,
+  resolveProjectFile,
+  resolveRootDir,
+} from "../../../../project/pathUtils.js";
+import type { ProjectFileRecord, ScanDiagnostic } from "../../../../project/types.js";
+import type { ProjectFileDiscoveryResult } from "../types.js";
 
 const IGNORED_DIRECTORIES = new Set([".git", "build", "coverage", "dist", "node_modules"]);
 
@@ -21,13 +27,13 @@ const DEFAULT_SOURCE_EXCLUDE_PATTERNS = [
   "**/*.spec.tsx",
 ];
 
-export async function discoverProjectFiles(input: {
+export async function discoverProjectFileRecords(input: {
   rootDir?: string;
   sourceFilePaths?: string[];
   cssFilePaths?: string[];
   htmlFilePaths?: string[];
   discovery?: DiscoveryConfig;
-}): Promise<ProjectDiscoveryResult> {
+}): Promise<ProjectFileDiscoveryResult> {
   const rootDir = resolveRootDir(input.rootDir);
   const diagnostics: ScanDiagnostic[] = [];
   const rootValidationDiagnostic = await validateRootDir(rootDir);

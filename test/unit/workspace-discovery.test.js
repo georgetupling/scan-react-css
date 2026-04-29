@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { discoverProjectFiles } from "../../dist/project/discovery.js";
+import { discoverProjectFileRecords } from "../../dist/static-analysis-engine/pipeline/workspace-discovery/files/discoverProjectFileRecords.js";
 import { buildProjectSnapshot } from "../../dist/static-analysis-engine/pipeline/workspace-discovery/buildProjectSnapshot.js";
 import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
 
-test("discoverProjectFiles scans source, CSS, and HTML under a root directory", async () => {
+test("discoverProjectFileRecords scans source, CSS, and HTML under a root directory", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile("src/components/Card.tsx", "export function Card() { return <div />; }\n")
     .withCssFile("src/components/Card.css", ".card {}\n")
@@ -16,7 +16,7 @@ test("discoverProjectFiles scans source, CSS, and HTML under a root directory", 
     .build();
 
   try {
-    const discovered = await discoverProjectFiles({
+    const discovered = await discoverProjectFileRecords({
       rootDir: project.rootDir,
     });
 
@@ -38,7 +38,7 @@ test("discoverProjectFiles scans source, CSS, and HTML under a root directory", 
   }
 });
 
-test("discoverProjectFiles applies default test exclusions and explicit file overrides", async () => {
+test("discoverProjectFileRecords applies default test exclusions and explicit file overrides", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile("src/App.test.tsx", "export function AppTest() { return null; }\n")
     .withSourceFile("src/components/Card.tsx", "export function Card() { return <div />; }\n")
@@ -51,7 +51,7 @@ test("discoverProjectFiles applies default test exclusions and explicit file ove
     .build();
 
   try {
-    const defaultDiscovery = await discoverProjectFiles({
+    const defaultDiscovery = await discoverProjectFileRecords({
       rootDir: project.rootDir,
     });
     assert.deepEqual(
@@ -59,7 +59,7 @@ test("discoverProjectFiles applies default test exclusions and explicit file ove
       ["src/App.tsx", "src/components/Card.tsx"],
     );
 
-    const explicitDiscovery = await discoverProjectFiles({
+    const explicitDiscovery = await discoverProjectFileRecords({
       rootDir: project.rootDir,
       sourceFilePaths: ["src/App.test.tsx"],
     });
@@ -76,7 +76,7 @@ test("discoverProjectFiles applies default test exclusions and explicit file ove
   }
 });
 
-test("discoverProjectFiles supports configured source roots and excludes", async () => {
+test("discoverProjectFileRecords supports configured source roots and excludes", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile("apps/web/src/App.tsx", "export function App() { return null; }\n")
     .withSourceFile("apps/web/src/App.stories.tsx", "export function Story() { return null; }\n")
@@ -85,7 +85,7 @@ test("discoverProjectFiles supports configured source roots and excludes", async
     .build();
 
   try {
-    const discovered = await discoverProjectFiles({
+    const discovered = await discoverProjectFileRecords({
       rootDir: project.rootDir,
       discovery: {
         sourceRoots: ["apps/web/src", "packages/ui/src"],
@@ -102,11 +102,11 @@ test("discoverProjectFiles supports configured source roots and excludes", async
   }
 });
 
-test("discoverProjectFiles reports file roots without traversing them", async () => {
+test("discoverProjectFileRecords reports file roots without traversing them", async () => {
   const project = await new TestProjectBuilder().build();
 
   try {
-    const discovered = await discoverProjectFiles({
+    const discovered = await discoverProjectFileRecords({
       rootDir: project.filePath("src/App.tsx"),
     });
 

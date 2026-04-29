@@ -7,6 +7,14 @@ export type ProjectSnapshotStageRunner = <T>(
   run: () => T | Promise<T>,
 ) => Promise<T>;
 
+export type ProjectFileDiscoveryResult = {
+  rootDir: string;
+  sourceFiles: ProjectFileRecord[];
+  cssFiles: ProjectFileRecord[];
+  htmlFiles: ProjectFileRecord[];
+  diagnostics: ScanDiagnostic[];
+};
+
 export type ProjectSnapshot = {
   rootDir: string;
   config: ResolvedScannerConfig;
