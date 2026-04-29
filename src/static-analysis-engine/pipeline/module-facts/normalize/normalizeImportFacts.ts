@@ -1,10 +1,12 @@
 import type { EngineModuleId } from "../../../types/core.js";
 import { resolveModuleFactSourceSpecifier } from "../resolve/resolveModuleFactSourceSpecifier.js";
+import { createSourceImportEdgeKey } from "../sourceImportEdges.js";
 import type {
   ModuleFactsImportRecord,
   ModuleFactsStore,
   ResolvedModuleImportFact,
 } from "../types.js";
+import type { SourceImportEdge } from "../../workspace-discovery/index.js";
 import { createModuleFactsBindingId, createModuleFactsModuleId } from "./moduleIds.js";
 
 export function normalizeImportFacts(input: {
@@ -57,6 +59,20 @@ function resolveImportFact(input: {
   filePath: string;
   importRecord: ModuleFactsImportRecord;
 }): ResolvedModuleImportFact["resolution"] {
+  const sourceImportEdge = input.moduleFacts.sourceImportEdgesByImportKey.get(
+    createSourceImportEdgeKey({
+      importerFilePath: input.filePath,
+      specifier: input.importRecord.specifier,
+      importKind: input.importRecord.importKind,
+    }),
+  );
+  const snapshotResolution = sourceImportEdge
+    ? resolveFromSourceImportEdge(sourceImportEdge, input.importRecord.importKind)
+    : undefined;
+  if (snapshotResolution) {
+    return snapshotResolution;
+  }
+
   if (input.importRecord.importKind === "source" || input.importRecord.importKind === "type-only") {
     const resolvedFilePath = resolveModuleFactSourceSpecifier({
       moduleFacts: input.moduleFacts,
@@ -113,6 +129,48 @@ function resolveImportFact(input: {
     status: "unsupported",
     reason: "unknown-import-kind",
   };
+}
+
+function resolveFromSourceImportEdge(
+  edge: SourceImportEdge,
+  importKind: ModuleFactsImportRecord["importKind"],
+): ResolvedModuleImportFact["resolution"] | undefined {
+  if (edge.resolutionStatus === "resolved" && edge.resolvedFilePath) {
+    return {
+      status: "resolved",
+      resolvedFilePath: edge.resolvedFilePath,
+      resolvedModuleId: createModuleFactsModuleId(edge.resolvedFilePath),
+      confidence: importKind === "css" ? "exact" : getSpecifierResolutionConfidence(edge.specifier),
+    };
+  }
+
+  if (importKind === "source" || importKind === "type-only") {
+    return undefined;
+  }
+
+  if (edge.resolutionStatus === "external") {
+    return {
+      status: "external",
+      reason:
+        importKind === "external-css" ? "remote-stylesheet-import" : "package-stylesheet-import",
+    };
+  }
+
+  if (edge.resolutionStatus === "unsupported") {
+    return {
+      status: "unsupported",
+      reason: "unknown-import-kind",
+    };
+  }
+
+  if (edge.resolutionStatus === "unresolved" && importKind === "css") {
+    return {
+      status: "unresolved",
+      reason: "stylesheet-specifier-not-found",
+    };
+  }
+
+  return undefined;
 }
 
 function getCssSemantics(specifier: string): "global" | "module" {

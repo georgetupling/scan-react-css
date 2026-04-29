@@ -22,6 +22,9 @@ export type {
   ProjectSnapshotStageRunner,
   ProjectSourceFile,
   ProjectStylesheetFile,
+  SourceImportEdge,
+  SourceImportFact,
+  SourceImportKind,
   StylesheetImportEdge,
   StylesheetImportFact,
 } from "./types.js";

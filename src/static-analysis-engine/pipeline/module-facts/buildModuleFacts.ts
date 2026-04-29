@@ -1,6 +1,7 @@
 import type ts from "typescript";
 
 import type { ParsedProjectFile } from "../../entry/stages/types.js";
+import type { ProjectResourceEdge } from "../workspace-discovery/index.js";
 import { collectDeclarations } from "./collect/collectDeclarations.js";
 import { applyExportEvidenceToDeclarations, collectExports } from "./collect/collectExports.js";
 import { collectImports } from "./collect/collectImports.js";
@@ -9,6 +10,7 @@ import { createModuleFactsCaches } from "./resolve/cache.js";
 import { buildTypescriptResolution } from "./resolve/typescriptResolution.js";
 import { collectWorkspacePackageEntryPoints } from "./resolve/workspaceEntryPoints.js";
 import { normalizeFilePath } from "./shared/pathUtils.js";
+import { collectSourceImportEdgesByImportKey } from "./sourceImportEdges.js";
 import type {
   ModuleFacts,
   ModuleFactsStore,
@@ -22,6 +24,7 @@ export function buildModuleFacts(input: {
   stylesheetFilePaths?: Iterable<string>;
   projectRoot?: string;
   compilerOptions?: ts.CompilerOptions;
+  resourceEdges?: ProjectResourceEdge[];
 }): ModuleFacts {
   const moduleFactsStore = buildModuleFactsStore(input);
   return {
@@ -34,6 +37,7 @@ function buildModuleFactsStore(input: {
   stylesheetFilePaths?: Iterable<string>;
   projectRoot?: string;
   compilerOptions?: ts.CompilerOptions;
+  resourceEdges?: ProjectResourceEdge[];
 }): ModuleFactsStore {
   const sortedParsedFiles = [...input.parsedFiles].sort((left, right) =>
     normalizeFilePath(left.filePath).localeCompare(normalizeFilePath(right.filePath)),
@@ -66,6 +70,7 @@ function buildModuleFactsStore(input: {
     ),
     resolvedModuleFactsByFilePath: new Map(),
     workspacePackageEntryPointsByPackageName: collectWorkspacePackageEntryPoints(sortedParsedFiles),
+    sourceImportEdgesByImportKey: collectSourceImportEdgesByImportKey(input.resourceEdges ?? []),
     typescriptResolution: buildTypescriptResolution({
       projectRoot: input.projectRoot,
       filePaths: parsedSourceFilesByFilePath.keys(),

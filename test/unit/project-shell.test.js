@@ -357,6 +357,27 @@ test("buildProjectSnapshot inventories files, boundaries, and resource edges", a
           edge.resolvedFilePath === "public/reset.css",
       ),
     );
+    assert.ok(
+      snapshot.edges.some(
+        (edge) =>
+          edge.kind === "source-import" &&
+          edge.importerFilePath === "src/App.tsx" &&
+          edge.specifier === "./App.module.css" &&
+          edge.importKind === "css" &&
+          edge.resolutionStatus === "resolved" &&
+          edge.resolvedFilePath === "src/App.module.css",
+      ),
+    );
+    assert.ok(
+      snapshot.edges.some(
+        (edge) =>
+          edge.kind === "source-import" &&
+          edge.importerFilePath === "src/App.tsx" &&
+          edge.specifier === "pkg/styles.css" &&
+          edge.importKind === "css" &&
+          edge.resolutionStatus === "external",
+      ),
+    );
   } finally {
     await project.cleanup();
   }

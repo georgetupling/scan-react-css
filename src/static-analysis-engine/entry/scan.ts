@@ -78,6 +78,7 @@ export function analyzeProjectSourceTexts(input: {
         .map((cssSource) => cssSource.filePath)
         .filter((filePath): filePath is string => Boolean(filePath)),
       projectRoot: input.projectRoot,
+      resourceEdges: input.resourceEdges,
     }),
   );
   const symbolResolutionStage = runAnalysisStage(

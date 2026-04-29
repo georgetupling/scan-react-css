@@ -1,4 +1,5 @@
 import type ts from "typescript";
+import type { SourceImportEdge } from "../workspace-discovery/index.js";
 import type { EngineModuleId, EngineSymbolId } from "../../types/core.js";
 
 export type ModuleFactsImportKind = "source" | "css" | "external-css" | "type-only" | "unknown";
@@ -174,6 +175,7 @@ export type ModuleFactsStore = ModuleFacts & {
   declarationsByFilePath: Map<string, ModuleFactsDeclarationIndex>;
   knownStylesheetFilePaths: ReadonlySet<string>;
   workspacePackageEntryPointsByPackageName: Map<string, WorkspacePackageEntryPoint[]>;
+  sourceImportEdgesByImportKey: ReadonlyMap<string, SourceImportEdge>;
   typescriptResolution?: ModuleFactsTypescriptResolution;
   caches: ModuleFactsCaches;
 };

@@ -31,5 +31,8 @@ function serializeProjectResourceEdge(edge: ProjectResourceEdge): string {
   if (edge.kind === "stylesheet-import") {
     return `${edge.kind}:${edge.importerFilePath}:${edge.specifier}:${edge.resolvedFilePath}`;
   }
+  if (edge.kind === "source-import") {
+    return `${edge.kind}:${edge.importerFilePath}:${edge.specifier}:${edge.importKind}:${edge.resolutionStatus}:${edge.resolvedFilePath ?? ""}`;
+  }
   return `${edge.kind}:${edge.importerKind}:${edge.importerFilePath}:${edge.specifier}:${edge.resolvedFilePath}`;
 }

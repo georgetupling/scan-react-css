@@ -2,6 +2,7 @@ import type {
   HtmlScriptSourceFact,
   HtmlStylesheetLinkFact,
   PackageCssImportFact,
+  SourceImportFact,
   StylesheetImportFact,
 } from "../types.js";
 import type { ProjectResourceEdge } from "../types.js";
@@ -12,6 +13,7 @@ export function collectProjectResourceEdges(input: {
   htmlScriptSources: HtmlScriptSourceFact[];
   packageCssImports: PackageCssImportFact[];
   stylesheetImports: StylesheetImportFact[];
+  sourceImports: SourceImportFact[];
 }): ProjectResourceEdge[] {
   const edges: ProjectResourceEdge[] = [
     ...input.htmlStylesheetLinks.map((stylesheetLink) => ({
@@ -42,6 +44,14 @@ export function collectProjectResourceEdges(input: {
       importerFilePath: importRecord.importerFilePath,
       specifier: importRecord.specifier,
       resolvedFilePath: importRecord.resolvedFilePath,
+    })),
+    ...input.sourceImports.map((importRecord) => ({
+      kind: "source-import" as const,
+      importerFilePath: importRecord.importerFilePath,
+      specifier: importRecord.specifier,
+      importKind: importRecord.importKind,
+      resolutionStatus: importRecord.resolutionStatus,
+      ...(importRecord.resolvedFilePath ? { resolvedFilePath: importRecord.resolvedFilePath } : {}),
     })),
   ];
 

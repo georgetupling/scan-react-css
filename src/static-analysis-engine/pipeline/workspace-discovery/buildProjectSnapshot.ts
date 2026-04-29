@@ -11,6 +11,7 @@ import { collectHtmlResources } from "./html/htmlLinks.js";
 import { collectLinkedCssFiles } from "./html/htmlPathResolution.js";
 import { loadPackageCssImports } from "./packages/loadPackageCssImports.js";
 import { fetchRemoteCssSources } from "./remote/fetchRemoteCssSources.js";
+import { collectSourceImports } from "./source/collectSourceImports.js";
 import { collectStylesheetImports } from "./stylesheets/collectStylesheetImports.js";
 import type { ProjectConfigFile, ProjectSnapshot, ProjectSnapshotStageRunner } from "./types.js";
 
@@ -95,6 +96,10 @@ export async function buildProjectSnapshot(input: {
   const stylesheetImports = collectStylesheetImports({
     stylesheets,
   });
+  const sourceImports = collectSourceImports({
+    sourceFiles,
+    stylesheets,
+  });
 
   return {
     rootDir: discovered.rootDir,
@@ -120,6 +125,7 @@ export async function buildProjectSnapshot(input: {
       htmlScriptSources,
       packageCssImports: packageCssImports.imports,
       stylesheetImports,
+      sourceImports,
     }),
     externalCss: {
       fetchRemote: config.externalCss.fetchRemote,
