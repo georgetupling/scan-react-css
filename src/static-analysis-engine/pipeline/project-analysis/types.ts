@@ -10,6 +10,7 @@ import type { RenderGraphEdge } from "../render-model/render-graph/types.js";
 import type { RenderSubtree, RenderNode } from "../render-model/render-ir/types.js";
 import type { RuntimeDomClassReference, RuntimeDomLibraryHint } from "../runtime-dom/types.js";
 import type { SelectorConstraint, SelectorQueryResult } from "../selector-analysis/types.js";
+import type { FactGraphResult } from "../fact-graph/types.js";
 import type { AnalysisConfidence, AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
 import type {
@@ -501,6 +502,7 @@ export type SerializableProjectAnalysisIndexes = {
 
 export type ProjectAnalysisBuildInput = {
   moduleFacts: ModuleFacts;
+  factGraph?: FactGraphResult;
   cssFiles: import("../css-analysis/types.js").ExperimentalCssFileAnalysis[];
   stylesheets?: ProjectAnalysisStylesheetInput[];
   symbolResolution: ProjectBindingResolution;

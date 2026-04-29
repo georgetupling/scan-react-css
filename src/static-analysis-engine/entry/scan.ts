@@ -1,6 +1,10 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
-import { graphToProjectResourceEdges, type FactGraphResult } from "../pipeline/fact-graph/index.js";
+import {
+  graphToProjectResourceEdges,
+  graphToStylesheetFilePaths,
+  type FactGraphResult,
+} from "../pipeline/fact-graph/index.js";
 import {
   buildSourceFrontendFactsFromSourceFiles,
   type CssFrontendFacts,
@@ -23,9 +27,9 @@ import { runModuleFactsStage } from "./stages/moduleFactsStage.js";
 import { runProjectAnalysisStage } from "./stages/projectAnalysisStage.js";
 import { runReachabilityStage } from "./stages/reachabilityStage.js";
 import { runRenderModelStage } from "./stages/renderModelStage.js";
-import { runRuntimeDomStage } from "./stages/runtimeDomStage.js";
 import { runSelectorAnalysisStage } from "./stages/selectorAnalysisStage.js";
 import { runSymbolResolutionStage } from "./stages/symbolResolutionStage.js";
+import { analyzeRuntimeDomClasses } from "../pipeline/runtime-dom/index.js";
 
 export function analyzeSourceText(input: {
   filePath: string;
@@ -124,9 +128,11 @@ export function analyzeProjectSourceTexts(input: {
   const moduleFactsStage = runAnalysisStage(progress, "module-facts", "Building module facts", () =>
     runModuleFactsStage({
       source: sourceFrontendFacts,
-      stylesheetFilePaths: (input.css?.files ?? input.selectorCssSources ?? [])
-        .map((stylesheet) => stylesheet.filePath)
-        .filter((filePath): filePath is string => Boolean(filePath)),
+      stylesheetFilePaths: input.factGraph
+        ? graphToStylesheetFilePaths(input.factGraph.graph)
+        : (input.css?.files ?? input.selectorCssSources ?? [])
+            .map((stylesheet) => stylesheet.filePath)
+            .filter((filePath): filePath is string => Boolean(filePath)),
       projectRoot: input.projectRoot,
       boundaries,
       resourceEdges: mergedResourceEdges,
@@ -146,21 +152,16 @@ export function analyzeProjectSourceTexts(input: {
   const renderModelStage = runAnalysisStage(progress, "render-model", "Building render model", () =>
     runRenderModelStage({
       parsedFiles,
+      factGraph: input.factGraph,
       symbolResolution: symbolResolutionStage,
       moduleFacts: moduleFactsStage.moduleFacts,
       includeTraces,
     }),
   );
-  const runtimeDomStage = runAnalysisStage(
-    progress,
-    "runtime-dom",
-    "Analyzing runtime DOM class usage",
-    () =>
-      runRuntimeDomStage({
-        source: sourceFrontendFacts,
-        includeTraces,
-      }),
-  );
+  const runtimeDomClassReferences = analyzeRuntimeDomClasses({
+    source: sourceFrontendFacts,
+    includeTraces,
+  });
   const cssAnalysisStage = runAnalysisStage(progress, "css-analysis", "Analyzing CSS", () =>
     runCssAnalysisStage({
       factGraph: input.factGraph,
@@ -185,6 +186,7 @@ export function analyzeProjectSourceTexts(input: {
     () =>
       runReachabilityStage({
         moduleFacts: moduleFactsStage.moduleFacts,
+        factGraph: input.factGraph,
         renderGraph: renderModelStage.renderGraph,
         renderSubtrees: renderModelStage.renderSubtrees,
         css: input.css,
@@ -216,6 +218,7 @@ export function analyzeProjectSourceTexts(input: {
     () =>
       runProjectAnalysisStage({
         moduleFacts: moduleFactsStage.moduleFacts,
+        factGraph: input.factGraph,
         cssFiles: cssAnalysisStage.cssFiles,
         stylesheets: input.stylesheets ?? cssFrontendStylesheets,
         symbolResolution: symbolResolutionStage,
@@ -225,7 +228,7 @@ export function analyzeProjectSourceTexts(input: {
         renderGraph: renderModelStage.renderGraph,
         renderSubtrees: renderModelStage.renderSubtrees,
         unsupportedClassReferences: renderModelStage.unsupportedClassReferences,
-        runtimeDomClassReferences: runtimeDomStage.runtimeDomClassReferences,
+        runtimeDomClassReferences,
         selectorQueryResults: selectorAnalysisStage.selectorQueryResults,
         includeTraces,
       }),

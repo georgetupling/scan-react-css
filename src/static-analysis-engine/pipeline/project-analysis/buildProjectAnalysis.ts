@@ -37,7 +37,7 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
   const includeTraces = input.includeTraces ?? true;
   const indexes = createEmptyIndexes();
   const sourceFiles = buildSourceFiles(input, indexes);
-  const components = buildComponents(input.renderGraph.nodes, indexes);
+  const components = buildComponents(input.renderGraph.nodes, indexes, input);
   const renderSubtrees = buildRenderSubtrees(input.renderSubtrees, indexes);
   const stylesheets = buildStylesheets(input, indexes);
   const classDefinitions = buildClassDefinitions(input, stylesheets, indexes);

@@ -12,6 +12,10 @@ export function buildModuleImports(
   input: ProjectAnalysisBuildInput,
   indexes: ProjectAnalysisIndexes,
 ): ModuleImportRelation[] {
+  if (input.factGraph) {
+    return buildModuleImportsFromFactGraph(input, indexes);
+  }
+
   const imports: ModuleImportRelation[] = [];
 
   for (const moduleFacts of getAllResolvedModuleFacts({
@@ -30,6 +34,39 @@ export function buildModuleImports(
         importKind: importRecord.importKind,
       });
     }
+  }
+
+  return imports.sort((left, right) =>
+    `${left.fromSourceFileId}:${left.specifier}:${left.importKind}`.localeCompare(
+      `${right.fromSourceFileId}:${right.specifier}:${right.importKind}`,
+    ),
+  );
+}
+
+function buildModuleImportsFromFactGraph(
+  input: ProjectAnalysisBuildInput,
+  indexes: ProjectAnalysisIndexes,
+): ModuleImportRelation[] {
+  const imports: ModuleImportRelation[] = [];
+
+  for (const importEdge of input.factGraph?.graph.edges.imports ?? []) {
+    if (importEdge.importerKind !== "source") {
+      continue;
+    }
+
+    const sourceFileId = indexes.sourceFileIdByPath.get(
+      normalizeProjectPath(importEdge.importerFilePath),
+    );
+    if (!sourceFileId) {
+      continue;
+    }
+
+    imports.push({
+      fromSourceFileId: sourceFileId,
+      toModuleId: importEdge.resolvedTargetNodeId,
+      specifier: importEdge.specifier,
+      importKind: importEdge.importKind,
+    });
   }
 
   return imports.sort((left, right) =>

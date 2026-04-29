@@ -5,7 +5,12 @@ export {
   buildSourceFrontendFactsFromSourceFiles,
   buildSourceFrontendFactsFromParsedFiles,
 } from "./pipeline/language-frontends/index.js";
-export { buildFactGraph, graphToReactRenderSyntaxInputs } from "./pipeline/fact-graph/index.js";
+export {
+  buildFactGraph,
+  graphToReachabilityStylesheets,
+  graphToReactRenderSyntaxInputs,
+  graphToStylesheetFilePaths,
+} from "./pipeline/fact-graph/index.js";
 export { buildModuleFacts } from "./pipeline/module-facts/buildModuleFacts.js";
 export {
   collectAvailableExportedNames,

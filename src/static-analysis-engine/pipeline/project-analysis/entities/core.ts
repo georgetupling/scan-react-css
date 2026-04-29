@@ -1,6 +1,7 @@
 import type { RenderGraphNode } from "../../render-model/render-graph/types.js";
 import type { RenderSubtree } from "../../render-model/render-ir/types.js";
 import { getAllResolvedModuleFacts } from "../../module-facts/index.js";
+import type { StyleSheetNode } from "../../fact-graph/index.js";
 import type {
   ClassContextAnalysis,
   ClassDefinitionAnalysis,
@@ -40,14 +41,20 @@ export function buildSourceFiles(
   const sourceFiles: SourceFileAnalysis[] = [];
   const sourcePaths = new Set<string>();
 
-  for (const moduleFacts of getAllResolvedModuleFacts({
-    moduleFacts: input.moduleFacts,
-  })) {
-    sourcePaths.add(normalizeProjectPath(moduleFacts.filePath));
-  }
+  if (input.factGraph) {
+    for (const moduleNode of input.factGraph.graph.nodes.modules) {
+      sourcePaths.add(normalizeProjectPath(moduleNode.filePath));
+    }
+  } else {
+    for (const moduleFacts of getAllResolvedModuleFacts({
+      moduleFacts: input.moduleFacts,
+    })) {
+      sourcePaths.add(normalizeProjectPath(moduleFacts.filePath));
+    }
 
-  for (const renderSubtree of input.renderSubtrees) {
-    sourcePaths.add(normalizeProjectPath(renderSubtree.sourceAnchor.filePath));
+    for (const renderSubtree of input.renderSubtrees) {
+      sourcePaths.add(normalizeProjectPath(renderSubtree.sourceAnchor.filePath));
+    }
   }
 
   for (const filePath of [...sourcePaths].sort((left, right) => left.localeCompare(right))) {
@@ -66,22 +73,46 @@ export function buildSourceFiles(
 export function buildComponents(
   renderGraphNodes: RenderGraphNode[],
   indexes: ProjectAnalysisIndexes,
+  input?: ProjectAnalysisBuildInput,
 ): ComponentAnalysis[] {
-  const components = renderGraphNodes.map((node) => {
-    const filePath = normalizeProjectPath(node.filePath);
-    const id = createComponentId(filePath, node.componentName);
-    indexes.componentIdByComponentKey.set(node.componentKey, id);
-    indexes.componentIdByFilePathAndName.set(createComponentKey(filePath, node.componentName), id);
+  const graphComponentNodes = input?.factGraph?.graph.nodes.components;
+  const components = graphComponentNodes
+    ? graphComponentNodes.map((node) => {
+        const filePath = normalizeProjectPath(node.filePath);
+        const id = createComponentId(filePath, node.componentName);
+        indexes.componentIdByComponentKey.set(node.componentKey, id);
+        indexes.componentIdByFilePathAndName.set(
+          createComponentKey(filePath, node.componentName),
+          id,
+        );
 
-    return {
-      id,
-      componentKey: node.componentKey,
-      filePath,
-      componentName: node.componentName,
-      exported: node.exported,
-      location: normalizeAnchor(node.sourceAnchor),
-    };
-  });
+        return {
+          id,
+          componentKey: node.componentKey,
+          filePath,
+          componentName: node.componentName,
+          exported: node.exported,
+          location: normalizeAnchor(node.location),
+        };
+      })
+    : renderGraphNodes.map((node) => {
+        const filePath = normalizeProjectPath(node.filePath);
+        const id = createComponentId(filePath, node.componentName);
+        indexes.componentIdByComponentKey.set(node.componentKey, id);
+        indexes.componentIdByFilePathAndName.set(
+          createComponentKey(filePath, node.componentName),
+          id,
+        );
+
+        return {
+          id,
+          componentKey: node.componentKey,
+          filePath,
+          componentName: node.componentName,
+          exported: node.exported,
+          location: normalizeAnchor(node.sourceAnchor),
+        };
+      });
 
   return components.sort(compareById);
 }
@@ -194,6 +225,15 @@ function indexStylesheetInputsByPath(
   input: ProjectAnalysisBuildInput,
 ): Map<string, ProjectAnalysisStylesheetInput> {
   const stylesheetsByPath = new Map<string, ProjectAnalysisStylesheetInput>();
+  for (const stylesheet of input.factGraph?.graph.nodes.stylesheets ?? []) {
+    const filePath = normalizeOptionalProjectPath(stylesheet.filePath);
+    if (!filePath) {
+      continue;
+    }
+
+    stylesheetsByPath.set(filePath, graphStylesheetToProjectInput(stylesheet, filePath));
+  }
+
   for (const stylesheet of input.stylesheets ?? []) {
     const filePath = normalizeOptionalProjectPath(stylesheet.filePath);
     if (!filePath) {
@@ -207,6 +247,17 @@ function indexStylesheetInputsByPath(
   }
 
   return stylesheetsByPath;
+}
+
+function graphStylesheetToProjectInput(
+  stylesheet: StyleSheetNode,
+  filePath: string,
+): ProjectAnalysisStylesheetInput {
+  return {
+    filePath,
+    cssKind: stylesheet.cssKind,
+    origin: stylesheet.origin,
+  };
 }
 
 export function buildClassContexts(

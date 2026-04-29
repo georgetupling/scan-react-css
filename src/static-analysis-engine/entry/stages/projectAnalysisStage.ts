@@ -12,10 +12,15 @@ import type {
   CssModuleLocalsConvention,
   ProjectAnalysisStylesheetInput,
 } from "../../pipeline/project-analysis/index.js";
-import type { ProjectAnalysisStageResult, SelectorAnalysisStageResult } from "./types.js";
+import type {
+  FactGraphStageResult,
+  ProjectAnalysisStageResult,
+  SelectorAnalysisStageResult,
+} from "./types.js";
 
 export function runProjectAnalysisStage(input: {
   moduleFacts: ModuleFacts;
+  factGraph?: FactGraphStageResult;
   cssFiles: ExperimentalCssFileAnalysis[];
   stylesheets?: ProjectAnalysisStylesheetInput[];
   symbolResolution: ProjectBindingResolution;

@@ -23,12 +23,14 @@ import type {
 } from "./render-ir/index.js";
 import type { ProjectBindingResolution } from "../symbol-resolution/index.js";
 import type { ModuleFacts } from "../module-facts/index.js";
+import type { FactGraphReactRenderSyntaxInputs } from "../fact-graph/index.js";
 
 export type RenderModelBuildInput = {
   parsedFiles: Array<{
     filePath: string;
     parsedSourceFile: ts.SourceFile;
   }>;
+  reactRenderSyntax?: FactGraphReactRenderSyntaxInputs;
   symbolResolution: ProjectBindingResolution;
   moduleFacts: ModuleFacts;
   includeTraces?: boolean;
@@ -133,6 +135,7 @@ export function buildRenderModel(input: RenderModelBuildInput): RenderModel {
   });
   const unsupportedClassReferences = collectUnsupportedClassReferences({
     parsedFiles: input.parsedFiles,
+    reactRenderSyntax: input.reactRenderSyntax,
     renderSubtrees,
     includeTraces,
   });
