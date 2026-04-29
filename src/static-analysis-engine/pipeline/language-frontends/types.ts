@@ -1,0 +1,66 @@
+import type { ResolvedScannerConfig } from "../../../config/index.js";
+import type { ExperimentalCssFileAnalysis } from "../css-analysis/index.js";
+import type { ExternalCssAnalysisInput } from "../external-css/index.js";
+import type { ProjectAnalysisStylesheetInput } from "../project-analysis/index.js";
+import type { SelectorSourceInput, ExtractedSelectorQuery } from "../selector-analysis/index.js";
+import type {
+  ProjectBoundary,
+  ProjectResourceEdge,
+  ProjectSnapshot,
+} from "../workspace-discovery/index.js";
+import type { ParsedProjectFile } from "../../entry/stages/types.js";
+
+export type LanguageFrontendsInput = {
+  snapshot: ProjectSnapshot;
+};
+
+export type LanguageFrontendsResult = {
+  snapshot: ProjectSnapshot;
+  source: SourceFrontendFacts;
+  css: CssFrontendFacts;
+  compatibility: LanguageFrontendsCompatibility;
+};
+
+export type SourceFrontendFacts = {
+  files: SourceFrontendFile[];
+  filesByPath: Map<string, SourceFrontendFile>;
+};
+
+export type SourceFrontendFile = {
+  filePath: string;
+  absolutePath: string;
+  languageKind: SourceLanguageKind;
+  sourceText: string;
+  legacy: {
+    parsedFile: ParsedProjectFile;
+  };
+};
+
+export type SourceLanguageKind = "js" | "jsx" | "ts" | "tsx";
+
+export type CssFrontendFacts = {
+  files: CssFrontendFile[];
+  filesByPath: Map<string, CssFrontendFile>;
+};
+
+export type CssFrontendFile = {
+  filePath: string;
+  absolutePath?: string;
+  cssText: string;
+  cssKind: "global-css" | "css-module";
+  origin: "project" | "html-linked" | "package" | "remote";
+  analysis: ExperimentalCssFileAnalysis;
+  selectorQueries: ExtractedSelectorQuery[];
+};
+
+export type LanguageFrontendsCompatibility = {
+  sourceFiles: Array<{ filePath: string; sourceText: string }>;
+  parsedFiles: ParsedProjectFile[];
+  selectorCssSources: SelectorSourceInput[];
+  projectAnalysisStylesheets: ProjectAnalysisStylesheetInput[];
+  boundaries: ProjectBoundary[];
+  resourceEdges: ProjectResourceEdge[];
+  cssModules: ResolvedScannerConfig["cssModules"];
+  externalCss: ExternalCssAnalysisInput;
+  projectRoot: string;
+};

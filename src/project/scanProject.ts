@@ -13,10 +13,8 @@ import type {
   ScanProgressCallback,
   ScanSummary,
 } from "./types.js";
-import {
-  buildProjectSnapshot,
-  projectSnapshotToEngineInput,
-} from "../static-analysis-engine/pipeline/workspace-discovery/index.js";
+import { buildProjectSnapshot } from "../static-analysis-engine/pipeline/workspace-discovery/index.js";
+import { runLanguageFrontendsStage } from "../static-analysis-engine/entry/stages/languageFrontendsStage.js";
 
 export async function scanProject(input: ScanProjectInput = {}): Promise<ScanProjectResult> {
   const totalStartedAt = performance.now();
@@ -31,10 +29,18 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
     rootDir,
     runStage: (stage, message, run) => runScanStage(progress, stage, message, run),
   });
-  const engineInput = projectSnapshotToEngineInput(snapshot);
+  const languageFrontends = runLanguageFrontendsStage({ snapshot });
+  const engineInput = languageFrontends.compatibility;
 
   const engineResult = analyzeProjectSourceTexts({
-    ...engineInput,
+    sourceFiles: engineInput.sourceFiles,
+    projectRoot: engineInput.projectRoot,
+    selectorCssSources: engineInput.selectorCssSources,
+    stylesheets: engineInput.projectAnalysisStylesheets,
+    boundaries: engineInput.boundaries,
+    resourceEdges: engineInput.resourceEdges,
+    cssModules: engineInput.cssModules,
+    externalCss: engineInput.externalCss,
     includeTraces: input.includeTraces ?? true,
     onProgress: (event) => progress(event.stage, event.status, event.message, event.durationMs),
   });

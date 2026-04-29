@@ -7,6 +7,7 @@ import type { ReachabilitySummary } from "../../pipeline/reachability/index.js";
 import type { RuntimeDomClassReference } from "../../pipeline/runtime-dom/index.js";
 import type { ProjectAnalysis } from "../../pipeline/project-analysis/index.js";
 import type { ModuleFacts } from "../../pipeline/module-facts/index.js";
+import type { LanguageFrontendsResult } from "../../pipeline/language-frontends/index.js";
 import type { RenderGraph } from "../../pipeline/render-model/render-graph/index.js";
 import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.js";
 import type { SelectorQueryResult } from "../../pipeline/selector-analysis/index.js";
@@ -15,6 +16,8 @@ import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/
 export type ParseStageResult = {
   parsedFiles: ParsedProjectFile[];
 };
+
+export type LanguageFrontendsStageResult = LanguageFrontendsResult;
 
 export type ParsedProjectFile = {
   filePath: string;
