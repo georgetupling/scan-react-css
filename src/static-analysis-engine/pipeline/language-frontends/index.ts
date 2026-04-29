@@ -1,13 +1,12 @@
 export {
   buildLanguageFrontends,
+  buildSourceFrontendFactsFromSourceFiles,
   buildSourceFrontendFactsFromParsedFiles,
 } from "./buildLanguageFrontends.js";
-export { languageFrontendsToEngineInput } from "./adapters/languageFrontendsToEngineInput.js";
 export type { SourceModuleSyntaxFacts } from "./source/module-syntax/index.js";
 export type {
   CssFrontendFacts,
   CssFrontendFile,
-  LanguageFrontendsCompatibility,
   LanguageFrontendsInput,
   LanguageFrontendsResult,
   RuntimeDomClassSite,

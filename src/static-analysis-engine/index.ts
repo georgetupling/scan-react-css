@@ -2,8 +2,8 @@ export { analyzeProjectSourceTexts, analyzeSourceText } from "./entry/scan.js";
 export { analyzeCssSources } from "./pipeline/css-analysis/index.js";
 export {
   buildLanguageFrontends,
+  buildSourceFrontendFactsFromSourceFiles,
   buildSourceFrontendFactsFromParsedFiles,
-  languageFrontendsToEngineInput,
 } from "./pipeline/language-frontends/index.js";
 export { buildModuleFacts } from "./pipeline/module-facts/buildModuleFacts.js";
 export {
@@ -95,7 +95,6 @@ export type { ExperimentalCssFileAnalysis } from "./pipeline/css-analysis/index.
 export type {
   CssFrontendFacts,
   CssFrontendFile,
-  LanguageFrontendsCompatibility,
   LanguageFrontendsInput,
   LanguageFrontendsResult,
   RuntimeDomClassSite,
@@ -232,6 +231,5 @@ export type {
   ExtractedSelectorQuery,
   SelectorConstraint,
   SelectorQueryResult,
-  SelectorSourceInput,
   SemanticOutcome,
 } from "./pipeline/selector-analysis/index.js";

@@ -1,7 +1,5 @@
 export { buildProjectSnapshot } from "./buildProjectSnapshot.js";
 export { discoverProjectFileRecords } from "./files/discoverProjectFileRecords.js";
-export { projectSnapshotToEngineInput } from "./adapters/projectSnapshotToEngineInput.js";
-export type { ProjectSnapshotEngineInput } from "./adapters/projectSnapshotToEngineInput.js";
 
 export type {
   HtmlScriptEdge,

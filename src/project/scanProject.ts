@@ -15,7 +15,6 @@ import type {
 } from "./types.js";
 import { buildProjectSnapshot } from "../static-analysis-engine/pipeline/workspace-discovery/index.js";
 import { runLanguageFrontendsStage } from "../static-analysis-engine/entry/stages/languageFrontendsStage.js";
-import { languageFrontendsToEngineInput } from "../static-analysis-engine/pipeline/language-frontends/index.js";
 
 export async function scanProject(input: ScanProjectInput = {}): Promise<ScanProjectResult> {
   const totalStartedAt = performance.now();
@@ -31,19 +30,27 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
     runStage: (stage, message, run) => runScanStage(progress, stage, message, run),
   });
   const languageFrontends = runLanguageFrontendsStage({ snapshot });
-  const engineInput = languageFrontendsToEngineInput(languageFrontends);
 
   const engineResult = analyzeProjectSourceTexts({
-    sourceFiles: engineInput.sourceFiles,
-    projectRoot: engineInput.projectRoot,
+    sourceFiles: languageFrontends.source.files.map((file) => ({
+      filePath: file.filePath,
+      sourceText: file.sourceText,
+    })),
+    projectRoot: snapshot.rootDir,
     source: languageFrontends.source,
     css: languageFrontends.css,
-    selectorCssSources: engineInput.selectorCssSources,
-    stylesheets: engineInput.projectAnalysisStylesheets,
-    boundaries: engineInput.boundaries,
-    resourceEdges: engineInput.resourceEdges,
-    cssModules: engineInput.cssModules,
-    externalCss: engineInput.externalCss,
+    stylesheets: languageFrontends.css.files.map((file) => ({
+      filePath: file.filePath,
+      cssKind: file.cssKind,
+      origin: file.origin,
+    })),
+    boundaries: snapshot.boundaries,
+    resourceEdges: snapshot.edges,
+    cssModules: snapshot.config.cssModules,
+    externalCss: {
+      fetchRemote: snapshot.externalCss.fetchRemote,
+      globalProviders: snapshot.externalCss.globalProviders,
+    },
     includeTraces: input.includeTraces ?? true,
     onProgress: (event) => progress(event.stage, event.status, event.message, event.durationMs),
   });

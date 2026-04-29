@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { languageFrontendsToEngineInput } from "../../dist/static-analysis-engine/pipeline/language-frontends/adapters/languageFrontendsToEngineInput.js";
-import { buildLanguageFrontends } from "../../dist/static-analysis-engine/pipeline/language-frontends/buildLanguageFrontends.js";
+import ts from "typescript";
+
+import {
+  buildLanguageFrontends,
+  buildSourceFrontendFactsFromSourceFiles,
+} from "../../dist/static-analysis-engine/pipeline/language-frontends/buildLanguageFrontends.js";
+import { getCssModuleMemberAccess } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/css-module-syntax/analyzeCssModuleMemberAccess.js";
+import { buildCssModuleAliases } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/css-module-syntax/analyzeCssModuleAliases.js";
+import { getCssModuleDestructuring } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/css-module-syntax/analyzeCssModuleDestructuring.js";
+import { collectExportedExpressionBindings } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/symbol-syntax/collectExportedExpressionBindings.js";
+import { collectLocalAliasResolutions } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/symbol-syntax/collectLocalAliasResolutions.js";
+import { collectSymbolReferences } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/symbol-syntax/collectSymbolReferences.js";
+import { collectSourceSymbols } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/symbol-syntax/collectSourceSymbols.js";
+import { buildModuleFacts } from "../../dist/static-analysis-engine/pipeline/module-facts/buildModuleFacts.js";
 import { buildProjectSnapshot } from "../../dist/static-analysis-engine/pipeline/workspace-discovery/buildProjectSnapshot.js";
 import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
 
@@ -95,56 +107,6 @@ test("language frontends consume ProjectSnapshot and expose target source facts"
   }
 });
 
-test("language frontends adapter projects legacy engine inputs", async () => {
-  const project = await new TestProjectBuilder()
-    .withSourceFile(
-      "src/App.tsx",
-      'import "./app.css";\nexport function App() { return <div className="app" />; }\n',
-    )
-    .withCssFile("src/app.css", ".app { color: red; }\n")
-    .build();
-
-  try {
-    const snapshot = await buildProjectSnapshot({
-      scanInput: {
-        rootDir: project.rootDir,
-        sourceFilePaths: ["src/App.tsx"],
-        cssFilePaths: ["src/app.css"],
-      },
-      runStage: async (_stage, _message, run) => run(),
-    });
-
-    const frontends = buildLanguageFrontends({ snapshot });
-    const engineInput = languageFrontendsToEngineInput(frontends);
-
-    assert.deepEqual(
-      engineInput.sourceFiles.map((file) => file.filePath),
-      ["src/App.tsx"],
-    );
-    assert.deepEqual(
-      engineInput.parsedFiles.map((file) => file.filePath),
-      ["src/App.tsx"],
-    );
-    assert.deepEqual(
-      engineInput.selectorCssSources.map((file) => file.filePath),
-      ["src/app.css"],
-    );
-    assert.deepEqual(engineInput.projectAnalysisStylesheets, [
-      {
-        filePath: "src/app.css",
-        cssKind: "global-css",
-        origin: "project",
-      },
-    ]);
-    assert.equal(engineInput.projectRoot, snapshot.rootDir);
-    assert.equal(engineInput.cssModules, snapshot.config.cssModules);
-    assert.deepEqual(engineInput.boundaries, snapshot.boundaries);
-    assert.deepEqual(engineInput.resourceEdges, snapshot.edges);
-  } finally {
-    await project.cleanup();
-  }
-});
-
 test("language frontends parse CSS into deterministic frontend facts", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
@@ -196,9 +158,464 @@ test("language frontends parse CSS into deterministic frontend facts", async () 
         },
       ],
     );
+    assert.deepEqual(frontends.css.filesByPath.get("src/b.css").rules[0].declarations, [
+      {
+        property: "color",
+        value: "blue",
+      },
+    ]);
+    assert.deepEqual(
+      frontends.css.filesByPath.get("src/b.css").selectorEntries.map((entry) => ({
+        selectorText: entry.selectorText,
+        branchIndex: entry.source.branchIndex,
+        branchCount: entry.source.branchCount,
+        ruleKey: entry.source.ruleKey,
+      })),
+      [
+        {
+          selectorText: ".beta .item",
+          branchIndex: 0,
+          branchCount: 2,
+          ruleKey: "src/b.css:0:.beta .item, .beta.active",
+        },
+        {
+          selectorText: ".beta.active",
+          branchIndex: 1,
+          branchCount: 2,
+          ruleKey: "src/b.css:0:.beta .item, .beta.active",
+        },
+      ],
+    );
   } finally {
     await project.cleanup();
   }
+});
+
+test("language frontends collect module syntax import, export, and declaration forms", () => {
+  const file = buildSingleSourceFrontendFile(
+    "src/module.ts",
+    `
+      import defaultExport, { named as localNamed, type TypeName } from "./source";
+      import * as namespaceSource from "./namespace";
+      import type { OnlyType } from "./types";
+      import "./reset.css";
+      import "https://cdn.test/theme.css";
+
+      const internal = 1;
+      export const token = "token";
+      export default token;
+      export { token as renamed };
+      export * from "./barrel";
+      export * as grouped from "./grouped";
+      export interface Props { tone: Tone; }
+      export type Tone = "dark";
+      export enum Size { Small = "small" }
+      export namespace Theme { export const root = "root"; }
+    `,
+  );
+
+  assert.deepEqual(
+    file.moduleSyntax.imports.map((importRecord) => ({
+      specifier: importRecord.specifier,
+      importKind: importRecord.importKind,
+      importNames: importRecord.importNames.map((importName) => ({
+        kind: importName.kind,
+        importedName: importName.importedName,
+        localName: importName.localName,
+        typeOnly: importName.typeOnly,
+      })),
+    })),
+    [
+      {
+        specifier: "./namespace",
+        importKind: "source",
+        importNames: [
+          {
+            kind: "namespace",
+            importedName: "*",
+            localName: "namespaceSource",
+            typeOnly: false,
+          },
+        ],
+      },
+      {
+        specifier: "./reset.css",
+        importKind: "css",
+        importNames: [],
+      },
+      {
+        specifier: "./source",
+        importKind: "source",
+        importNames: [
+          {
+            kind: "default",
+            importedName: "default",
+            localName: "defaultExport",
+            typeOnly: false,
+          },
+          {
+            kind: "named",
+            importedName: "named",
+            localName: "localNamed",
+            typeOnly: false,
+          },
+          {
+            kind: "named",
+            importedName: "TypeName",
+            localName: "TypeName",
+            typeOnly: true,
+          },
+        ],
+      },
+      {
+        specifier: "./types",
+        importKind: "type-only",
+        importNames: [
+          {
+            kind: "named",
+            importedName: "OnlyType",
+            localName: "OnlyType",
+            typeOnly: true,
+          },
+        ],
+      },
+      {
+        specifier: "https://cdn.test/theme.css",
+        importKind: "css",
+        importNames: [],
+      },
+    ],
+  );
+  assert.deepEqual(
+    file.moduleSyntax.exports.map((exportRecord) => ({
+      exportedName: exportRecord.exportedName,
+      localName: exportRecord.localName,
+      specifier: exportRecord.specifier,
+      reexportKind: exportRecord.reexportKind,
+      declarationKind: exportRecord.declarationKind,
+    })),
+    [
+      {
+        exportedName: "*",
+        localName: undefined,
+        specifier: "./barrel",
+        reexportKind: "star",
+        declarationKind: "unknown",
+      },
+      {
+        exportedName: "default",
+        localName: "token",
+        specifier: undefined,
+        reexportKind: undefined,
+        declarationKind: "value",
+      },
+      {
+        exportedName: "grouped",
+        localName: undefined,
+        specifier: "./grouped",
+        reexportKind: "namespace",
+        declarationKind: "unknown",
+      },
+      {
+        exportedName: "Props",
+        localName: "Props",
+        specifier: undefined,
+        reexportKind: undefined,
+        declarationKind: "type",
+      },
+      {
+        exportedName: "renamed",
+        localName: "token",
+        specifier: undefined,
+        reexportKind: undefined,
+        declarationKind: "unknown",
+      },
+      {
+        exportedName: "Size",
+        localName: "Size",
+        specifier: undefined,
+        reexportKind: undefined,
+        declarationKind: "value",
+      },
+      {
+        exportedName: "Theme",
+        localName: "Theme",
+        specifier: undefined,
+        reexportKind: undefined,
+        declarationKind: "value",
+      },
+      {
+        exportedName: "token",
+        localName: "token",
+        specifier: undefined,
+        reexportKind: undefined,
+        declarationKind: "value",
+      },
+      {
+        exportedName: "Tone",
+        localName: "Tone",
+        specifier: undefined,
+        reexportKind: undefined,
+        declarationKind: "type",
+      },
+    ],
+  );
+  assert.deepEqual([...file.moduleSyntax.declarations.typeAliases.keys()], ["Tone"]);
+  assert.deepEqual([...file.moduleSyntax.declarations.interfaces.keys()], ["Props"]);
+  assert.deepEqual(
+    [...file.moduleSyntax.declarations.valueDeclarations.keys()],
+    ["internal", "token", "Size", "Theme"],
+  );
+  assert.deepEqual(
+    [...file.moduleSyntax.declarations.exportedLocalNames.entries()],
+    [
+      ["default", "token"],
+      ["Props", "Props"],
+      ["renamed", "token"],
+      ["Size", "Size"],
+      ["Theme", "Theme"],
+      ["token", "token"],
+      ["Tone", "Tone"],
+    ],
+  );
+});
+
+test("language frontends expose source symbol syntax collectors", () => {
+  const source = buildSourceFrontendFactsFromSourceFiles([
+    {
+      filePath: "src/symbols.tsx",
+      absolutePath: "src/symbols.tsx",
+      sourceText: `
+        const token = "token";
+        export const exportedToken = token;
+        function helper(input: string) {
+          const local = input;
+          return local;
+        }
+        export function Button() {
+          const Alias = exportedToken;
+          return <button className={Alias} />;
+        }
+        const ButtonAlias = Button;
+        export default exportedToken;
+      `,
+    },
+  ]);
+  const file = source.files[0];
+  const parsedSourceFile = file.legacy.parsedFile.parsedSourceFile;
+  const moduleFacts = buildModuleFacts({ source });
+  const { symbols, scopes } = collectSourceSymbols({
+    filePath: file.filePath,
+    parsedSourceFile,
+    moduleId: "module:src/symbols.tsx",
+    moduleFacts,
+  });
+  const symbolsByLocalName = new Map(
+    [...symbols.values()].map((symbol) => [symbol.localName, symbol]),
+  );
+  const references = collectSymbolReferences({
+    filePath: file.filePath,
+    parsedSourceFile,
+    symbols,
+    scopes,
+  });
+  const aliases = collectLocalAliasResolutions({
+    filePath: file.filePath,
+    parsedSourceFile,
+    symbols,
+    references,
+  });
+  const exportedExpressions = collectExportedExpressionBindings(parsedSourceFile);
+
+  assert.equal(symbolsByLocalName.get("Button")?.kind, "component");
+  assert.equal(symbolsByLocalName.get("helper")?.kind, "function");
+  assert.deepEqual(symbolsByLocalName.get("exportedToken")?.exportedNames, [
+    "default",
+    "exportedToken",
+  ]);
+  assert.ok(
+    references.some(
+      (reference) =>
+        reference.localName === "Alias" &&
+        reference.resolvedSymbolId === symbolsByLocalName.get("Alias")?.id,
+    ),
+  );
+  assert.deepEqual(
+    aliases.map((alias) => ({
+      kind: alias.kind,
+      aliasKind: alias.aliasKind,
+      source: symbolLocalName(symbols, alias.sourceSymbolId),
+      target: symbolLocalName(symbols, alias.targetSymbolId),
+    })),
+    [
+      {
+        kind: "resolved-alias",
+        aliasKind: "identifier",
+        source: "exportedToken",
+        target: "token",
+      },
+      {
+        kind: "resolved-alias",
+        aliasKind: "identifier",
+        source: "local",
+        target: "input",
+      },
+      {
+        kind: "resolved-alias",
+        aliasKind: "identifier",
+        source: "Alias",
+        target: "exportedToken",
+      },
+      {
+        kind: "resolved-alias",
+        aliasKind: "identifier",
+        source: "ButtonAlias",
+        target: "Button",
+      },
+    ],
+  );
+  assert.deepEqual(
+    [...exportedExpressions.entries()].map(([exportedName, expression]) => [
+      exportedName,
+      expression.getText(parsedSourceFile),
+    ]),
+    [
+      ["exportedToken", "token"],
+      ["default", "token"],
+    ],
+  );
+});
+
+test("language frontends expose CSS Module syntax collectors", () => {
+  const file = buildSingleSourceFrontendFile(
+    "src/Button.tsx",
+    `
+      import styles from "./Button.module.css";
+      const alias = styles;
+      let mutable = styles;
+      const { root, "foo-bar": fooBar, ...rest } = styles;
+      const rootClass = alias.root;
+      const literalClass = alias["foo-bar"];
+      const computedClass = alias[token];
+    `,
+  );
+  const parsedSourceFile = file.legacy.parsedFile.parsedSourceFile;
+  const directBinding = {
+    sourceFilePath: file.filePath,
+    stylesheetFilePath: "src/Button.module.css",
+    specifier: "./Button.module.css",
+    localName: "styles",
+    originLocalName: "styles",
+    importKind: "default",
+    sourceKind: "import",
+    location: sourceAnchor(file.filePath),
+    rawExpressionText: 'import styles from "./Button.module.css"',
+    traces: [],
+  };
+  const aliases = buildCssModuleAliases({
+    parsedSourceFile,
+    sourceFilePath: file.filePath,
+    directNamespaceBindingsByLocalName: new Map([["styles", directBinding]]),
+    includeTraces: false,
+  });
+  const aliasBinding = aliases.aliases[0];
+  const namespaceBindings = new Map([
+    ["styles", directBinding],
+    [aliasBinding.localName, aliasBinding],
+  ]);
+  const memberAccesses = collectNodes(parsedSourceFile)
+    .map((node) =>
+      getCssModuleMemberAccess({
+        node,
+        parsedSourceFile,
+        sourceFilePath: file.filePath,
+        namespaceBindings,
+        includeTraces: false,
+      }),
+    )
+    .filter(Boolean);
+  const destructuring = collectNodes(parsedSourceFile)
+    .map((node) =>
+      getCssModuleDestructuring({
+        node,
+        parsedSourceFile,
+        sourceFilePath: file.filePath,
+        namespaceBindings,
+        includeTraces: false,
+      }),
+    )
+    .find(Boolean);
+
+  assert.deepEqual(
+    aliases.aliases.map((alias) => ({
+      localName: alias.localName,
+      originLocalName: alias.originLocalName,
+      sourceKind: alias.sourceKind,
+      rawExpressionText: alias.rawExpressionText,
+    })),
+    [
+      {
+        localName: "alias",
+        originLocalName: "styles",
+        sourceKind: "alias",
+        rawExpressionText: "alias = styles",
+      },
+    ],
+  );
+  assert.deepEqual(
+    aliases.diagnostics.map((diagnostic) => diagnostic.reason),
+    ["reassignable-css-module-alias"],
+  );
+  assert.deepEqual(
+    memberAccesses.map((access) =>
+      access.kind === "reference"
+        ? {
+            kind: access.kind,
+            memberName: access.reference.memberName,
+            accessKind: access.reference.accessKind,
+          }
+        : {
+            kind: access.kind,
+            reason: access.diagnostic.reason,
+          },
+    ),
+    [
+      {
+        kind: "reference",
+        memberName: "root",
+        accessKind: "property",
+      },
+      {
+        kind: "reference",
+        memberName: "foo-bar",
+        accessKind: "string-literal-element",
+      },
+      {
+        kind: "diagnostic",
+        reason: "computed-css-module-member",
+      },
+    ],
+  );
+  assert.deepEqual(
+    destructuring.bindings.map((binding) => ({
+      localName: binding.localName,
+      memberName: binding.memberName,
+    })),
+    [
+      {
+        localName: "root",
+        memberName: "root",
+      },
+      {
+        localName: "fooBar",
+        memberName: "foo-bar",
+      },
+    ],
+  );
+  assert.deepEqual(
+    destructuring.diagnostics.map((diagnostic) => diagnostic.reason),
+    ["rest-css-module-destructuring"],
+  );
 });
 
 test("language frontends extract runtime DOM class sites from module-backed adapters", async () => {
@@ -259,3 +676,39 @@ test("language frontends extract runtime DOM class sites from module-backed adap
     await project.cleanup();
   }
 });
+
+function buildSingleSourceFrontendFile(filePath, sourceText) {
+  return buildSourceFrontendFactsFromSourceFiles([
+    {
+      filePath,
+      absolutePath: filePath,
+      sourceText,
+    },
+  ]).filesByPath.get(filePath);
+}
+
+function symbolLocalName(symbols, symbolId) {
+  return symbols.get(symbolId)?.localName;
+}
+
+function sourceAnchor(filePath) {
+  return {
+    filePath,
+    startLine: 1,
+    startColumn: 1,
+    endLine: 1,
+    endColumn: 1,
+  };
+}
+
+function collectNodes(sourceFile) {
+  const nodes = [];
+
+  function visit(node) {
+    nodes.push(node);
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sourceFile);
+  return nodes;
+}

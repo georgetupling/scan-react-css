@@ -15,6 +15,12 @@ import type {
   SourceLanguageKind,
 } from "./types.js";
 
+type SourceFrontendInputFile = {
+  filePath: string;
+  absolutePath: string;
+  sourceText: string;
+};
+
 export function buildLanguageFrontends(input: {
   snapshot: ProjectSnapshot;
 }): LanguageFrontendsResult {
@@ -29,7 +35,13 @@ export function buildLanguageFrontends(input: {
 }
 
 function buildSourceFrontendFacts(snapshot: ProjectSnapshot): SourceFrontendFacts {
-  const files: SourceFrontendFile[] = [...snapshot.files.sourceFiles]
+  return buildSourceFrontendFactsFromSourceFiles(snapshot.files.sourceFiles);
+}
+
+export function buildSourceFrontendFactsFromSourceFiles(
+  sourceFiles: SourceFrontendInputFile[],
+): SourceFrontendFacts {
+  const files: SourceFrontendFile[] = [...sourceFiles]
     .sort((left, right) => left.filePath.localeCompare(right.filePath))
     .map((sourceFile) => {
       const parsedFile = {

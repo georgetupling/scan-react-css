@@ -13,10 +13,6 @@ import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.
 import type { SelectorQueryResult } from "../../pipeline/selector-analysis/index.js";
 import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/index.js";
 
-export type ParseStageResult = {
-  parsedFiles: ParsedProjectFile[];
-};
-
 export type LanguageFrontendsStageResult = LanguageFrontendsResult;
 
 export type ParsedProjectFile = {

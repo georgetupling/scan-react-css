@@ -1,7 +1,7 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
 import {
-  buildSourceFrontendFactsFromParsedFiles,
+  buildSourceFrontendFactsFromSourceFiles,
   type CssFrontendFacts,
   type SourceFrontendFacts,
 } from "../pipeline/language-frontends/index.js";
@@ -18,7 +18,6 @@ import type { AnalysisProgressCallback, StaticAnalysisEngineResult } from "../ty
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
 import { runExternalCssStage } from "./stages/externalCssStage.js";
 import { runModuleFactsStage } from "./stages/moduleFactsStage.js";
-import { runParseStage } from "./stages/parseStage.js";
 import { runProjectAnalysisStage } from "./stages/projectAnalysisStage.js";
 import { runReachabilityStage } from "./stages/reachabilityStage.js";
 import { runRenderModelStage } from "./stages/renderModelStage.js";
@@ -101,11 +100,16 @@ export function analyzeProjectSourceTexts(input: {
       })),
     );
   const progress = createAnalysisProgressReporter(input.onProgress);
-  const parseStage = runAnalysisStage(progress, "parse", "Parsing source files", () =>
-    runParseStage(input.sourceFiles),
-  );
   const sourceFrontendFacts =
-    input.source ?? buildSourceFrontendFactsFromParsedFiles(parseStage.parsedFiles);
+    input.source ??
+    buildSourceFrontendFactsFromSourceFiles(
+      input.sourceFiles.map((sourceFile) => ({
+        filePath: sourceFile.filePath,
+        absolutePath: sourceFile.filePath,
+        sourceText: sourceFile.sourceText,
+      })),
+    );
+  const parsedFiles = sourceFrontendFacts.files.map((file) => file.legacy.parsedFile);
   const moduleFactsStage = runAnalysisStage(progress, "module-facts", "Building module facts", () =>
     runModuleFactsStage({
       source: sourceFrontendFacts,
@@ -124,14 +128,13 @@ export function analyzeProjectSourceTexts(input: {
     () =>
       runSymbolResolutionStage({
         source: sourceFrontendFacts,
-        parsedFiles: parseStage.parsedFiles,
         moduleFacts: moduleFactsStage.moduleFacts,
         includeTraces,
       }),
   );
   const renderModelStage = runAnalysisStage(progress, "render-model", "Building render model", () =>
     runRenderModelStage({
-      parsedFiles: parseStage.parsedFiles,
+      parsedFiles,
       symbolResolution: symbolResolutionStage,
       moduleFacts: moduleFactsStage.moduleFacts,
       includeTraces,
