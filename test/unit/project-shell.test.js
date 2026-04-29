@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import * as publicApi from "../../dist/index.js";
 import { discoverProjectFiles } from "../../dist/project/discovery.js";
+import { buildProjectSnapshot } from "../../dist/static-analysis-engine/pipeline/workspace-discovery/buildProjectSnapshot.js";
 import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
 
 const { scanProject } = publicApi;
@@ -253,6 +254,93 @@ test("discoverProjectFiles discovers HTML files for stylesheet link analysis", a
     assert.deepEqual(
       discovered.htmlFiles.map((file) => file.filePath),
       ["index.html", "public/nested/page.html"],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("buildProjectSnapshot inventories files, boundaries, and resource edges", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import styles from "./App.module.css";',
+        'import "pkg/styles.css";',
+        "export function App() { return <main className={styles.root}>Hello</main>; }",
+      ].join("\n"),
+    )
+    .withCssFile("src/App.module.css", ".root { display: block; }\n")
+    .withFile(
+      "index.html",
+      '<link rel="stylesheet" href="/public/global.css">\n<script src="/src/App.tsx"></script>\n',
+    )
+    .withCssFile("public/global.css", ".global { color: red; }\n")
+    .withNodeModuleFile("pkg/styles.css", ".pkg { color: blue; }\n")
+    .build();
+
+  try {
+    const snapshot = await buildProjectSnapshot({
+      scanInput: {
+        rootDir: project.rootDir,
+        cssFilePaths: ["src/App.module.css"],
+      },
+      runStage: async (_stage, _message, run) => run(),
+    });
+
+    assert.deepEqual(
+      snapshot.files.sourceFiles.map((file) => file.filePath),
+      ["src/App.tsx"],
+    );
+    assert.deepEqual(
+      snapshot.files.stylesheets.map((stylesheet) => ({
+        filePath: stylesheet.filePath,
+        cssKind: stylesheet.cssKind,
+        origin: stylesheet.origin,
+      })),
+      [
+        {
+          filePath: "node_modules/pkg/styles.css",
+          cssKind: "global-css",
+          origin: "package",
+        },
+        {
+          filePath: "public/global.css",
+          cssKind: "global-css",
+          origin: "html-linked",
+        },
+        {
+          filePath: "src/App.module.css",
+          cssKind: "css-module",
+          origin: "project",
+        },
+      ],
+    );
+    assert.ok(
+      snapshot.boundaries.some(
+        (boundary) =>
+          boundary.kind === "html-app-entry" &&
+          boundary.htmlFilePath === "index.html" &&
+          boundary.entrySourceFilePath === "src/App.tsx" &&
+          boundary.appRootPath === ".",
+      ),
+    );
+    assert.ok(
+      snapshot.edges.some(
+        (edge) =>
+          edge.kind === "html-stylesheet" &&
+          edge.fromHtmlFilePath === "index.html" &&
+          edge.resolvedFilePath === "public/global.css",
+      ),
+    );
+    assert.ok(
+      snapshot.edges.some(
+        (edge) =>
+          edge.kind === "package-css-import" &&
+          edge.importerKind === "source" &&
+          edge.importerFilePath === "src/App.tsx" &&
+          edge.resolvedFilePath === "node_modules/pkg/styles.css",
+      ),
     );
   } finally {
     await project.cleanup();
