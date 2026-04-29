@@ -1,4 +1,4 @@
-import type { HtmlStylesheetLinkInput } from "../static-analysis-engine/index.js";
+import type { HtmlStylesheetLinkFact } from "../types.js";
 
 const LINK_TAG_PATTERN = /<link\b[^>]*>/gi;
 const ATTRIBUTE_PATTERN = /([^\s=/"'>]+)\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+)/gi;
@@ -6,8 +6,8 @@ const ATTRIBUTE_PATTERN = /([^\s=/"'>]+)\s*=\s*("[^"]*"|'[^']*'|[^\s"'>]+)/gi;
 export function extractHtmlStylesheetLinks(input: {
   filePath: string;
   htmlText: string;
-}): HtmlStylesheetLinkInput[] {
-  const links: HtmlStylesheetLinkInput[] = [];
+}): HtmlStylesheetLinkFact[] {
+  const links: HtmlStylesheetLinkFact[] = [];
 
   for (const linkTagMatch of input.htmlText.matchAll(LINK_TAG_PATTERN)) {
     const attributes = parseAttributes(linkTagMatch[0]);

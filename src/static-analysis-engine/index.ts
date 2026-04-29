@@ -92,8 +92,11 @@ export type {
   ExternalCssAnalysisInput,
   ExternalCssGlobalProviderConfig,
   ExternalCssSummary,
-  HtmlStylesheetLinkInput,
 } from "./pipeline/external-css/index.js";
+export type {
+  HtmlStylesheetLinkFact,
+  HtmlStylesheetLinkInput,
+} from "./pipeline/workspace-discovery/index.js";
 export type {
   RuntimeDomClassReference,
   RuntimeDomClassReferenceKind,

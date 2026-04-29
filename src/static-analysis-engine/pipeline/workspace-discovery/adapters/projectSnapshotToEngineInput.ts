@@ -1,4 +1,20 @@
-import type { ProjectSnapshot, ProjectSnapshotEngineInput } from "../types.js";
+import type { ResolvedScannerConfig } from "../../../../config/index.js";
+import type { ExternalCssAnalysisInput } from "../../external-css/types.js";
+import type { ProjectAnalysisStylesheetInput } from "../../project-analysis/types.js";
+import type { SelectorSourceInput } from "../../selector-analysis/types.js";
+import type { ProjectResourceEdge, ProjectSnapshot } from "../types.js";
+
+// TODO(workspace-discovery): this adapter type exists only to connect ProjectSnapshot to the
+// current engine entrypoint. Remove it when downstream stages consume ProjectSnapshot directly.
+export type ProjectSnapshotEngineInput = {
+  sourceFiles: Array<{ filePath: string; sourceText: string }>;
+  projectRoot: string;
+  selectorCssSources: SelectorSourceInput[];
+  stylesheets: ProjectAnalysisStylesheetInput[];
+  resourceEdges: ProjectResourceEdge[];
+  cssModules: ResolvedScannerConfig["cssModules"];
+  externalCss: ExternalCssAnalysisInput;
+};
 
 export function projectSnapshotToEngineInput(
   snapshot: ProjectSnapshot,
@@ -18,13 +34,11 @@ export function projectSnapshotToEngineInput(
       cssKind: stylesheet.cssKind,
       origin: stylesheet.origin,
     })),
+    resourceEdges: snapshot.edges,
     cssModules: snapshot.config.cssModules,
     externalCss: {
       fetchRemote: snapshot.externalCss.fetchRemote,
       globalProviders: snapshot.externalCss.globalProviders,
-      htmlStylesheetLinks: snapshot.externalCss.htmlStylesheetLinks,
-      htmlScriptSources: snapshot.externalCss.htmlScriptSources,
-      packageCssImports: snapshot.externalCss.packageCssImports,
     },
   };
 }

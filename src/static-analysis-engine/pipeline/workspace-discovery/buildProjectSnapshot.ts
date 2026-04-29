@@ -1,9 +1,7 @@
 import type { ResolvedScannerConfig } from "../../../config/index.js";
 import { loadScannerConfig } from "../../../config/index.js";
 import { discoverProjectFiles } from "../../../project/discovery.js";
-import { loadPackageCssImports } from "../../../project/packageCssImports.js";
 import { resolveRootDir } from "../../../project/pathUtils.js";
-import { fetchRemoteCssSources } from "../../../project/remoteCss.js";
 import type { ScanDiagnostic, ScanProjectInput } from "../../../project/types.js";
 import { collectProjectBoundaries } from "./boundaries/collectProjectBoundaries.js";
 import { collectProjectResourceEdges } from "./edges/collectResourceEdges.js";
@@ -11,6 +9,8 @@ import { mergeStylesheets, toCssSources, toStylesheetFiles } from "./files/style
 import { readCssFiles, readHtmlFiles, readSourceFiles } from "./files/loadProjectFiles.js";
 import { collectHtmlResources } from "./html/htmlLinks.js";
 import { collectLinkedCssFiles } from "./html/htmlPathResolution.js";
+import { loadPackageCssImports } from "./packages/loadPackageCssImports.js";
+import { fetchRemoteCssSources } from "./remote/fetchRemoteCssSources.js";
 import type { ProjectConfigFile, ProjectSnapshot, ProjectSnapshotStageRunner } from "./types.js";
 
 export async function buildProjectSnapshot(input: {
@@ -119,9 +119,6 @@ export async function buildProjectSnapshot(input: {
     externalCss: {
       fetchRemote: config.externalCss.fetchRemote,
       globalProviders: config.externalCss.globals,
-      htmlStylesheetLinks,
-      htmlScriptSources,
-      packageCssImports: packageCssImports.imports,
     },
     diagnostics,
   };

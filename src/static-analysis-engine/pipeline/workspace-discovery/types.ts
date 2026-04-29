@@ -1,13 +1,5 @@
 import type { ResolvedScannerConfig } from "../../../config/index.js";
 import type { ProjectFileRecord, ScanDiagnostic } from "../../../project/types.js";
-import type { ProjectAnalysisStylesheetInput } from "../project-analysis/types.js";
-import type {
-  ExternalCssAnalysisInput,
-  HtmlScriptSourceInput,
-  HtmlStylesheetLinkInput,
-  PackageCssImportInput,
-} from "../external-css/types.js";
-import type { SelectorSourceInput } from "../selector-analysis/types.js";
 
 export type ProjectSnapshotStageRunner = <T>(
   stage: string,
@@ -53,6 +45,33 @@ export type ProjectStylesheetFile = {
   origin: "project" | "html-linked" | "package" | "remote";
 };
 
+export type HtmlStylesheetLinkFact = {
+  filePath: string;
+  href: string;
+  isRemote: boolean;
+  resolvedFilePath?: string;
+};
+
+export type HtmlScriptSourceFact = {
+  filePath: string;
+  src: string;
+  resolvedFilePath?: string;
+  appRootPath?: string;
+};
+
+export type PackageCssImportFact = {
+  importerKind: "source" | "stylesheet";
+  importerFilePath: string;
+  specifier: string;
+  resolvedFilePath: string;
+};
+
+// TODO(workspace-discovery): compatibility aliases for existing external-css/direct engine inputs.
+// Prefer the *Fact names inside workspace-discovery and remove these once downstream APIs are renamed.
+export type HtmlStylesheetLinkInput = HtmlStylesheetLinkFact;
+export type HtmlScriptSourceInput = HtmlScriptSourceFact;
+export type PackageCssImportInput = PackageCssImportFact;
+
 export type ProjectHtmlFile = {
   kind: "html";
   filePath: string;
@@ -85,43 +104,21 @@ export type ProjectBoundary =
 
 export type ProjectResourceEdge = HtmlStylesheetEdge | HtmlScriptEdge | PackageCssImportEdge;
 
-export type HtmlStylesheetEdge = {
+export type HtmlStylesheetEdge = Omit<HtmlStylesheetLinkFact, "filePath"> & {
   kind: "html-stylesheet";
   fromHtmlFilePath: string;
-  href: string;
-  isRemote: boolean;
-  resolvedFilePath?: string;
 };
 
-export type HtmlScriptEdge = {
+export type HtmlScriptEdge = Omit<HtmlScriptSourceFact, "filePath"> & {
   kind: "html-script";
   fromHtmlFilePath: string;
-  src: string;
-  resolvedFilePath?: string;
-  appRootPath?: string;
 };
 
-export type PackageCssImportEdge = {
+export type PackageCssImportEdge = PackageCssImportFact & {
   kind: "package-css-import";
-  importerKind: "source" | "stylesheet";
-  importerFilePath: string;
-  specifier: string;
-  resolvedFilePath: string;
 };
 
 export type ProjectExternalCssSurface = {
   fetchRemote: boolean;
   globalProviders: ResolvedScannerConfig["externalCss"]["globals"];
-  htmlStylesheetLinks: HtmlStylesheetLinkInput[];
-  htmlScriptSources: HtmlScriptSourceInput[];
-  packageCssImports: PackageCssImportInput[];
-};
-
-export type ProjectSnapshotEngineInput = {
-  sourceFiles: Array<{ filePath: string; sourceText: string }>;
-  projectRoot: string;
-  selectorCssSources: SelectorSourceInput[];
-  stylesheets: ProjectAnalysisStylesheetInput[];
-  cssModules: ResolvedScannerConfig["cssModules"];
-  externalCss: ExternalCssAnalysisInput;
 };

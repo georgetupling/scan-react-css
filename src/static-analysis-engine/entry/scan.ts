@@ -4,6 +4,7 @@ import type {
   CssModuleLocalsConvention,
   ProjectAnalysisStylesheetInput,
 } from "../pipeline/project-analysis/index.js";
+import type { ProjectResourceEdge } from "../pipeline/workspace-discovery/index.js";
 import type { AnalysisProgressCallback, StaticAnalysisEngineResult } from "../types/runtime.js";
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
 import { runExternalCssStage } from "./stages/externalCssStage.js";
@@ -22,6 +23,7 @@ export function analyzeSourceText(input: {
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
   stylesheets?: ProjectAnalysisStylesheetInput[];
+  resourceEdges?: ProjectResourceEdge[];
   externalCss?: ExternalCssAnalysisInput;
   cssModules?: {
     localsConvention?: CssModuleLocalsConvention;
@@ -39,6 +41,7 @@ export function analyzeSourceText(input: {
     selectorQueries: input.selectorQueries,
     selectorCssSources: input.selectorCssSources,
     stylesheets: input.stylesheets,
+    resourceEdges: input.resourceEdges,
     externalCss: input.externalCss,
     cssModules: input.cssModules,
     onProgress: input.onProgress,
@@ -55,6 +58,7 @@ export function analyzeProjectSourceTexts(input: {
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
   stylesheets?: ProjectAnalysisStylesheetInput[];
+  resourceEdges?: ProjectResourceEdge[];
   externalCss?: ExternalCssAnalysisInput;
   cssModules?: {
     localsConvention?: CssModuleLocalsConvention;
@@ -117,6 +121,7 @@ export function analyzeProjectSourceTexts(input: {
     () =>
       runExternalCssStage({
         externalCss: input.externalCss,
+        resourceEdges: input.resourceEdges,
       }),
   );
   const reachabilityStage = runAnalysisStage(

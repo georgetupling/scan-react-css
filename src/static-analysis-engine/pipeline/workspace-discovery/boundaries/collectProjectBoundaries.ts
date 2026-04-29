@@ -1,13 +1,12 @@
 import type { ResolvedScannerConfig } from "../../../../config/index.js";
 import { normalizeProjectPath } from "../../../../project/pathUtils.js";
-import type { HtmlScriptSourceInput } from "../../external-css/types.js";
-import type { ProjectBoundary } from "../types.js";
+import type { HtmlScriptSourceFact, ProjectBoundary } from "../types.js";
 import { compareProjectBoundaries } from "../utils/sorting.js";
 
 export function collectProjectBoundaries(input: {
   rootDir: string;
   config: ResolvedScannerConfig;
-  htmlScriptSources: HtmlScriptSourceInput[];
+  htmlScriptSources: HtmlScriptSourceFact[];
 }): ProjectBoundary[] {
   const boundaries: ProjectBoundary[] = [
     {

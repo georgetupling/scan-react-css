@@ -147,7 +147,7 @@ test("ProjectAnalysis records class references from statically skipped render br
   assert.equal(skippedReference.reason, "condition-resolved-false");
 });
 
-test("ProjectAnalysis indexes declared-provider satisfaction edges by reference and class", () => {
+test("ProjectAnalysis indexes declared-provider satisfaction from resource edges", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -155,14 +155,22 @@ test("ProjectAnalysis indexes declared-provider satisfaction edges by reference 
         sourceText: 'export function App() { return <i className="fa-user" />; }\n',
       },
     ],
+    resourceEdges: [
+      {
+        kind: "html-stylesheet",
+        fromHtmlFilePath: "index.html",
+        href: "https://cdn.example/fontawesome.css",
+        isRemote: true,
+      },
+      {
+        kind: "html-script",
+        fromHtmlFilePath: "index.html",
+        src: "/src/App.tsx",
+        resolvedFilePath: "src/App.tsx",
+        appRootPath: ".",
+      },
+    ],
     externalCss: {
-      htmlStylesheetLinks: [
-        {
-          filePath: "index.html",
-          href: "https://cdn.example/fontawesome.css",
-          isRemote: true,
-        },
-      ],
       globalProviders: [
         {
           provider: "fontawesome",
@@ -185,6 +193,12 @@ test("ProjectAnalysis indexes declared-provider satisfaction edges by reference 
   assert.equal(satisfaction.className, "fa-user");
   assert.equal(satisfaction.referenceClassKind, "definite");
   assert.equal(satisfaction.provider, "fontawesome");
+  assert.deepEqual(analysis.inputs.externalCss.projectWideEntrySources, [
+    {
+      entrySourceFilePath: "src/App.tsx",
+      appRootPath: ".",
+    },
+  ]);
 });
 
 test("ProjectAnalysis can be serialized for debug output with populated indexes", () => {

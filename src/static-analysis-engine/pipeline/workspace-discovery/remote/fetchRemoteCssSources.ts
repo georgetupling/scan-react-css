@@ -1,12 +1,12 @@
-import type { HtmlStylesheetLinkInput } from "../static-analysis-engine/index.js";
-import type { ScanDiagnostic } from "./types.js";
+import type { ScanDiagnostic } from "../../../../project/types.js";
+import type { HtmlStylesheetLinkFact } from "../types.js";
 
 export async function fetchRemoteCssSources(input: {
-  htmlStylesheetLinks: HtmlStylesheetLinkInput[];
+  htmlStylesheetLinks: HtmlStylesheetLinkFact[];
   remoteTimeoutMs: number;
   diagnostics: ScanDiagnostic[];
 }): Promise<Array<{ filePath: string; cssText: string }>> {
-  const remoteLinksByHref = new Map<string, HtmlStylesheetLinkInput>();
+  const remoteLinksByHref = new Map<string, HtmlStylesheetLinkFact>();
   for (const stylesheetLink of input.htmlStylesheetLinks) {
     if (stylesheetLink.isRemote) {
       remoteLinksByHref.set(stylesheetLink.href, stylesheetLink);
@@ -29,7 +29,7 @@ export async function fetchRemoteCssSources(input: {
 }
 
 async function fetchRemoteCssSource(input: {
-  stylesheetLink: HtmlStylesheetLinkInput;
+  stylesheetLink: HtmlStylesheetLinkFact;
   remoteTimeoutMs: number;
   diagnostics: ScanDiagnostic[];
 }): Promise<{ filePath: string; cssText: string } | undefined> {

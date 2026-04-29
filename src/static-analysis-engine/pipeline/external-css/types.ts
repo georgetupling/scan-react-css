@@ -1,3 +1,9 @@
+import type {
+  HtmlScriptSourceFact,
+  HtmlStylesheetLinkFact,
+  PackageCssImportFact,
+} from "../workspace-discovery/types.js";
+
 export type ExternalCssGlobalProviderConfig = {
   provider: string;
   match: string[];
@@ -5,33 +11,12 @@ export type ExternalCssGlobalProviderConfig = {
   classNames: string[];
 };
 
-export type HtmlStylesheetLinkInput = {
-  filePath: string;
-  href: string;
-  isRemote: boolean;
-  resolvedFilePath?: string;
-};
-
-export type HtmlScriptSourceInput = {
-  filePath: string;
-  src: string;
-  resolvedFilePath?: string;
-  appRootPath?: string;
-};
-
-export type PackageCssImportInput = {
-  importerKind: "source" | "stylesheet";
-  importerFilePath: string;
-  specifier: string;
-  resolvedFilePath: string;
-};
-
 export type ExternalCssAnalysisInput = {
   fetchRemote?: boolean;
   globalProviders?: ExternalCssGlobalProviderConfig[];
-  htmlStylesheetLinks?: HtmlStylesheetLinkInput[];
-  htmlScriptSources?: HtmlScriptSourceInput[];
-  packageCssImports?: PackageCssImportInput[];
+  htmlStylesheetLinks?: HtmlStylesheetLinkFact[];
+  htmlScriptSources?: HtmlScriptSourceFact[];
+  packageCssImports?: PackageCssImportFact[];
 };
 
 export type ActiveExternalCssProvider = {
@@ -39,14 +24,14 @@ export type ActiveExternalCssProvider = {
   match: string[];
   classPrefixes: string[];
   classNames: string[];
-  matchedStylesheets: HtmlStylesheetLinkInput[];
+  matchedStylesheets: HtmlStylesheetLinkFact[];
 };
 
 export type ExternalCssSummary = {
   enabled: boolean;
   fetchRemote: boolean;
   activeProviders: ActiveExternalCssProvider[];
-  packageCssImports: PackageCssImportInput[];
+  packageCssImports: PackageCssImportFact[];
   projectWideEntrySources: Array<{
     entrySourceFilePath: string;
     appRootPath: string;
@@ -54,3 +39,11 @@ export type ExternalCssSummary = {
   projectWideStylesheetFilePaths: string[];
   externalStylesheetFilePaths: string[];
 };
+
+export type { HtmlScriptSourceFact, HtmlStylesheetLinkFact, PackageCssImportFact };
+
+// TODO(workspace-discovery): compatibility aliases for direct external-css consumers.
+// Prefer the *Fact names and remove these once ExternalCssAnalysisInput is renamed around facts.
+export type HtmlScriptSourceInput = HtmlScriptSourceFact;
+export type HtmlStylesheetLinkInput = HtmlStylesheetLinkFact;
+export type PackageCssImportInput = PackageCssImportFact;

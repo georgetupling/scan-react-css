@@ -3,9 +3,9 @@ import type {
   ExternalCssAnalysisInput,
   ExternalCssGlobalProviderConfig,
   ExternalCssSummary,
-  HtmlScriptSourceInput,
-  HtmlStylesheetLinkInput,
-  PackageCssImportInput,
+  HtmlScriptSourceFact,
+  HtmlStylesheetLinkFact,
+  PackageCssImportFact,
 } from "./types.js";
 
 export function buildExternalCssSummary(
@@ -42,7 +42,7 @@ export function buildExternalCssSummary(
 
 function buildActiveProviders(input: {
   globalProviders: ExternalCssGlobalProviderConfig[];
-  htmlStylesheetLinks: HtmlStylesheetLinkInput[];
+  htmlStylesheetLinks: HtmlStylesheetLinkFact[];
 }): ActiveExternalCssProvider[] {
   const activeProviders = new Map<string, ActiveExternalCssProvider>();
 
@@ -67,7 +67,7 @@ function buildActiveProviders(input: {
 function upsertActiveProvider(
   activeProviders: Map<string, ActiveExternalCssProvider>,
   provider: ExternalCssGlobalProviderConfig,
-  matchedStylesheet: HtmlStylesheetLinkInput,
+  matchedStylesheet: HtmlStylesheetLinkFact,
 ): void {
   const existingProvider = activeProviders.get(provider.provider);
   if (existingProvider) {
@@ -109,9 +109,7 @@ function normalizeGlobalProviders(
     .sort((left, right) => left.provider.localeCompare(right.provider));
 }
 
-function normalizeHtmlScriptSources(
-  scriptSources: HtmlScriptSourceInput[],
-): HtmlScriptSourceInput[] {
+function normalizeHtmlScriptSources(scriptSources: HtmlScriptSourceFact[]): HtmlScriptSourceFact[] {
   return [...scriptSources]
     .map((scriptSource) => ({
       filePath: scriptSource.filePath.replace(/\\/g, "/"),
@@ -131,8 +129,8 @@ function normalizeHtmlScriptSources(
 }
 
 function normalizeHtmlStylesheetLinks(
-  stylesheetLinks: HtmlStylesheetLinkInput[],
-): HtmlStylesheetLinkInput[] {
+  stylesheetLinks: HtmlStylesheetLinkFact[],
+): HtmlStylesheetLinkFact[] {
   return [...stylesheetLinks]
     .map((stylesheetLink) => ({
       filePath: stylesheetLink.filePath.replace(/\\/g, "/"),
@@ -145,8 +143,8 @@ function normalizeHtmlStylesheetLinks(
     .sort(compareStylesheetLinks);
 }
 
-function normalizePackageCssImports(imports: PackageCssImportInput[]): PackageCssImportInput[] {
-  const importsByKey = new Map<string, PackageCssImportInput>();
+function normalizePackageCssImports(imports: PackageCssImportFact[]): PackageCssImportFact[] {
+  const importsByKey = new Map<string, PackageCssImportFact>();
   for (const importRecord of imports) {
     const normalizedImport = {
       importerKind: importRecord.importerKind,
@@ -168,8 +166,8 @@ function normalizePackageCssImports(imports: PackageCssImportInput[]): PackageCs
 }
 
 function compareStylesheetLinks(
-  left: HtmlStylesheetLinkInput,
-  right: HtmlStylesheetLinkInput,
+  left: HtmlStylesheetLinkFact,
+  right: HtmlStylesheetLinkFact,
 ): number {
   if (left.filePath === right.filePath) {
     return left.href.localeCompare(right.href);
@@ -183,9 +181,9 @@ function uniqueSorted(values: string[]): string[] {
 }
 
 function uniqueStylesheetLinks(
-  stylesheetLinks: HtmlStylesheetLinkInput[],
-): HtmlStylesheetLinkInput[] {
-  const linksByKey = new Map<string, HtmlStylesheetLinkInput>();
+  stylesheetLinks: HtmlStylesheetLinkFact[],
+): HtmlStylesheetLinkFact[] {
+  const linksByKey = new Map<string, HtmlStylesheetLinkFact>();
   for (const stylesheetLink of stylesheetLinks) {
     linksByKey.set(
       `${stylesheetLink.filePath}:${stylesheetLink.href}:${stylesheetLink.resolvedFilePath ?? ""}`,
@@ -196,7 +194,7 @@ function uniqueStylesheetLinks(
 }
 
 function collectProjectWideEntrySources(
-  scriptSources: HtmlScriptSourceInput[],
+  scriptSources: HtmlScriptSourceFact[],
 ): ExternalCssSummary["projectWideEntrySources"] {
   const entrySourcesByKey = new Map<
     string,
@@ -226,7 +224,7 @@ function collectProjectWideEntrySources(
 }
 
 function collectProjectWideStylesheetFilePaths(input: {
-  htmlStylesheetLinks: HtmlStylesheetLinkInput[];
+  htmlStylesheetLinks: HtmlStylesheetLinkFact[];
   fetchRemote: boolean;
 }): string[] {
   const projectWideStylesheetFilePaths = new Set<string>();
@@ -250,8 +248,8 @@ function collectProjectWideStylesheetFilePaths(input: {
 
 function collectExternalStylesheetFilePaths(input: {
   activeProviders: ActiveExternalCssProvider[];
-  htmlStylesheetLinks: HtmlStylesheetLinkInput[];
-  packageCssImports: PackageCssImportInput[];
+  htmlStylesheetLinks: HtmlStylesheetLinkFact[];
+  packageCssImports: PackageCssImportFact[];
   fetchRemote: boolean;
 }): string[] {
   const externalStylesheetFilePaths = new Set<string>();

@@ -5,5 +5,10 @@ export type {
   ExternalCssAnalysisInput,
   ExternalCssGlobalProviderConfig,
   ExternalCssSummary,
+  HtmlScriptSourceFact,
+  HtmlScriptSourceInput,
+  HtmlStylesheetLinkFact,
   HtmlStylesheetLinkInput,
+  PackageCssImportFact,
+  PackageCssImportInput,
 } from "./types.js";

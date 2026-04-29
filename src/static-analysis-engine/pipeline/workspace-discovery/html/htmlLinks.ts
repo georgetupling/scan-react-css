@@ -1,7 +1,7 @@
-import { extractHtmlScriptSources } from "../../../../project/htmlScriptSources.js";
-import { extractHtmlStylesheetLinks } from "../../../../project/htmlStylesheetLinks.js";
 import type { ScanDiagnostic } from "../../../../project/types.js";
 import type { ProjectHtmlFile } from "../types.js";
+import { extractHtmlScriptSources } from "./extractHtmlScriptSources.js";
+import { extractHtmlStylesheetLinks } from "./extractHtmlStylesheetLinks.js";
 import {
   resolveLocalHtmlScriptSources,
   resolveLocalHtmlStylesheetLinks,

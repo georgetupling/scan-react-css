@@ -1,15 +1,15 @@
 import type {
-  HtmlScriptSourceInput,
-  HtmlStylesheetLinkInput,
-  PackageCssImportInput,
-} from "../../external-css/types.js";
+  HtmlScriptSourceFact,
+  HtmlStylesheetLinkFact,
+  PackageCssImportFact,
+} from "../types.js";
 import type { ProjectResourceEdge } from "../types.js";
 import { compareProjectResourceEdges } from "../utils/sorting.js";
 
 export function collectProjectResourceEdges(input: {
-  htmlStylesheetLinks: HtmlStylesheetLinkInput[];
-  htmlScriptSources: HtmlScriptSourceInput[];
-  packageCssImports: PackageCssImportInput[];
+  htmlStylesheetLinks: HtmlStylesheetLinkFact[];
+  htmlScriptSources: HtmlScriptSourceFact[];
+  packageCssImports: PackageCssImportFact[];
 }): ProjectResourceEdge[] {
   const edges: ProjectResourceEdge[] = [
     ...input.htmlStylesheetLinks.map((stylesheetLink) => ({

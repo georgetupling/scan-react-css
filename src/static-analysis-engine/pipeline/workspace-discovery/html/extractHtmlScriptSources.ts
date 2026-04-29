@@ -1,9 +1,4 @@
-export type HtmlScriptSourceInput = {
-  filePath: string;
-  src: string;
-  resolvedFilePath?: string;
-  appRootPath?: string;
-};
+import type { HtmlScriptSourceFact } from "../types.js";
 
 const SCRIPT_TAG_PATTERN = /<script\b[^>]*>/gi;
 const SRC_ATTRIBUTE_PATTERN = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i;
@@ -11,8 +6,8 @@ const SRC_ATTRIBUTE_PATTERN = /\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/i;
 export function extractHtmlScriptSources(input: {
   filePath: string;
   htmlText: string;
-}): HtmlScriptSourceInput[] {
-  const scriptSources: HtmlScriptSourceInput[] = [];
+}): HtmlScriptSourceFact[] {
+  const scriptSources: HtmlScriptSourceFact[] = [];
 
   for (const scriptTagMatch of input.htmlText.matchAll(SCRIPT_TAG_PATTERN)) {
     const scriptTag = scriptTagMatch[0];

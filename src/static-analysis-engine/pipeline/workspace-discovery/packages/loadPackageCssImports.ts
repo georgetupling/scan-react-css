@@ -1,14 +1,11 @@
 import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import ts from "typescript";
-import { normalizeProjectPath } from "./pathUtils.js";
-import type { ScanDiagnostic } from "./types.js";
+import { normalizeProjectPath } from "../../../../project/pathUtils.js";
+import type { ScanDiagnostic } from "../../../../project/types.js";
+import type { PackageCssImportFact } from "../types.js";
 
-export type PackageCssImportRecord = {
-  importerKind: "source" | "stylesheet";
-  importerFilePath: string;
-  specifier: string;
-  resolvedFilePath: string;
+export type PackageCssImportRecord = PackageCssImportFact & {
   resolvedAbsolutePath: string;
 };
 

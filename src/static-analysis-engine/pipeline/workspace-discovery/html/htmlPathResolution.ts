@@ -1,13 +1,13 @@
 import path from "node:path";
 import { normalizeProjectPath } from "../../../../project/pathUtils.js";
 import type { ProjectFileRecord, ScanDiagnostic } from "../../../../project/types.js";
-import type { HtmlScriptSourceInput, HtmlStylesheetLinkInput } from "../../external-css/types.js";
+import type { HtmlScriptSourceFact, HtmlStylesheetLinkFact } from "../types.js";
 
 export function resolveLocalHtmlScriptSources(input: {
   rootDir: string;
-  htmlScriptSources: HtmlScriptSourceInput[];
+  htmlScriptSources: HtmlScriptSourceFact[];
   diagnostics: ScanDiagnostic[];
-}): HtmlScriptSourceInput[] {
+}): HtmlScriptSourceFact[] {
   return input.htmlScriptSources.map((scriptSource) => {
     if (!isLocalSourceHref(scriptSource.src)) {
       return scriptSource;
@@ -46,9 +46,9 @@ export function resolveLocalHtmlScriptSources(input: {
 
 export function resolveLocalHtmlStylesheetLinks(input: {
   rootDir: string;
-  htmlStylesheetLinks: HtmlStylesheetLinkInput[];
+  htmlStylesheetLinks: HtmlStylesheetLinkFact[];
   diagnostics: ScanDiagnostic[];
-}): HtmlStylesheetLinkInput[] {
+}): HtmlStylesheetLinkFact[] {
   return input.htmlStylesheetLinks.map((stylesheetLink) => {
     if (stylesheetLink.isRemote || !isLocalCssHref(stylesheetLink.href)) {
       return stylesheetLink;
@@ -84,7 +84,7 @@ export function resolveLocalHtmlStylesheetLinks(input: {
 export function collectLinkedCssFiles(input: {
   rootDir: string;
   cssFiles: ProjectFileRecord[];
-  htmlStylesheetLinks: HtmlStylesheetLinkInput[];
+  htmlStylesheetLinks: HtmlStylesheetLinkFact[];
 }): ProjectFileRecord[] {
   const knownCssFilePaths = new Set(input.cssFiles.map((cssFile) => cssFile.filePath));
   const linkedCssFilePaths = [
