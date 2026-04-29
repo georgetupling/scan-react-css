@@ -24,30 +24,6 @@ export function buildLanguageFrontends(input: {
     snapshot: input.snapshot,
     source,
     css,
-    compatibility: {
-      sourceFiles: source.files.map((file) => ({
-        filePath: file.filePath,
-        sourceText: file.sourceText,
-      })),
-      parsedFiles: source.files.map((file) => file.legacy.parsedFile),
-      selectorCssSources: css.files.map((file) => ({
-        filePath: file.filePath,
-        cssText: file.cssText,
-      })),
-      projectAnalysisStylesheets: css.files.map((file) => ({
-        filePath: file.filePath,
-        cssKind: file.cssKind,
-        origin: file.origin,
-      })),
-      boundaries: [...input.snapshot.boundaries],
-      resourceEdges: [...input.snapshot.edges],
-      cssModules: input.snapshot.config.cssModules,
-      externalCss: {
-        fetchRemote: input.snapshot.externalCss.fetchRemote,
-        globalProviders: input.snapshot.externalCss.globalProviders,
-      },
-      projectRoot: input.snapshot.rootDir,
-    },
   };
 }
 

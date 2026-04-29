@@ -15,6 +15,7 @@ import type {
 } from "./types.js";
 import { buildProjectSnapshot } from "../static-analysis-engine/pipeline/workspace-discovery/index.js";
 import { runLanguageFrontendsStage } from "../static-analysis-engine/entry/stages/languageFrontendsStage.js";
+import { languageFrontendsToEngineInput } from "../static-analysis-engine/pipeline/language-frontends/index.js";
 
 export async function scanProject(input: ScanProjectInput = {}): Promise<ScanProjectResult> {
   const totalStartedAt = performance.now();
@@ -30,7 +31,7 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
     runStage: (stage, message, run) => runScanStage(progress, stage, message, run),
   });
   const languageFrontends = runLanguageFrontendsStage({ snapshot });
-  const engineInput = languageFrontends.compatibility;
+  const engineInput = languageFrontendsToEngineInput(languageFrontends);
 
   const engineResult = analyzeProjectSourceTexts({
     sourceFiles: engineInput.sourceFiles,

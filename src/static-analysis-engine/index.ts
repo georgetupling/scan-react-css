@@ -3,6 +3,7 @@ export { analyzeCssSources } from "./pipeline/css-analysis/index.js";
 export {
   buildLanguageFrontends,
   buildSourceFrontendFactsFromParsedFiles,
+  languageFrontendsToEngineInput,
 } from "./pipeline/language-frontends/index.js";
 export { buildModuleFacts } from "./pipeline/module-facts/buildModuleFacts.js";
 export {

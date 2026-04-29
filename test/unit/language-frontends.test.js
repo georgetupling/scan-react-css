@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import { languageFrontendsToEngineInput } from "../../dist/static-analysis-engine/pipeline/language-frontends/adapters/languageFrontendsToEngineInput.js";
 import { buildLanguageFrontends } from "../../dist/static-analysis-engine/pipeline/language-frontends/buildLanguageFrontends.js";
 import { buildProjectSnapshot } from "../../dist/static-analysis-engine/pipeline/workspace-discovery/buildProjectSnapshot.js";
 import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
 
-test("language frontends consume ProjectSnapshot and expose compatibility projections", async () => {
+test("language frontends consume ProjectSnapshot and expose target source facts", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
       "src/Zed.jsx",
@@ -54,14 +55,6 @@ test("language frontends consume ProjectSnapshot and expose compatibility projec
       ],
     );
     assert.deepEqual(
-      frontends.compatibility.sourceFiles.map((file) => file.filePath),
-      ["src/components/Button.tsx", "src/Zed.jsx"],
-    );
-    assert.deepEqual(
-      frontends.compatibility.parsedFiles.map((file) => file.filePath),
-      ["src/components/Button.tsx", "src/Zed.jsx"],
-    );
-    assert.deepEqual(
       frontends.source.files.map((file) => ({
         filePath: file.filePath,
         imports: file.moduleSyntax.imports.map((importRecord) => ({
@@ -96,26 +89,57 @@ test("language frontends consume ProjectSnapshot and expose compatibility projec
         },
       ],
     );
-    assert.deepEqual(
-      frontends.compatibility.selectorCssSources.map((file) => file.filePath),
-      ["src/components/Button.module.css", "src/zed.css"],
-    );
-    assert.deepEqual(frontends.compatibility.projectAnalysisStylesheets, [
-      {
-        filePath: "src/components/Button.module.css",
-        cssKind: "css-module",
-        origin: "project",
+    assert.equal("compatibility" in frontends, false);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("language frontends adapter projects legacy engine inputs", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      'import "./app.css";\nexport function App() { return <div className="app" />; }\n',
+    )
+    .withCssFile("src/app.css", ".app { color: red; }\n")
+    .build();
+
+  try {
+    const snapshot = await buildProjectSnapshot({
+      scanInput: {
+        rootDir: project.rootDir,
+        sourceFilePaths: ["src/App.tsx"],
+        cssFilePaths: ["src/app.css"],
       },
+      runStage: async (_stage, _message, run) => run(),
+    });
+
+    const frontends = buildLanguageFrontends({ snapshot });
+    const engineInput = languageFrontendsToEngineInput(frontends);
+
+    assert.deepEqual(
+      engineInput.sourceFiles.map((file) => file.filePath),
+      ["src/App.tsx"],
+    );
+    assert.deepEqual(
+      engineInput.parsedFiles.map((file) => file.filePath),
+      ["src/App.tsx"],
+    );
+    assert.deepEqual(
+      engineInput.selectorCssSources.map((file) => file.filePath),
+      ["src/app.css"],
+    );
+    assert.deepEqual(engineInput.projectAnalysisStylesheets, [
       {
-        filePath: "src/zed.css",
+        filePath: "src/app.css",
         cssKind: "global-css",
         origin: "project",
       },
     ]);
-    assert.equal(frontends.compatibility.projectRoot, snapshot.rootDir);
-    assert.equal(frontends.compatibility.cssModules, snapshot.config.cssModules);
-    assert.deepEqual(frontends.compatibility.boundaries, snapshot.boundaries);
-    assert.deepEqual(frontends.compatibility.resourceEdges, snapshot.edges);
+    assert.equal(engineInput.projectRoot, snapshot.rootDir);
+    assert.equal(engineInput.cssModules, snapshot.config.cssModules);
+    assert.deepEqual(engineInput.boundaries, snapshot.boundaries);
+    assert.deepEqual(engineInput.resourceEdges, snapshot.edges);
   } finally {
     await project.cleanup();
   }

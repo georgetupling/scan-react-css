@@ -19,7 +19,6 @@ export type LanguageFrontendsResult = {
   snapshot: ProjectSnapshot;
   source: SourceFrontendFacts;
   css: CssFrontendFacts;
-  compatibility: LanguageFrontendsCompatibility;
 };
 
 export type SourceFrontendFacts = {
