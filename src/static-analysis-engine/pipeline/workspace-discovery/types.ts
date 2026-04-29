@@ -1,5 +1,6 @@
 import type { ResolvedScannerConfig } from "../../../config/index.js";
 import type { ProjectFileRecord, ScanDiagnostic } from "../../../project/types.js";
+import type { ProjectAnalysisStylesheetInput } from "../project-analysis/types.js";
 import type {
   ExternalCssAnalysisInput,
   HtmlScriptSourceInput,
@@ -120,6 +121,7 @@ export type ProjectSnapshotEngineInput = {
   sourceFiles: Array<{ filePath: string; sourceText: string }>;
   projectRoot: string;
   selectorCssSources: SelectorSourceInput[];
+  stylesheets: ProjectAnalysisStylesheetInput[];
   cssModules: ResolvedScannerConfig["cssModules"];
   externalCss: ExternalCssAnalysisInput;
 };

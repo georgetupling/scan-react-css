@@ -7,6 +7,7 @@ import type {
   ComponentAnalysis,
   ProjectAnalysisBuildInput,
   ProjectAnalysisIndexes,
+  ProjectAnalysisStylesheetInput,
   RenderSubtreeAnalysis,
   SourceFileAnalysis,
   StylesheetAnalysis,
@@ -23,8 +24,8 @@ import {
   getDeclarationSignature,
   getDefinitionSelectorKind,
   getSelectorBranchKind,
-  getStylesheetOrigin,
-  isCssModuleStylesheet,
+  getStylesheetOriginFromInventory,
+  isCssModuleStylesheetFromInventory,
   normalizeAnchor,
   normalizeOptionalProjectPath,
   normalizeProjectPath,
@@ -118,8 +119,10 @@ export function buildStylesheets(
   input: ProjectAnalysisBuildInput,
   indexes: ProjectAnalysisIndexes,
 ): StylesheetAnalysis[] {
+  const stylesheetInputsByPath = indexStylesheetInputsByPath(input);
   const stylesheets = input.cssFiles.map((cssFile, index) => {
     const filePath = normalizeOptionalProjectPath(cssFile.filePath);
+    const stylesheetInput = filePath ? stylesheetInputsByPath.get(filePath) : undefined;
     const id = filePath ? createPathId("stylesheet", filePath) : `stylesheet:anonymous:${index}`;
     if (filePath) {
       indexes.stylesheetIdByPath.set(filePath, id);
@@ -128,7 +131,7 @@ export function buildStylesheets(
     return {
       id,
       filePath,
-      origin: getStylesheetOrigin(filePath, input),
+      origin: getStylesheetOriginFromInventory(stylesheetInput, filePath, input),
       definitions: [],
       selectors: [],
     };
@@ -142,6 +145,7 @@ export function buildClassDefinitions(
   stylesheets: StylesheetAnalysis[],
   indexes: ProjectAnalysisIndexes,
 ): ClassDefinitionAnalysis[] {
+  const stylesheetInputsByPath = indexStylesheetInputsByPath(input);
   const stylesheetsByPath = new Map(
     stylesheets.map((stylesheet) => [stylesheet.filePath ?? stylesheet.id, stylesheet]),
   );
@@ -156,6 +160,9 @@ export function buildClassDefinitions(
     }
 
     for (const definition of cssFile.classDefinitions) {
+      const stylesheetInput = stylesheet.filePath
+        ? stylesheetInputsByPath.get(stylesheet.filePath)
+        : undefined;
       const id = createClassDefinitionId(stylesheet.id, definition);
       const analysis: ClassDefinitionAnalysis = {
         id,
@@ -167,7 +174,7 @@ export function buildClassDefinitions(
         atRuleContext: [...definition.atRuleContext],
         declarationProperties: [...definition.declarations],
         declarationSignature: getDeclarationSignature(definition.declarationDetails),
-        isCssModule: isCssModuleStylesheet(stylesheet.filePath),
+        isCssModule: isCssModuleStylesheetFromInventory(stylesheetInput, stylesheet.filePath),
         sourceDefinition: definition,
       };
 
@@ -181,6 +188,25 @@ export function buildClassDefinitions(
   sortIndexValues(indexes.definitionsByClassName);
   sortIndexValues(indexes.definitionsByStylesheetId);
   return definitions.sort(compareById);
+}
+
+function indexStylesheetInputsByPath(
+  input: ProjectAnalysisBuildInput,
+): Map<string, ProjectAnalysisStylesheetInput> {
+  const stylesheetsByPath = new Map<string, ProjectAnalysisStylesheetInput>();
+  for (const stylesheet of input.stylesheets ?? []) {
+    const filePath = normalizeOptionalProjectPath(stylesheet.filePath);
+    if (!filePath) {
+      continue;
+    }
+
+    stylesheetsByPath.set(filePath, {
+      ...stylesheet,
+      filePath,
+    });
+  }
+
+  return stylesheetsByPath;
 }
 
 export function buildClassContexts(

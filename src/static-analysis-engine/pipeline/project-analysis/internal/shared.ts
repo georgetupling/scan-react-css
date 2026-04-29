@@ -18,6 +18,7 @@ import type {
   StylesheetReachabilityRelation,
   StaticallySkippedClassReferenceAnalysis,
   ClassContextAnalysis,
+  ProjectAnalysisStylesheetInput,
 } from "../types.js";
 
 export function getStylesheetOrigin(
@@ -34,6 +35,37 @@ export function getStylesheetOrigin(
     return "external-import";
   }
   return "project-css";
+}
+
+export function getStylesheetOriginFromInventory(
+  stylesheet: ProjectAnalysisStylesheetInput | undefined,
+  filePath: string | undefined,
+  input: ProjectAnalysisBuildInput,
+): StylesheetOrigin {
+  if (!stylesheet) {
+    return getStylesheetOrigin(filePath, input);
+  }
+
+  if (stylesheet.cssKind === "css-module") {
+    return "css-module";
+  }
+
+  if (stylesheet.origin === "package" || stylesheet.origin === "remote") {
+    return "external-import";
+  }
+
+  if (filePath && isExternalStylesheet(filePath, input)) {
+    return "external-import";
+  }
+
+  return "project-css";
+}
+
+export function isCssModuleStylesheetFromInventory(
+  stylesheet: ProjectAnalysisStylesheetInput | undefined,
+  filePath: string | undefined,
+): boolean {
+  return stylesheet ? stylesheet.cssKind === "css-module" : isCssModuleStylesheet(filePath);
 }
 
 export function isExternalStylesheet(filePath: string, input: ProjectAnalysisBuildInput): boolean {

@@ -8,12 +8,16 @@ import type { RenderGraph } from "../../pipeline/render-model/render-graph/index
 import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.js";
 import type { RuntimeDomClassReference } from "../../pipeline/runtime-dom/index.js";
 import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/index.js";
-import type { CssModuleLocalsConvention } from "../../pipeline/project-analysis/index.js";
+import type {
+  CssModuleLocalsConvention,
+  ProjectAnalysisStylesheetInput,
+} from "../../pipeline/project-analysis/index.js";
 import type { ProjectAnalysisStageResult, SelectorAnalysisStageResult } from "./types.js";
 
 export function runProjectAnalysisStage(input: {
   moduleFacts: ModuleFacts;
   cssFiles: ExperimentalCssFileAnalysis[];
+  stylesheets?: ProjectAnalysisStylesheetInput[];
   symbolResolution: ProjectBindingResolution;
   cssModuleLocalsConvention?: CssModuleLocalsConvention;
   externalCssSummary: ExternalCssSummary;

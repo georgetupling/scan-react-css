@@ -30,6 +30,7 @@ export type {
   ProjectAnalysisInputs,
   ProjectAnalysisMeta,
   ProjectAnalysisRelations,
+  ProjectAnalysisStylesheetInput,
   ProviderClassSatisfactionRelation,
   RenderSubtreeAnalysis,
   SelectorBranchAnalysis,

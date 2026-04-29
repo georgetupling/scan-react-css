@@ -82,6 +82,12 @@ export type SourceFileAnalysis = SourceFileRecord & {
 
 export type StylesheetOrigin = "project-css" | "css-module" | "external-import" | "unknown";
 
+export type ProjectAnalysisStylesheetInput = {
+  filePath?: string;
+  cssKind: "global-css" | "css-module";
+  origin: "project" | "html-linked" | "package" | "remote";
+};
+
 export type StylesheetAnalysis = CssFileRecord & {
   origin: StylesheetOrigin;
   definitions: ProjectAnalysisId[];
@@ -494,6 +500,7 @@ export type SerializableProjectAnalysisIndexes = {
 export type ProjectAnalysisBuildInput = {
   moduleFacts: ModuleFacts;
   cssFiles: import("../css-analysis/types.js").ExperimentalCssFileAnalysis[];
+  stylesheets?: ProjectAnalysisStylesheetInput[];
   symbolResolution: ProjectBindingResolution;
   cssModuleLocalsConvention?: CssModuleLocalsConvention;
   externalCssSummary: ExternalCssSummary;

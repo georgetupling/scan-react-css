@@ -50,6 +50,66 @@ test("ProjectAnalysis exposes reference match semantics for reachable and unreac
   assert.equal(maybeMatch.referenceClassKind, "possible");
 });
 
+test("ProjectAnalysis prefers supplied stylesheet inventory for origin and CSS Module kind", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/App.tsx",
+        sourceText: [
+          'import styles from "./App.module.css";',
+          'import "pkg/styles.css";',
+          "export function App() { return <main className={styles.root}>Hello</main>; }",
+          "",
+        ].join("\n"),
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/App.module.css",
+        cssText: ".root { display: block; }\n",
+      },
+      {
+        filePath: "node_modules/pkg/styles.css",
+        cssText: ".pkg { display: block; }\n",
+      },
+    ],
+    stylesheets: [
+      {
+        filePath: "src/App.module.css",
+        cssKind: "css-module",
+        origin: "project",
+      },
+      {
+        filePath: "node_modules/pkg/styles.css",
+        cssKind: "global-css",
+        origin: "package",
+      },
+    ],
+  });
+
+  const stylesheetsByPath = new Map(
+    result.projectAnalysis.entities.stylesheets.map((stylesheet) => [
+      stylesheet.filePath,
+      stylesheet,
+    ]),
+  );
+  const definitionsByStylesheetId = new Map(
+    result.projectAnalysis.entities.classDefinitions.map((definition) => [
+      definition.stylesheetId,
+      definition,
+    ]),
+  );
+  const moduleStylesheet = stylesheetsByPath.get("src/App.module.css");
+  const packageStylesheet = stylesheetsByPath.get("node_modules/pkg/styles.css");
+
+  assert.equal(moduleStylesheet?.origin, "css-module");
+  assert.equal(packageStylesheet?.origin, "external-import");
+  assert.equal(
+    moduleStylesheet ? definitionsByStylesheetId.get(moduleStylesheet.id)?.isCssModule : undefined,
+    true,
+  );
+});
+
 test("ProjectAnalysis records class references from statically skipped render branches", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [

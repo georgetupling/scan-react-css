@@ -13,6 +13,11 @@ export function projectSnapshotToEngineInput(
       filePath: stylesheet.filePath,
       cssText: stylesheet.cssText,
     })),
+    stylesheets: snapshot.files.stylesheets.map((stylesheet) => ({
+      filePath: stylesheet.filePath,
+      cssKind: stylesheet.cssKind,
+      origin: stylesheet.origin,
+    })),
     cssModules: snapshot.config.cssModules,
     externalCss: {
       fetchRemote: snapshot.externalCss.fetchRemote,

@@ -1,6 +1,9 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
-import type { CssModuleLocalsConvention } from "../pipeline/project-analysis/index.js";
+import type {
+  CssModuleLocalsConvention,
+  ProjectAnalysisStylesheetInput,
+} from "../pipeline/project-analysis/index.js";
 import type { AnalysisProgressCallback, StaticAnalysisEngineResult } from "../types/runtime.js";
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
 import { runExternalCssStage } from "./stages/externalCssStage.js";
@@ -18,6 +21,7 @@ export function analyzeSourceText(input: {
   sourceText: string;
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
+  stylesheets?: ProjectAnalysisStylesheetInput[];
   externalCss?: ExternalCssAnalysisInput;
   cssModules?: {
     localsConvention?: CssModuleLocalsConvention;
@@ -34,6 +38,7 @@ export function analyzeSourceText(input: {
     ],
     selectorQueries: input.selectorQueries,
     selectorCssSources: input.selectorCssSources,
+    stylesheets: input.stylesheets,
     externalCss: input.externalCss,
     cssModules: input.cssModules,
     onProgress: input.onProgress,
@@ -49,6 +54,7 @@ export function analyzeProjectSourceTexts(input: {
   projectRoot?: string;
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
+  stylesheets?: ProjectAnalysisStylesheetInput[];
   externalCss?: ExternalCssAnalysisInput;
   cssModules?: {
     localsConvention?: CssModuleLocalsConvention;
@@ -148,6 +154,7 @@ export function analyzeProjectSourceTexts(input: {
       runProjectAnalysisStage({
         moduleFacts: moduleFactsStage.moduleFacts,
         cssFiles: cssAnalysisStage.cssFiles,
+        stylesheets: input.stylesheets,
         symbolResolution: symbolResolutionStage,
         cssModuleLocalsConvention: input.cssModules?.localsConvention,
         externalCssSummary: externalCssStage.externalCssSummary,
