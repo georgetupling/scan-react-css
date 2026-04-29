@@ -1,6 +1,7 @@
 export { buildFactGraph } from "./buildFactGraph.js";
 export { graphToCssRuleFileInputs } from "./adapters/cssAnalysisInputs.js";
 export { graphToProjectResourceEdges } from "./adapters/graphToProjectResourceEdges.js";
+export { graphToReactRenderSyntaxInputs } from "./adapters/reactRenderSyntaxInputs.js";
 export { graphToSelectorEntries } from "./adapters/selectorAnalysisInputs.js";
 export type {
   FactEdge,
@@ -33,3 +34,4 @@ export type {
   StyleSheetNode,
 } from "./types.js";
 export type { FactGraphCssRuleFileInput } from "./adapters/cssAnalysisInputs.js";
+export type { FactGraphReactRenderSyntaxInputs } from "./adapters/reactRenderSyntaxInputs.js";

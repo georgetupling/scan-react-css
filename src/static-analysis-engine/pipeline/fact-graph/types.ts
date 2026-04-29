@@ -150,7 +150,13 @@ export type ComponentNode = FactNodeBase & {
 export type RenderSiteNode = FactNodeBase & {
   kind: "render-site";
   renderSiteKey: string;
-  renderSiteKind: "component-root" | "jsx-element" | "jsx-fragment" | "conditional";
+  renderSiteKind:
+    | "component-root"
+    | "jsx-element"
+    | "component-reference"
+    | "jsx-fragment"
+    | "conditional"
+    | "helper-return";
   filePath: string;
   location: SourceAnchor;
   emittingComponentNodeId?: FactNodeId;
@@ -241,6 +247,10 @@ export type SelectorBranchNode = FactNodeBase & {
 
 export type OwnerCandidateNode = FactNodeBase & {
   kind: "owner-candidate";
+  ownerCandidateKind: "component" | "source-file" | "directory" | "workspace-package";
+  ownerKey: string;
+  displayName: string;
+  seedReason: string;
 };
 
 export type FactNode =
@@ -318,6 +328,14 @@ export type FactGraphIndexes = {
   fileNodeIdByPath: Map<string, FactNodeId>;
   moduleNodeIdByFilePath: Map<string, FactNodeId>;
   stylesheetNodeIdByFilePath: Map<string, FactNodeId>;
+  componentNodeIdByComponentKey: Map<string, FactNodeId>;
+  componentNodeIdsByFilePath: Map<string, FactNodeId[]>;
+  renderSiteNodeIdByRenderSiteKey: Map<string, FactNodeId>;
+  renderSiteNodeIdsByComponentNodeId: Map<FactNodeId, FactNodeId[]>;
+  elementTemplateNodeIdByTemplateKey: Map<string, FactNodeId>;
+  classExpressionSiteNodeIdBySiteKey: Map<string, FactNodeId>;
+  classExpressionSiteNodeIdsByComponentNodeId: Map<FactNodeId, FactNodeId[]>;
+  ownerCandidateNodeIdsByOwnerKind: Map<string, FactNodeId[]>;
   ruleDefinitionNodeIdsByStylesheetNodeId: Map<FactNodeId, FactNodeId[]>;
   selectorNodeIdsByStylesheetNodeId: Map<FactNodeId, FactNodeId[]>;
   selectorBranchNodeIdsByStylesheetNodeId: Map<FactNodeId, FactNodeId[]>;

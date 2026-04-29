@@ -11,6 +11,14 @@ export function buildFactGraphIndexes(input: { nodes: FactNode[]; edges: FactEdg
   const fileNodeIdByPath = new Map<string, string>();
   const moduleNodeIdByFilePath = new Map<string, string>();
   const stylesheetNodeIdByFilePath = new Map<string, string>();
+  const componentNodeIdByComponentKey = new Map<string, string>();
+  const componentNodeIdsByFilePath = new Map<string, string[]>();
+  const renderSiteNodeIdByRenderSiteKey = new Map<string, string>();
+  const renderSiteNodeIdsByComponentNodeId = new Map<string, string[]>();
+  const elementTemplateNodeIdByTemplateKey = new Map<string, string>();
+  const classExpressionSiteNodeIdBySiteKey = new Map<string, string>();
+  const classExpressionSiteNodeIdsByComponentNodeId = new Map<string, string[]>();
+  const ownerCandidateNodeIdsByOwnerKind = new Map<string, string[]>();
   const ruleDefinitionNodeIdsByStylesheetNodeId = new Map<string, string[]>();
   const selectorNodeIdsByStylesheetNodeId = new Map<string, string[]>();
   const selectorBranchNodeIdsByStylesheetNodeId = new Map<string, string[]>();
@@ -33,6 +41,27 @@ export function buildFactGraphIndexes(input: { nodes: FactNode[]; edges: FactEdg
       fileNodeIdByPath.set(node.filePath, node.id);
     } else if (node.kind === "module") {
       moduleNodeIdByFilePath.set(node.filePath, node.id);
+    } else if (node.kind === "component") {
+      componentNodeIdByComponentKey.set(node.componentKey, node.id);
+      pushMapValue(componentNodeIdsByFilePath, node.filePath, node.id);
+    } else if (node.kind === "render-site") {
+      renderSiteNodeIdByRenderSiteKey.set(node.renderSiteKey, node.id);
+      if (node.emittingComponentNodeId) {
+        pushMapValue(renderSiteNodeIdsByComponentNodeId, node.emittingComponentNodeId, node.id);
+      }
+    } else if (node.kind === "element-template") {
+      elementTemplateNodeIdByTemplateKey.set(node.templateKey, node.id);
+    } else if (node.kind === "class-expression-site") {
+      classExpressionSiteNodeIdBySiteKey.set(node.classExpressionSiteKey, node.id);
+      if (node.emittingComponentNodeId) {
+        pushMapValue(
+          classExpressionSiteNodeIdsByComponentNodeId,
+          node.emittingComponentNodeId,
+          node.id,
+        );
+      }
+    } else if (node.kind === "owner-candidate") {
+      pushMapValue(ownerCandidateNodeIdsByOwnerKind, node.ownerCandidateKind, node.id);
     } else if (node.kind === "stylesheet" && node.filePath) {
       stylesheetNodeIdByFilePath.set(node.filePath, node.id);
     } else if (node.kind === "rule-definition") {
@@ -81,6 +110,16 @@ export function buildFactGraphIndexes(input: { nodes: FactNode[]; edges: FactEdg
       fileNodeIdByPath,
       moduleNodeIdByFilePath,
       stylesheetNodeIdByFilePath,
+      componentNodeIdByComponentKey,
+      componentNodeIdsByFilePath: sortMapValues(componentNodeIdsByFilePath),
+      renderSiteNodeIdByRenderSiteKey,
+      renderSiteNodeIdsByComponentNodeId: sortMapValues(renderSiteNodeIdsByComponentNodeId),
+      elementTemplateNodeIdByTemplateKey,
+      classExpressionSiteNodeIdBySiteKey,
+      classExpressionSiteNodeIdsByComponentNodeId: sortMapValues(
+        classExpressionSiteNodeIdsByComponentNodeId,
+      ),
+      ownerCandidateNodeIdsByOwnerKind: sortMapValues(ownerCandidateNodeIdsByOwnerKind),
       ruleDefinitionNodeIdsByStylesheetNodeId: sortMapValues(
         ruleDefinitionNodeIdsByStylesheetNodeId,
       ),

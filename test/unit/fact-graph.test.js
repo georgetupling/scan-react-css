@@ -3,6 +3,7 @@ import test from "node:test";
 
 import { graphToCssRuleFileInputs } from "../../dist/static-analysis-engine/pipeline/fact-graph/adapters/cssAnalysisInputs.js";
 import { graphToProjectResourceEdges } from "../../dist/static-analysis-engine/pipeline/fact-graph/adapters/graphToProjectResourceEdges.js";
+import { graphToReactRenderSyntaxInputs } from "../../dist/static-analysis-engine/pipeline/fact-graph/adapters/reactRenderSyntaxInputs.js";
 import { graphToSelectorEntries } from "../../dist/static-analysis-engine/pipeline/fact-graph/adapters/selectorAnalysisInputs.js";
 import { buildFactGraph } from "../../dist/static-analysis-engine/pipeline/fact-graph/buildFactGraph.js";
 import { buildLanguageFrontends } from "../../dist/static-analysis-engine/pipeline/language-frontends/buildLanguageFrontends.js";
@@ -227,6 +228,13 @@ test("fact graph builds file, module, stylesheet, and origin facts without chang
         (node) => node.classExpressionSiteKind === "jsx-class",
       ),
       true,
+    );
+    assert.equal(result.graph.indexes.componentNodeIdsByFilePath.get("src/App.tsx").length, 1);
+    assert.equal(
+      result.graph.indexes.classExpressionSiteNodeIdsByComponentNodeId.get(
+        result.graph.nodes.components[0].id,
+      ).length,
+      1,
     );
     assert.deepEqual(
       result.graph.edges.definesSelector.map((edge) => ({
@@ -499,6 +507,182 @@ test("fact graph normalizes source and stylesheet imports into import edges", as
           resolvedFilePath: "src/tokens.css",
         },
       ],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("fact graph normalizes React component references and helper return sites", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import "./app.css";',
+        'export function Child() { return <span className="child" />; }',
+        'export function Parent() { function helper() { return <em className="helper" />; } return <Child className="from-parent" />; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/app.css", ".child, .helper, .from-parent { display: block; }\n")
+    .build();
+
+  try {
+    const snapshot = await buildProjectSnapshot({
+      scanInput: {
+        rootDir: project.rootDir,
+        sourceFilePaths: ["src/App.tsx"],
+        cssFilePaths: ["src/app.css"],
+      },
+      runStage: async (_stage, _message, run) => run(),
+    });
+    const frontends = buildLanguageFrontends({ snapshot });
+    const result = buildFactGraph({ snapshot, frontends });
+
+    assert.deepEqual(
+      result.graph.nodes.components.map((node) => node.componentName),
+      ["Child", "Parent"],
+    );
+    assert.equal(
+      result.graph.nodes.renderSites.some((node) => node.renderSiteKind === "component-reference"),
+      true,
+    );
+    assert.equal(
+      result.graph.nodes.renderSites.some((node) => node.renderSiteKind === "helper-return"),
+      true,
+    );
+    assert.equal(
+      result.graph.nodes.elementTemplates.some(
+        (node) => node.templateKind === "component-candidate" && node.name === "Child",
+      ),
+      true,
+    );
+    assert.equal(
+      result.graph.nodes.classExpressionSites.some(
+        (node) => node.classExpressionSiteKind === "component-prop-class",
+      ),
+      true,
+    );
+    assert.equal(
+      result.graph.edges.renders.some((edge) => {
+        const from = result.graph.indexes.nodesById.get(edge.from);
+        const to = result.graph.indexes.nodesById.get(edge.to);
+        return (
+          from?.kind === "component" &&
+          from.componentName === "Parent" &&
+          to?.kind === "component" &&
+          to.componentName === "Child"
+        );
+      }),
+      true,
+    );
+    const renderSyntaxInputs = graphToReactRenderSyntaxInputs(result.graph);
+    const parentComponent = renderSyntaxInputs.components.find(
+      (component) => component.componentName === "Parent",
+    );
+    const parentRenderSiteKinds = renderSyntaxInputs.renderSitesByComponentNodeId
+      .get(parentComponent.id)
+      .map((node) => node.renderSiteKind);
+    assert.equal(parentRenderSiteKinds.includes("component-root"), true);
+    assert.equal(parentRenderSiteKinds.includes("component-reference"), true);
+    assert.equal(parentRenderSiteKinds.includes("helper-return"), true);
+    assert.equal(
+      renderSyntaxInputs.elementTemplates.some(
+        (node) => node.templateKind === "component-candidate" && node.name === "Child",
+      ),
+      true,
+    );
+    assert.equal(
+      renderSyntaxInputs.classExpressionSites.some(
+        (node) => node.classExpressionSiteKind === "component-prop-class",
+      ),
+      true,
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("fact graph seeds reusable owner candidates without emitting findings", async () => {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "packages/ui/src/index.tsx",
+      'export function Button() { return <button className="button" />; }\n',
+    )
+    .withCssFile("packages/ui/src/Button.css", ".button { color: red; }\n")
+    .build();
+
+  try {
+    const snapshot = await buildProjectSnapshot({
+      scanInput: {
+        rootDir: project.rootDir,
+        sourceFilePaths: ["packages/ui/src/index.tsx"],
+        cssFilePaths: ["packages/ui/src/Button.css"],
+      },
+      runStage: async (_stage, _message, run) => run(),
+    });
+    const frontends = buildLanguageFrontends({ snapshot });
+    const result = buildFactGraph({ snapshot, frontends });
+
+    assert.deepEqual(
+      result.graph.nodes.ownerCandidates.map((node) => ({
+        ownerCandidateKind: node.ownerCandidateKind,
+        ownerKey: node.ownerKey,
+        seedReason: node.seedReason,
+        confidence: node.confidence,
+      })),
+      [
+        {
+          ownerCandidateKind: "component",
+          ownerKey: "component:packages/ui/src/index.tsx:Button:1:17:1:23",
+          seedReason: "component declaration",
+          confidence: "high",
+        },
+        {
+          ownerCandidateKind: "directory",
+          ownerKey: "packages/ui/src",
+          seedReason: "containing directory path",
+          confidence: "high",
+        },
+        {
+          ownerCandidateKind: "source-file",
+          ownerKey: "packages/ui/src/Button.css",
+          seedReason: "file resource path",
+          confidence: "high",
+        },
+        {
+          ownerCandidateKind: "source-file",
+          ownerKey: "packages/ui/src/index.tsx",
+          seedReason: "file resource path",
+          confidence: "high",
+        },
+        {
+          ownerCandidateKind: "workspace-package",
+          ownerKey: "ui",
+          seedReason: "discovered-workspace-entrypoint",
+          confidence: "medium",
+        },
+      ],
+    );
+    assert.equal(
+      result.graph.indexes.ownerCandidateNodeIdsByOwnerKind.get("workspace-package").length,
+      1,
+    );
+    assert.equal(
+      result.graph.edges.belongsToOwnerCandidate.some(
+        (edge) =>
+          edge.from === "module:packages/ui/src/index.tsx" &&
+          edge.to === "owner:workspace-package:ui",
+      ),
+      true,
+    );
+    assert.equal(
+      result.graph.edges.belongsToOwnerCandidate.some(
+        (edge) =>
+          edge.from === "stylesheet:packages/ui/src/Button.css" &&
+          edge.to === "owner:directory:packages/ui/src",
+      ),
+      true,
     );
   } finally {
     await project.cleanup();

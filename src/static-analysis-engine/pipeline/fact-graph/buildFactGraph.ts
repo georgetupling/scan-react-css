@@ -5,6 +5,7 @@ import {
   buildFileNodes,
   buildModuleNodes,
   buildOriginatesFromFileEdges,
+  buildOwnerCandidateSeeds,
   buildImportEdges,
   buildStylesheetNodes,
   buildReactSyntaxFacts,
@@ -18,6 +19,13 @@ export function buildFactGraph(input: FactGraphInput): FactGraphResult {
   const stylesheetNodes = buildStylesheetNodes(input);
   const cssNodes = buildCssNodes(input);
   const reactSyntaxFacts = buildReactSyntaxFacts(input);
+  const ownerCandidateSeeds = buildOwnerCandidateSeeds({
+    graphInput: input,
+    components: reactSyntaxFacts.components,
+    modules: moduleNodes,
+    stylesheets: stylesheetNodes,
+    files: fileNodes,
+  });
   const importEdges = buildImportEdges({
     frontends: input.frontends,
     snapshotEdges: input.snapshot.edges,
@@ -31,6 +39,7 @@ export function buildFactGraph(input: FactGraphInput): FactGraphResult {
     ...reactSyntaxFacts.allNodes,
     ...stylesheetNodes,
     ...cssNodes.all,
+    ...ownerCandidateSeeds.ownerCandidates,
     ...importEdges.externalResources,
   ]);
   const originatesFromFileEdges = buildOriginatesFromFileEdges({
@@ -47,6 +56,7 @@ export function buildFactGraph(input: FactGraphInput): FactGraphResult {
     ...originatesFromFileEdges,
     ...cssEdges.all,
     ...reactSyntaxFacts.allEdges,
+    ...ownerCandidateSeeds.belongsToOwnerCandidate,
     ...importEdges.imports,
   ]);
 
@@ -74,7 +84,7 @@ export function buildFactGraph(input: FactGraphInput): FactGraphResult {
         ruleDefinitions: cssNodes.ruleDefinitions,
         selectors: cssNodes.selectors,
         selectorBranches: cssNodes.selectorBranches,
-        ownerCandidates: [],
+        ownerCandidates: ownerCandidateSeeds.ownerCandidates,
         files: fileNodes,
         externalResources: importEdges.externalResources,
       },
@@ -86,7 +96,7 @@ export function buildFactGraph(input: FactGraphInput): FactGraphResult {
         referencesClassExpression: reactSyntaxFacts.referencesClassExpression,
         definesSelector: cssEdges.definesSelector,
         originatesFromFile: originatesFromFileEdges,
-        belongsToOwnerCandidate: [],
+        belongsToOwnerCandidate: ownerCandidateSeeds.belongsToOwnerCandidate,
       },
       indexes,
       diagnostics,

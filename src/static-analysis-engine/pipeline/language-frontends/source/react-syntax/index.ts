@@ -25,7 +25,13 @@ export type ReactComponentDeclarationFact = {
 
 export type ReactRenderSiteFact = {
   siteKey: string;
-  kind: "component-root" | "jsx-element" | "jsx-fragment" | "conditional";
+  kind:
+    | "component-root"
+    | "jsx-element"
+    | "component-reference"
+    | "jsx-fragment"
+    | "conditional"
+    | "helper-return";
   filePath: string;
   location: SourceAnchor;
   emittingComponentKey?: string;
@@ -209,7 +215,8 @@ function tryCreateRenderSite(input: {
     !ts.isJsxElement(input.node) &&
     !ts.isJsxSelfClosingElement(input.node) &&
     !ts.isJsxFragment(input.node) &&
-    !ts.isConditionalExpression(input.node)
+    !ts.isConditionalExpression(input.node) &&
+    !isHelperReturnStatement(input.node)
   ) {
     return undefined;
   }
@@ -369,6 +376,13 @@ function getRenderSiteKind(node: ts.Node): ReactRenderSiteFact["kind"] {
   if (ts.isConditionalExpression(node)) {
     return "conditional";
   }
+  if (isHelperReturnStatement(node)) {
+    return "helper-return";
+  }
+  const tagName = getJsxTagName(node);
+  if (tagName && !isIntrinsicTagName(tagName)) {
+    return "component-reference";
+  }
   return "jsx-element";
 }
 
@@ -380,6 +394,21 @@ function getJsxTagName(node: ts.Node): string | undefined {
     return node.tagName.getText(node.getSourceFile());
   }
   return undefined;
+}
+
+function isHelperReturnStatement(node: ts.Node): node is ts.ReturnStatement {
+  return (
+    ts.isReturnStatement(node) && Boolean(node.expression && isJsxLikeExpression(node.expression))
+  );
+}
+
+function isJsxLikeExpression(expression: ts.Expression): boolean {
+  return (
+    ts.isJsxElement(expression) ||
+    ts.isJsxSelfClosingElement(expression) ||
+    ts.isJsxFragment(expression) ||
+    ts.isConditionalExpression(expression)
+  );
 }
 
 function isIntrinsicTagName(tagName: string): boolean {

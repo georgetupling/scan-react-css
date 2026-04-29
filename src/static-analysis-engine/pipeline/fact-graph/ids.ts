@@ -77,6 +77,14 @@ export function referencesClassExpressionEdgeId(from: FactNodeId, to: FactNodeId
   return `references-class-expression:${from}->${to}`;
 }
 
+export function ownerCandidateNodeId(ownerKind: string, ownerKey: string): FactNodeId {
+  return `owner:${ownerKind}:${normalizeIdPart(ownerKey)}`;
+}
+
+export function belongsToOwnerCandidateEdgeId(from: FactNodeId, to: FactNodeId): FactEdgeId {
+  return `belongs-to-owner-candidate:${from}->${to}`;
+}
+
 export function normalizeIdPart(value: string): string {
   return value.replace(/\\/g, "/");
 }
