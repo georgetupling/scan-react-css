@@ -4,6 +4,7 @@ import type { ProjectSnapshot } from "../workspace-discovery/index.js";
 import type { ParsedProjectFile } from "../../entry/stages/types.js";
 import type { SourceAnchor } from "../../types/core.js";
 import type { SourceModuleSyntaxFacts } from "./source/module-syntax/index.js";
+import type { SourceExpressionSyntaxFact } from "./source/expression-syntax/index.js";
 import type { SourceReactSyntaxFacts } from "./source/react-syntax/index.js";
 
 export type LanguageFrontendsInput = {
@@ -28,6 +29,7 @@ export type SourceFrontendFile = {
   sourceText: string;
   moduleSyntax: SourceModuleSyntaxFacts;
   reactSyntax: SourceReactSyntaxFacts;
+  expressionSyntax: SourceExpressionSyntaxFact[];
   runtimeDomClassSites: RuntimeDomClassSite[];
   legacy: {
     parsedFile: ParsedProjectFile;
@@ -42,6 +44,7 @@ export type RuntimeDomClassSite = {
   kind: RuntimeDomClassSiteKind;
   filePath: string;
   location: SourceAnchor;
+  expressionId: string;
   rawExpressionText: string;
   classText: string;
   runtimeLibraryHint?: RuntimeDomLibraryHint;

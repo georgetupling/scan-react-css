@@ -1,10 +1,12 @@
 import type { SourceAnchor } from "../../../../types/core.js";
+import type { SourceExpressionSyntaxFact } from "../expression-syntax/index.js";
 
 export type SourceReactSyntaxFacts = {
   components: ReactComponentDeclarationFact[];
   renderSites: ReactRenderSiteFact[];
   elementTemplates: ReactElementTemplateFact[];
   classExpressionSites: ReactClassExpressionSiteFact[];
+  expressionSyntax: SourceExpressionSyntaxFact[];
 };
 
 export type ReactComponentDeclarationFact = {
@@ -50,6 +52,7 @@ export type ReactClassExpressionSiteFact = {
   kind: "jsx-class" | "component-prop-class" | "css-module-member" | "runtime-dom-class";
   filePath: string;
   location: SourceAnchor;
+  expressionId: string;
   rawExpressionText: string;
   emittingComponentKey?: string;
   placementComponentKey?: string;

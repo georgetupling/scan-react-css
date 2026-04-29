@@ -1,6 +1,7 @@
 export { buildCssEdges } from "./buildCssEdges.js";
 export { buildCssNodes } from "./buildCssNodes.js";
 export { buildFileNodes } from "./buildFileNodes.js";
+export { buildExpressionSyntaxNodes } from "./buildExpressionSyntaxNodes.js";
 export { buildModuleNodes } from "./buildModuleNodes.js";
 export { buildImportEdges } from "./buildImportEdges.js";
 export { buildOriginatesFromFileEdges } from "./buildOriginatesFromFileEdges.js";

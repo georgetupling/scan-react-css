@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 import { toSourceAnchor } from "../../../../libraries/react-components/reactComponentAstUtils.js";
+import { collectExpressionSyntaxForNode } from "../expression-syntax/index.js";
 import { createSiteKey } from "./keys.js";
 import { getJsxTagName, isIntrinsicTagName, unwrapJsxAttributeInitializer } from "./jsxUtils.js";
 import type {
@@ -8,6 +9,12 @@ import type {
   ReactElementTemplateFact,
   ReactRenderSiteFact,
 } from "./types.js";
+import type { SourceExpressionSyntaxFact } from "../expression-syntax/index.js";
+
+export type CreatedReactClassExpressionSite = {
+  site: ReactClassExpressionSiteFact;
+  expressionSyntax: SourceExpressionSyntaxFact[];
+};
 
 export function tryCreateJsxClassExpressionSite(input: {
   node: ts.Node;
@@ -16,7 +23,7 @@ export function tryCreateJsxClassExpressionSite(input: {
   renderSite?: ReactRenderSiteFact;
   template?: ReactElementTemplateFact;
   emittingComponentKey?: string;
-}): ReactClassExpressionSiteFact | undefined {
+}): CreatedReactClassExpressionSite | undefined {
   if (!ts.isJsxElement(input.node) && !ts.isJsxSelfClosingElement(input.node)) {
     return undefined;
   }
@@ -26,7 +33,9 @@ export function tryCreateJsxClassExpressionSite(input: {
     : input.node.attributes.properties;
   const classNameAttribute = attributes.find(
     (attribute): attribute is ts.JsxAttribute =>
-      ts.isJsxAttribute(attribute) && attribute.name.text === "className",
+      ts.isJsxAttribute(attribute) &&
+      ts.isIdentifier(attribute.name) &&
+      attribute.name.text === "className",
   );
   if (!classNameAttribute?.initializer) {
     return undefined;
@@ -38,20 +47,30 @@ export function tryCreateJsxClassExpressionSite(input: {
   const location = toSourceAnchor(anchorNode, input.sourceFile, input.filePath);
   const emittingComponentKey = input.renderSite?.emittingComponentKey ?? input.emittingComponentKey;
   const placementComponentKey = input.renderSite?.placementComponentKey ?? emittingComponentKey;
-  return {
-    siteKey: createSiteKey(
-      "class-expression",
-      location,
-      input.renderSite?.siteKey ?? "standalone-jsx-class",
-    ),
-    kind: isIntrinsicTagName(tagName) ? "jsx-class" : "component-prop-class",
+  const expressionSyntax = collectExpressionSyntaxForNode({
+    node: anchorNode,
     filePath: input.filePath,
-    location,
-    rawExpressionText: anchorNode.getText(input.sourceFile),
-    ...(emittingComponentKey ? { emittingComponentKey } : {}),
-    ...(placementComponentKey ? { placementComponentKey } : {}),
-    ...(input.renderSite ? { renderSiteKey: input.renderSite.siteKey } : {}),
-    ...(input.template ? { elementTemplateKey: input.template.templateKey } : {}),
+    sourceFile: input.sourceFile,
+  });
+
+  return {
+    site: {
+      siteKey: createSiteKey(
+        "class-expression",
+        location,
+        input.renderSite?.siteKey ?? "standalone-jsx-class",
+      ),
+      kind: isIntrinsicTagName(tagName) ? "jsx-class" : "component-prop-class",
+      filePath: input.filePath,
+      location,
+      expressionId: expressionSyntax.rootExpressionId,
+      rawExpressionText: anchorNode.getText(input.sourceFile),
+      ...(emittingComponentKey ? { emittingComponentKey } : {}),
+      ...(placementComponentKey ? { placementComponentKey } : {}),
+      ...(input.renderSite ? { renderSiteKey: input.renderSite.siteKey } : {}),
+      ...(input.template ? { elementTemplateKey: input.template.templateKey } : {}),
+    },
+    expressionSyntax: expressionSyntax.expressions,
   };
 }
 
@@ -61,7 +80,7 @@ export function tryCreateCssModuleClassExpressionSite(input: {
   sourceFile: ts.SourceFile;
   cssModuleNamespaceNames: ReadonlySet<string>;
   emittingComponentKey?: string;
-}): ReactClassExpressionSiteFact | undefined {
+}): CreatedReactClassExpressionSite | undefined {
   if (
     !ts.isPropertyAccessExpression(input.node) ||
     !ts.isIdentifier(input.node.expression) ||
@@ -71,18 +90,28 @@ export function tryCreateCssModuleClassExpressionSite(input: {
   }
 
   const location = toSourceAnchor(input.node, input.sourceFile, input.filePath);
-  return {
-    siteKey: createSiteKey("class-expression", location, "css-module-member"),
-    kind: "css-module-member",
+  const expressionSyntax = collectExpressionSyntaxForNode({
+    node: input.node,
     filePath: input.filePath,
-    location,
-    rawExpressionText: input.node.getText(input.sourceFile),
-    ...(input.emittingComponentKey
-      ? {
-          emittingComponentKey: input.emittingComponentKey,
-          placementComponentKey: input.emittingComponentKey,
-        }
-      : {}),
+    sourceFile: input.sourceFile,
+  });
+
+  return {
+    site: {
+      siteKey: createSiteKey("class-expression", location, "css-module-member"),
+      kind: "css-module-member",
+      filePath: input.filePath,
+      location,
+      expressionId: expressionSyntax.rootExpressionId,
+      rawExpressionText: input.node.getText(input.sourceFile),
+      ...(input.emittingComponentKey
+        ? {
+            emittingComponentKey: input.emittingComponentKey,
+            placementComponentKey: input.emittingComponentKey,
+          }
+        : {}),
+    },
+    expressionSyntax: expressionSyntax.expressions,
   };
 }
 

@@ -6,6 +6,7 @@ import type {
   RuntimeDomLibraryHint,
 } from "../../types.js";
 import type { SourceAnchor } from "../../../../types/core.js";
+import { createExpressionSyntaxId } from "../expression-syntax/index.js";
 
 export type RuntimeDomFrontendAdapterContext = {
   filePath: string;
@@ -30,6 +31,10 @@ export function buildRuntimeDomClassSite(input: {
     kind: input.kind,
     filePath: input.context.filePath,
     location,
+    expressionId: createExpressionSyntaxId({
+      location,
+      discriminator: ts.SyntaxKind[input.expression.kind],
+    }),
     rawExpressionText: input.expression.getText(input.context.parsedSourceFile),
     classText: input.expression.text,
     runtimeLibraryHint: input.runtimeLibraryHint,

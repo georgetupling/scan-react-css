@@ -6,6 +6,10 @@ import { collectCssModuleNamespaceNames } from "./cssModuleImports.js";
 import { tryCreateElementTemplate } from "./elementTemplates.js";
 import { tryCreateRenderSite } from "./renderSites.js";
 import {
+  dedupeExpressionSyntaxFacts,
+  type SourceExpressionSyntaxFact,
+} from "../expression-syntax/index.js";
+import {
   dedupeClassExpressionSites,
   tryCreateCssModuleClassExpressionSite,
   tryCreateJsxClassExpressionSite,
@@ -37,6 +41,7 @@ export function collectSourceReactSyntax(input: {
   const renderSites: ReactRenderSiteFact[] = [];
   const elementTemplates: ReactElementTemplateFact[] = [];
   const classExpressionSites: ReactClassExpressionSiteFact[] = [];
+  const expressionSyntax: SourceExpressionSyntaxFact[] = [];
   const renderStack: ReactRenderSiteFact[] = [];
   const componentStack: string[] = [];
 
@@ -94,7 +99,8 @@ export function collectSourceReactSyntax(input: {
       ...(currentComponentKey ? { emittingComponentKey: currentComponentKey } : {}),
     });
     if (classSite) {
-      classExpressionSites.push(classSite);
+      classExpressionSites.push(classSite.site);
+      expressionSyntax.push(...classSite.expressionSyntax);
     }
 
     const cssModuleClassSite = tryCreateCssModuleClassExpressionSite({
@@ -105,7 +111,8 @@ export function collectSourceReactSyntax(input: {
       ...(currentComponentKey ? { emittingComponentKey: currentComponentKey } : {}),
     });
     if (cssModuleClassSite) {
-      classExpressionSites.push(cssModuleClassSite);
+      classExpressionSites.push(cssModuleClassSite.site);
+      expressionSyntax.push(...cssModuleClassSite.expressionSyntax);
     }
 
     ts.forEachChild(node, visit);
@@ -130,5 +137,6 @@ export function collectSourceReactSyntax(input: {
     classExpressionSites: dedupeClassExpressionSites(classExpressionSites).sort(
       compareClassExpressionSites,
     ),
+    expressionSyntax: dedupeExpressionSyntaxFacts(expressionSyntax),
   };
 }

@@ -5,6 +5,10 @@ export {
 } from "./buildLanguageFrontends.js";
 export type { SourceModuleSyntaxFacts } from "./source/module-syntax/index.js";
 export type {
+  SourceExpressionSyntaxFact,
+  SourceObjectExpressionProperty,
+} from "./source/expression-syntax/index.js";
+export type {
   ReactClassExpressionSiteFact,
   ReactComponentDeclarationFact,
   ReactElementTemplateFact,

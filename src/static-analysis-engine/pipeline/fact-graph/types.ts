@@ -3,6 +3,7 @@ import type { SourceAnchor } from "../../types/core.js";
 import type { CssAtRuleContextFact, CssStyleRuleFact } from "../../types/css.js";
 import type { ExtractedSelectorQuery } from "../selector-analysis/index.js";
 import type { LanguageFrontendsResult } from "../language-frontends/index.js";
+import type { SourceExpressionSyntaxFact } from "../language-frontends/source/expression-syntax/index.js";
 import type { ProjectSnapshot } from "../workspace-discovery/index.js";
 
 export type FactGraphInput = {
@@ -44,6 +45,7 @@ export type FactNodeKind =
   | "render-site"
   | "element-template"
   | "class-expression-site"
+  | "expression-syntax"
   | "stylesheet"
   | "rule-definition"
   | "selector"
@@ -66,6 +68,7 @@ export type FactGraphNodes = {
   renderSites: RenderSiteNode[];
   elementTemplates: ElementTemplateNode[];
   classExpressionSites: ClassExpressionSiteNode[];
+  expressionSyntax: ExpressionSyntaxNode[];
   stylesheets: StyleSheetNode[];
   ruleDefinitions: RuleDefinitionNode[];
   selectors: SelectorNode[];
@@ -186,12 +189,19 @@ export type ClassExpressionSiteNode = FactNodeBase & {
     | "runtime-dom-class";
   filePath: string;
   location: SourceAnchor;
+  expressionId: string;
+  expressionNodeId: FactNodeId;
   rawExpressionText: string;
   emittingComponentNodeId?: FactNodeId;
   placementComponentNodeId?: FactNodeId;
   renderSiteNodeId?: FactNodeId;
   elementTemplateNodeId?: FactNodeId;
 };
+
+export type ExpressionSyntaxNode = FactNodeBase &
+  SourceExpressionSyntaxFact & {
+    kind: "expression-syntax";
+  };
 
 export type StyleSheetNode = FactNodeBase & {
   kind: "stylesheet";
@@ -261,6 +271,7 @@ export type FactNode =
   | RenderSiteNode
   | ElementTemplateNode
   | ClassExpressionSiteNode
+  | ExpressionSyntaxNode
   | StyleSheetNode
   | RuleDefinitionNode
   | SelectorNode
@@ -335,6 +346,8 @@ export type FactGraphIndexes = {
   elementTemplateNodeIdByTemplateKey: Map<string, FactNodeId>;
   classExpressionSiteNodeIdBySiteKey: Map<string, FactNodeId>;
   classExpressionSiteNodeIdsByComponentNodeId: Map<FactNodeId, FactNodeId[]>;
+  expressionSyntaxNodeIdByExpressionId: Map<string, FactNodeId>;
+  expressionSyntaxNodeIdsByFilePath: Map<string, FactNodeId[]>;
   ownerCandidateNodeIdsByOwnerKind: Map<string, FactNodeId[]>;
   ruleDefinitionNodeIdsByStylesheetNodeId: Map<FactNodeId, FactNodeId[]>;
   selectorNodeIdsByStylesheetNodeId: Map<FactNodeId, FactNodeId[]>;

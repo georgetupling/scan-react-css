@@ -2,6 +2,7 @@ import { buildFactGraphIndexes } from "./indexes.js";
 import {
   buildCssEdges,
   buildCssNodes,
+  buildExpressionSyntaxNodes,
   buildFileNodes,
   buildModuleNodes,
   buildOriginatesFromFileEdges,
@@ -19,6 +20,7 @@ export function buildFactGraph(input: FactGraphInput): FactGraphResult {
   const stylesheetNodes = buildStylesheetNodes(input);
   const cssNodes = buildCssNodes(input);
   const reactSyntaxFacts = buildReactSyntaxFacts(input);
+  const expressionSyntaxNodes = buildExpressionSyntaxNodes(input);
   const ownerCandidateSeeds = buildOwnerCandidateSeeds({
     graphInput: input,
     components: reactSyntaxFacts.components,
@@ -37,6 +39,7 @@ export function buildFactGraph(input: FactGraphInput): FactGraphResult {
     ...fileNodes,
     ...moduleNodes,
     ...reactSyntaxFacts.allNodes,
+    ...expressionSyntaxNodes,
     ...stylesheetNodes,
     ...cssNodes.all,
     ...ownerCandidateSeeds.ownerCandidates,
@@ -80,6 +83,7 @@ export function buildFactGraph(input: FactGraphInput): FactGraphResult {
         renderSites: reactSyntaxFacts.renderSites,
         elementTemplates: reactSyntaxFacts.elementTemplates,
         classExpressionSites: reactSyntaxFacts.classExpressionSites,
+        expressionSyntax: expressionSyntaxNodes,
         stylesheets: stylesheetNodes,
         ruleDefinitions: cssNodes.ruleDefinitions,
         selectors: cssNodes.selectors,

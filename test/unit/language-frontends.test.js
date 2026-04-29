@@ -486,6 +486,59 @@ test("language frontends expose source symbol syntax collectors", () => {
   );
 });
 
+test("language frontends attach normalized expression syntax to class expression sites", () => {
+  const file = buildSingleSourceFrontendFile(
+    "src/Button.tsx",
+    [
+      'import styles from "./Button.module.css";',
+      "export function Button({ active, selected, tone }) {",
+      '  return <button className={["button", active && styles.root, { selected }, `tone-${tone}`].filter(Boolean).join(" ")} />;',
+      "}",
+      "",
+    ].join("\n"),
+  );
+  const expressions = new Map(
+    file.expressionSyntax.map((expression) => [expression.expressionId, expression]),
+  );
+  const jsxSite = file.reactSyntax.classExpressionSites.find((site) => site.kind === "jsx-class");
+  const cssModuleSite = file.reactSyntax.classExpressionSites.find(
+    (site) => site.kind === "css-module-member",
+  );
+
+  assert.ok(jsxSite);
+  assert.ok(cssModuleSite);
+  assert.ok(jsxSite.expressionId);
+  assert.equal(expressions.has(jsxSite.expressionId), true);
+  assert.equal(cssModuleSite.rawExpressionText, "styles.root");
+  assert.equal(expressions.has(cssModuleSite.expressionId), true);
+
+  const joinCall = expressions.get(jsxSite.expressionId);
+  assert.equal(joinCall.expressionKind, "call");
+  const joinMember = expressions.get(joinCall.calleeExpressionId);
+  assert.equal(joinMember.expressionKind, "member-access");
+  assert.equal(joinMember.propertyName, "join");
+  const filterCall = expressions.get(joinMember.objectExpressionId);
+  assert.equal(filterCall.expressionKind, "call");
+  const filterMember = expressions.get(filterCall.calleeExpressionId);
+  assert.equal(filterMember.expressionKind, "member-access");
+  assert.equal(filterMember.propertyName, "filter");
+  const arrayExpression = expressions.get(filterMember.objectExpressionId);
+  assert.equal(arrayExpression.expressionKind, "array-literal");
+  assert.equal(arrayExpression.elementExpressionIds.length, 4);
+
+  const conditionalClass = [...expressions.values()].find(
+    (expression) => expression.expressionKind === "binary" && expression.operator === "&&",
+  );
+  assert.ok(conditionalClass);
+  assert.equal(conditionalClass.rightExpressionId, cssModuleSite.expressionId);
+  assert.ok(
+    [...expressions.values()].some(
+      (expression) =>
+        expression.expressionKind === "template-literal" && expression.rawText === "`tone-${tone}`",
+    ),
+  );
+});
+
 test("language frontends expose CSS Module syntax collectors", () => {
   const file = buildSingleSourceFrontendFile(
     "src/Button.tsx",
@@ -645,12 +698,14 @@ test("language frontends extract runtime DOM class sites from module-backed adap
     });
 
     const frontends = buildLanguageFrontends({ snapshot });
+    const runtimeExpression = frontends.source.files[0].expressionSyntax[0];
 
     assert.deepEqual(
       frontends.source.files.flatMap((file) =>
         file.runtimeDomClassSites.map((site) => ({
           kind: site.kind,
           filePath: site.filePath,
+          expressionId: site.expressionId,
           rawExpressionText: site.rawExpressionText,
           classText: site.classText,
           runtimeLibraryHint: site.runtimeLibraryHint,
@@ -661,6 +716,7 @@ test("language frontends extract runtime DOM class sites from module-backed adap
         {
           kind: "prosemirror-editor-view-attributes",
           filePath: "src/editor.ts",
+          expressionId: runtimeExpression.expressionId,
           rawExpressionText: '"ProseMirror editor-shell"',
           classText: "ProseMirror editor-shell",
           runtimeLibraryHint: {
@@ -669,6 +725,22 @@ test("language frontends extract runtime DOM class sites from module-backed adap
             localName: "ProseMirrorView",
           },
           adapterName: "prosemirror-editor-view",
+        },
+      ],
+    );
+    assert.deepEqual(
+      frontends.source.files[0].expressionSyntax.map((expression) => ({
+        expressionId: expression.expressionId,
+        expressionKind: expression.expressionKind,
+        rawText: expression.rawText,
+        value: expression.value,
+      })),
+      [
+        {
+          expressionId: runtimeExpression.expressionId,
+          expressionKind: "string-literal",
+          rawText: '"ProseMirror editor-shell"',
+          value: "ProseMirror editor-shell",
         },
       ],
     );

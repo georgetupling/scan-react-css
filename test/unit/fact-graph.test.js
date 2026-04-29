@@ -229,6 +229,27 @@ test("fact graph builds file, module, stylesheet, and origin facts without chang
       ),
       true,
     );
+    const classExpressionSite = result.graph.nodes.classExpressionSites.find(
+      (node) => node.classExpressionSiteKind === "jsx-class",
+    );
+    assert.ok(classExpressionSite);
+    assert.equal(classExpressionSite.expressionNodeId, classExpressionSite.expressionId);
+    const classExpressionSyntaxNode = result.graph.indexes.nodesById.get(
+      classExpressionSite.expressionNodeId,
+    );
+    assert.ok(classExpressionSyntaxNode);
+    assert.equal(classExpressionSyntaxNode.kind, "expression-syntax");
+    assert.equal(classExpressionSyntaxNode.expressionKind, "string-literal");
+    assert.equal(classExpressionSyntaxNode.value, "app");
+    assert.equal(
+      result.graph.indexes.expressionSyntaxNodeIdByExpressionId.get(
+        classExpressionSite.expressionId,
+      ),
+      classExpressionSite.expressionNodeId,
+    );
+    assert.deepEqual(result.graph.indexes.expressionSyntaxNodeIdsByFilePath.get("src/App.tsx"), [
+      classExpressionSite.expressionNodeId,
+    ]);
     assert.equal(result.graph.indexes.componentNodeIdsByFilePath.get("src/App.tsx").length, 1);
     assert.equal(
       result.graph.indexes.classExpressionSiteNodeIdsByComponentNodeId.get(

@@ -27,6 +27,7 @@ export type {
   ContainsEdge,
   DefinesSelectorEdge,
   ElementTemplateNode,
+  ExpressionSyntaxNode,
   ModuleNode,
   OriginatesFromFileEdge,
   ReferencesClassExpressionEdge,

@@ -18,6 +18,8 @@ export function buildFactGraphIndexes(input: { nodes: FactNode[]; edges: FactEdg
   const elementTemplateNodeIdByTemplateKey = new Map<string, string>();
   const classExpressionSiteNodeIdBySiteKey = new Map<string, string>();
   const classExpressionSiteNodeIdsByComponentNodeId = new Map<string, string[]>();
+  const expressionSyntaxNodeIdByExpressionId = new Map<string, string>();
+  const expressionSyntaxNodeIdsByFilePath = new Map<string, string[]>();
   const ownerCandidateNodeIdsByOwnerKind = new Map<string, string[]>();
   const ruleDefinitionNodeIdsByStylesheetNodeId = new Map<string, string[]>();
   const selectorNodeIdsByStylesheetNodeId = new Map<string, string[]>();
@@ -60,6 +62,9 @@ export function buildFactGraphIndexes(input: { nodes: FactNode[]; edges: FactEdg
           node.id,
         );
       }
+    } else if (node.kind === "expression-syntax") {
+      expressionSyntaxNodeIdByExpressionId.set(node.expressionId, node.id);
+      pushMapValue(expressionSyntaxNodeIdsByFilePath, node.filePath, node.id);
     } else if (node.kind === "owner-candidate") {
       pushMapValue(ownerCandidateNodeIdsByOwnerKind, node.ownerCandidateKind, node.id);
     } else if (node.kind === "stylesheet" && node.filePath) {
@@ -119,6 +124,8 @@ export function buildFactGraphIndexes(input: { nodes: FactNode[]; edges: FactEdg
       classExpressionSiteNodeIdsByComponentNodeId: sortMapValues(
         classExpressionSiteNodeIdsByComponentNodeId,
       ),
+      expressionSyntaxNodeIdByExpressionId,
+      expressionSyntaxNodeIdsByFilePath: sortMapValues(expressionSyntaxNodeIdsByFilePath),
       ownerCandidateNodeIdsByOwnerKind: sortMapValues(ownerCandidateNodeIdsByOwnerKind),
       ruleDefinitionNodeIdsByStylesheetNodeId: sortMapValues(
         ruleDefinitionNodeIdsByStylesheetNodeId,

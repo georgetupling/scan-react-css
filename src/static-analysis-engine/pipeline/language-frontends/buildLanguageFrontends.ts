@@ -5,6 +5,7 @@ import type { ExtractedSelectorQuery } from "../selector-analysis/index.js";
 import type { ProjectSnapshot } from "../workspace-discovery/index.js";
 import { collectSourceModuleSyntax } from "./source/module-syntax/index.js";
 import { parseSourceFile } from "./source/parseSourceFile.js";
+import { dedupeExpressionSyntaxFacts } from "./source/expression-syntax/index.js";
 import { collectSourceReactSyntax } from "./source/react-syntax/index.js";
 import { extractRuntimeDomClassSites } from "./source/runtime-dom-syntax/extractRuntimeDomSites.js";
 import type {
@@ -14,7 +15,9 @@ import type {
   SourceFrontendFacts,
   SourceFrontendFile,
   SourceLanguageKind,
+  RuntimeDomClassSite,
 } from "./types.js";
+import type { SourceExpressionSyntaxFact } from "./source/expression-syntax/index.js";
 
 type SourceFrontendInputFile = {
   filePath: string;
@@ -59,6 +62,11 @@ export function buildSourceFrontendFactsFromSourceFiles(
         sourceFile: parsedFile.parsedSourceFile,
         moduleSyntax,
       });
+      const runtimeDomClassSites = extractRuntimeDomClassSites({
+        filePath,
+        sourceFile: parsedFile.parsedSourceFile,
+        moduleSyntax,
+      });
 
       return {
         filePath: sourceFile.filePath,
@@ -67,11 +75,11 @@ export function buildSourceFrontendFactsFromSourceFiles(
         sourceText: sourceFile.sourceText,
         moduleSyntax,
         reactSyntax,
-        runtimeDomClassSites: extractRuntimeDomClassSites({
-          filePath,
-          sourceFile: parsedFile.parsedSourceFile,
-          moduleSyntax,
+        expressionSyntax: buildSourceExpressionSyntaxFacts({
+          reactSyntax,
+          runtimeDomClassSites,
         }),
+        runtimeDomClassSites,
         legacy: {
           parsedFile,
         },
@@ -100,6 +108,11 @@ export function buildSourceFrontendFactsFromParsedFiles(
         sourceFile: parsedFile.parsedSourceFile,
         moduleSyntax,
       });
+      const runtimeDomClassSites = extractRuntimeDomClassSites({
+        filePath,
+        sourceFile: parsedFile.parsedSourceFile,
+        moduleSyntax,
+      });
 
       return {
         filePath: parsedFile.filePath,
@@ -108,11 +121,11 @@ export function buildSourceFrontendFactsFromParsedFiles(
         sourceText: parsedFile.parsedSourceFile.getFullText(),
         moduleSyntax,
         reactSyntax,
-        runtimeDomClassSites: extractRuntimeDomClassSites({
-          filePath,
-          sourceFile: parsedFile.parsedSourceFile,
-          moduleSyntax,
+        expressionSyntax: buildSourceExpressionSyntaxFacts({
+          reactSyntax,
+          runtimeDomClassSites,
         }),
+        runtimeDomClassSites,
         legacy: {
           parsedFile,
         },
@@ -122,6 +135,30 @@ export function buildSourceFrontendFactsFromParsedFiles(
   return {
     files,
     filesByPath: new Map(files.map((file) => [file.filePath, file])),
+  };
+}
+
+function buildSourceExpressionSyntaxFacts(input: {
+  reactSyntax: SourceFrontendFile["reactSyntax"];
+  runtimeDomClassSites: RuntimeDomClassSite[];
+}): SourceExpressionSyntaxFact[] {
+  return dedupeExpressionSyntaxFacts([
+    ...input.reactSyntax.expressionSyntax,
+    ...input.runtimeDomClassSites.map(runtimeDomClassSiteToExpressionSyntaxFact),
+  ]);
+}
+
+function runtimeDomClassSiteToExpressionSyntaxFact(
+  site: RuntimeDomClassSite,
+): SourceExpressionSyntaxFact {
+  return {
+    expressionId: site.expressionId,
+    filePath: site.filePath,
+    location: site.location,
+    rawText: site.rawExpressionText,
+    expressionKind: "string-literal",
+    literalKind: site.rawExpressionText.startsWith("`") ? "no-substitution-template" : "string",
+    value: site.classText,
   };
 }
 

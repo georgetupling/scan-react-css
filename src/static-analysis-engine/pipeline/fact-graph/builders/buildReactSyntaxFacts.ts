@@ -169,6 +169,7 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
         kind: "runtime-dom-class" as const,
         filePath: site.filePath,
         location: site.location,
+        expressionId: site.expressionId,
         rawExpressionText: site.rawExpressionText,
         emittingComponentKey: undefined,
         placementComponentKey: undefined,
@@ -184,6 +185,8 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
         classExpressionSiteKind: classSite.kind,
         filePath: classSite.filePath,
         location: classSite.location,
+        expressionId: classSite.expressionId,
+        expressionNodeId: classSite.expressionId,
         rawExpressionText: classSite.rawExpressionText,
         ...(classSite.emittingComponentKey
           ? { emittingComponentNodeId: componentNodeId(classSite.emittingComponentKey) }
