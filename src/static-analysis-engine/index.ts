@@ -5,6 +5,7 @@ export {
   buildSourceFrontendFactsFromSourceFiles,
   buildSourceFrontendFactsFromParsedFiles,
 } from "./pipeline/language-frontends/index.js";
+export { buildFactGraph } from "./pipeline/fact-graph/index.js";
 export { buildModuleFacts } from "./pipeline/module-facts/buildModuleFacts.js";
 export {
   collectAvailableExportedNames,
@@ -104,6 +105,20 @@ export type {
   SourceLanguageKind,
   SourceModuleSyntaxFacts,
 } from "./pipeline/language-frontends/index.js";
+export type {
+  FactEdge,
+  FactEdgeId,
+  FactGraph,
+  FactGraphDiagnostic,
+  FactGraphResult,
+  FactNode,
+  FactNodeId,
+  FactProvenance,
+  FileResourceNode,
+  ModuleNode,
+  OriginatesFromFileEdge,
+  StyleSheetNode,
+} from "./pipeline/fact-graph/index.js";
 export type {
   ActiveExternalCssProvider,
   ExternalCssAnalysisInput,

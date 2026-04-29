@@ -1,5 +1,6 @@
 import type { SelectorSourceInput } from "../pipeline/selector-analysis/index.js";
 import type { ExternalCssAnalysisInput } from "../pipeline/external-css/index.js";
+import type { FactGraphResult } from "../pipeline/fact-graph/index.js";
 import {
   buildSourceFrontendFactsFromSourceFiles,
   type CssFrontendFacts,
@@ -36,6 +37,7 @@ export function analyzeSourceText(input: {
   boundaries?: ProjectBoundary[];
   resourceEdges?: ProjectResourceEdge[];
   externalCss?: ExternalCssAnalysisInput;
+  factGraph?: FactGraphResult;
   cssModules?: {
     localsConvention?: CssModuleLocalsConvention;
   };
@@ -57,6 +59,7 @@ export function analyzeSourceText(input: {
     boundaries: input.boundaries,
     resourceEdges: input.resourceEdges,
     externalCss: input.externalCss,
+    factGraph: input.factGraph,
     cssModules: input.cssModules,
     onProgress: input.onProgress,
     includeTraces: input.includeTraces,
@@ -77,6 +80,7 @@ export function analyzeProjectSourceTexts(input: {
   boundaries?: ProjectBoundary[];
   resourceEdges?: ProjectResourceEdge[];
   externalCss?: ExternalCssAnalysisInput;
+  factGraph?: FactGraphResult;
   cssModules?: {
     localsConvention?: CssModuleLocalsConvention;
   };
@@ -84,6 +88,8 @@ export function analyzeProjectSourceTexts(input: {
   includeTraces?: boolean;
 }): StaticAnalysisEngineResult {
   const includeTraces = input.includeTraces ?? true;
+  // Phase 1 threads the graph through the entrypoint before downstream consumers switch to it.
+  void input.factGraph;
   const cssFrontendStylesheets = input.css?.files.map((file) => ({
     filePath: file.filePath,
     cssKind: file.cssKind,

@@ -8,12 +8,15 @@ import type { RuntimeDomClassReference } from "../../pipeline/runtime-dom/index.
 import type { ProjectAnalysis } from "../../pipeline/project-analysis/index.js";
 import type { ModuleFacts } from "../../pipeline/module-facts/index.js";
 import type { LanguageFrontendsResult } from "../../pipeline/language-frontends/index.js";
+import type { FactGraphResult } from "../../pipeline/fact-graph/index.js";
 import type { RenderGraph } from "../../pipeline/render-model/render-graph/index.js";
 import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.js";
 import type { SelectorQueryResult } from "../../pipeline/selector-analysis/index.js";
 import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/index.js";
 
 export type LanguageFrontendsStageResult = LanguageFrontendsResult;
+
+export type FactGraphStageResult = FactGraphResult;
 
 export type ParsedProjectFile = {
   filePath: string;

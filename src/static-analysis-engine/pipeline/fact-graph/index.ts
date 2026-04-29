@@ -1,0 +1,20 @@
+export { buildFactGraph } from "./buildFactGraph.js";
+export type {
+  FactEdge,
+  FactEdgeId,
+  FactGraph,
+  FactGraphDiagnostic,
+  FactGraphEdges,
+  FactGraphIndexes,
+  FactGraphInput,
+  FactGraphMeta,
+  FactGraphNodes,
+  FactGraphResult,
+  FactNode,
+  FactNodeId,
+  FactProvenance,
+  FileResourceNode,
+  ModuleNode,
+  OriginatesFromFileEdge,
+  StyleSheetNode,
+} from "./types.js";

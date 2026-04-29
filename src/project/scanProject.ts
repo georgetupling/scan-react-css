@@ -14,6 +14,7 @@ import type {
   ScanSummary,
 } from "./types.js";
 import { buildProjectSnapshot } from "../static-analysis-engine/pipeline/workspace-discovery/index.js";
+import { runFactGraphStage } from "../static-analysis-engine/entry/stages/factGraphStage.js";
 import { runLanguageFrontendsStage } from "../static-analysis-engine/entry/stages/languageFrontendsStage.js";
 
 export async function scanProject(input: ScanProjectInput = {}): Promise<ScanProjectResult> {
@@ -30,6 +31,11 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
     runStage: (stage, message, run) => runScanStage(progress, stage, message, run),
   });
   const languageFrontends = runLanguageFrontendsStage({ snapshot });
+  const factGraph = runFactGraphStage({
+    snapshot,
+    frontends: languageFrontends,
+    includeTraces: input.includeTraces ?? true,
+  });
 
   const engineResult = analyzeProjectSourceTexts({
     sourceFiles: languageFrontends.source.files.map((file) => ({
@@ -51,6 +57,7 @@ export async function scanProject(input: ScanProjectInput = {}): Promise<ScanPro
       fetchRemote: snapshot.externalCss.fetchRemote,
       globalProviders: snapshot.externalCss.globalProviders,
     },
+    factGraph,
     includeTraces: input.includeTraces ?? true,
     onProgress: (event) => progress(event.stage, event.status, event.message, event.durationMs),
   });
