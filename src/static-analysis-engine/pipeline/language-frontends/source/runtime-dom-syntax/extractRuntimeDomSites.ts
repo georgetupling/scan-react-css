@@ -1,6 +1,6 @@
 import ts from "typescript";
 
-import type { SourceModuleSyntaxFacts } from "../moduleSyntax.js";
+import type { SourceModuleSyntaxFacts } from "../module-syntax/index.js";
 import type { RuntimeDomClassSite } from "../../types.js";
 import { collectProseMirrorEditorViewRuntimeDomSites } from "./prosemirrorEditorView.js";
 import type { RuntimeDomFrontendAdapterContext } from "./shared.js";

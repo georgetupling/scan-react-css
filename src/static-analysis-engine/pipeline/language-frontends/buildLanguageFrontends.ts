@@ -4,7 +4,7 @@ import type { ParsedProjectFile } from "../../entry/stages/types.js";
 import { parseSourceFile } from "../parse/index.js";
 import type { ExtractedSelectorQuery } from "../selector-analysis/index.js";
 import type { ProjectSnapshot } from "../workspace-discovery/index.js";
-import { collectSourceModuleSyntax } from "./source/moduleSyntax.js";
+import { collectSourceModuleSyntax } from "./source/module-syntax/index.js";
 import { extractRuntimeDomClassSites } from "./source/runtime-dom-syntax/extractRuntimeDomSites.js";
 import type {
   CssFrontendFacts,

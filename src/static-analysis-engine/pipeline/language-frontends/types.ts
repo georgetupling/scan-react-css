@@ -10,7 +10,7 @@ import type {
 } from "../workspace-discovery/index.js";
 import type { ParsedProjectFile } from "../../entry/stages/types.js";
 import type { SourceAnchor } from "../../types/core.js";
-import type { SourceModuleSyntaxFacts } from "./source/moduleSyntax.js";
+import type { SourceModuleSyntaxFacts } from "./source/module-syntax/index.js";
 
 export type LanguageFrontendsInput = {
   snapshot: ProjectSnapshot;
