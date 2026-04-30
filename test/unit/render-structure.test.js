@@ -256,6 +256,45 @@ test("render structure builds emission sites from legacy render classes and stag
   assert.equal(missingEmission.suppliedByComponentNodeId, appComponentNodeId);
 });
 
+test("render structure instantiates parent-supplied external contributions during expansion", async () => {
+  const fixture = await buildForwardedContributionFixture();
+  const symbolicEvaluation = evaluateSymbolicExpressions({
+    graph: fixture.graph,
+    cssModuleBindingResolution: fixture.symbolResolution,
+  });
+  const result = buildRenderStructure({
+    graph: fixture.graph,
+    symbolicEvaluation,
+    options: {
+      includeTraces: true,
+    },
+    legacy: {
+      parsedFiles: fixture.parsedFiles,
+      moduleFacts: fixture.moduleFacts,
+      symbolResolution: fixture.symbolResolution,
+    },
+  });
+
+  const appComponentNodeId = componentNodeIdByName(fixture.graph, "App");
+  const childComponentNodeId = componentNodeIdByName(fixture.graph, "Child");
+  const externalEmission = findEmissionByToken(result.renderModel.emissionSites, "from-parent");
+
+  assert.equal(externalEmission.emittingComponentNodeId, childComponentNodeId);
+  assert.equal(externalEmission.suppliedByComponentNodeId, appComponentNodeId);
+  assert.ok(
+    externalEmission.tokenProvenance.some(
+      (provenance) =>
+        provenance.token === "from-parent" &&
+        provenance.emittedByComponentNodeId === childComponentNodeId &&
+        provenance.suppliedByComponentNodeId === appComponentNodeId,
+    ),
+  );
+
+  const staticChildEmission = findEmissionByToken(result.renderModel.emissionSites, "child-static");
+  assert.equal(staticChildEmission.emittingComponentNodeId, childComponentNodeId);
+  assert.equal(staticChildEmission.suppliedByComponentNodeId, childComponentNodeId);
+});
+
 test("render structure legacy projection is deterministic across repeated runs", async () => {
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
@@ -298,6 +337,56 @@ async function buildProjectionFixture() {
       ].join("\n"),
     )
     .withCssFile("src/app.css", ".app, .child, .label, .missing { display: block; }\n")
+    .build();
+
+  try {
+    const snapshot = await buildProjectSnapshot({
+      scanInput: {
+        rootDir: project.rootDir,
+        sourceFilePaths: ["src/App.tsx"],
+        cssFilePaths: ["src/app.css"],
+      },
+      runStage: async (_stage, _message, run) => run(),
+    });
+    const frontends = buildLanguageFrontends({ snapshot });
+    const factGraph = buildFactGraph({ snapshot, frontends });
+    const moduleFacts = buildModuleFacts({
+      source: frontends.source,
+      stylesheetFilePaths: ["src/app.css"],
+    });
+    const symbolResolution = buildProjectBindingResolution({
+      source: frontends.source,
+      moduleFacts,
+      includeTraces: true,
+    });
+
+    return {
+      graph: factGraph.graph,
+      parsedFiles: frontends.source.files.map((file) => file.legacy.parsedFile),
+      moduleFacts,
+      symbolResolution,
+    };
+  } finally {
+    await project.cleanup();
+  }
+}
+
+async function buildForwardedContributionFixture() {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import "./app.css";',
+        "function Child({ className }) {",
+        '  return <section className={className}><i className="child-static" /></section>;',
+        "}",
+        "export function App() {",
+        '  return <main className="app"><Child className="from-parent" /></main>;',
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/app.css", ".app, .child-static, .from-parent { display: block; }\n")
     .build();
 
   try {
@@ -415,17 +504,6 @@ function countNodes(node, kind) {
   }
 
   return count;
-}
-
-function normalizeAnchor(anchor) {
-  return {
-    ...anchor,
-    filePath: normalizeProjectPath(anchor.filePath),
-  };
-}
-
-function normalizeProjectPath(filePath) {
-  return filePath.replace(/\\/g, "/");
 }
 
 function serializeIndexSizes(indexes) {

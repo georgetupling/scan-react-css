@@ -59,6 +59,7 @@ type ProjectionAccumulator = {
 type TraversalContext = {
   rootComponentNodeId?: string;
   emittingComponentNodeId?: string;
+  externalSupplierComponentNodeId?: string;
   placementComponentNodeId?: string;
   boundaryId: string;
   parentElementId?: string;
@@ -541,6 +542,7 @@ function projectExpandedComponentBoundary(input: {
     context: {
       rootComponentNodeId: input.context.rootComponentNodeId,
       emittingComponentNodeId: expandedComponentNodeId ?? input.context.emittingComponentNodeId,
+      externalSupplierComponentNodeId: input.context.emittingComponentNodeId,
       placementComponentNodeId: input.context.rootComponentNodeId,
       boundaryId,
       parentElementId: input.context.parentElementId,
@@ -794,18 +796,22 @@ function projectEmissionSite(input: {
     ...(input.context.emittingComponentNodeId
       ? { emittingComponentNodeId: input.context.emittingComponentNodeId }
       : {}),
-    ...(symbolicExpression.emittingComponentNodeId
-      ? { suppliedByComponentNodeId: symbolicExpression.emittingComponentNodeId }
+    ...(resolveSuppliedByComponentNodeId({
+      symbolicExpression,
+      context: input.context,
+    })
+      ? {
+          suppliedByComponentNodeId: resolveSuppliedByComponentNodeId({
+            symbolicExpression,
+            context: input.context,
+          }),
+        }
       : {}),
     ...(input.context.placementComponentNodeId
       ? { placementComponentNodeId: input.context.placementComponentNodeId }
       : {}),
-    tokenProvenance: buildTokenProvenance({
-      expression: symbolicExpression,
-      emittedByComponentNodeId: input.context.emittingComponentNodeId,
-      suppliedByComponentNodeId: symbolicExpression.emittingComponentNodeId,
-    }),
-    tokens: sortTokens(symbolicExpression.tokens),
+    tokenProvenance: [],
+    tokens: [],
     emissionVariants: [...symbolicExpression.emissionVariants].sort((left, right) =>
       left.id.localeCompare(right.id),
     ),
@@ -823,6 +829,26 @@ function projectEmissionSite(input: {
     placementConditionIds: input.context.placementConditionIds,
     traces: symbolicExpression.traces,
   };
+  const suppliedByComponentNodeId = resolveSuppliedByComponentNodeId({
+    symbolicExpression,
+    context: input.context,
+  });
+  const instantiatedExternalTokens = instantiateExternalContributionTokens({
+    symbolicExpression,
+    summary: input.classExpression,
+    suppliedByComponentNodeId,
+  });
+  const tokens = sortTokens([...symbolicExpression.tokens, ...instantiatedExternalTokens]);
+  emissionSite.tokens = tokens;
+  emissionSite.tokenProvenance = buildTokenProvenanceFromTokens({
+    tokens,
+    expression: symbolicExpression,
+    emittedByComponentNodeId: input.context.emittingComponentNodeId,
+    suppliedByComponentNodeId,
+  });
+  if (instantiatedExternalTokens.length > 0 && input.emissionKind === "rendered-element-class") {
+    emissionSite.emissionKind = "instantiated-external-class";
+  }
 
   input.accumulator.emissionSites.push(emissionSite);
   addRenderPath(input.accumulator, path);
@@ -832,6 +858,71 @@ function projectEmissionSite(input: {
     input.element.elementTemplateNodeId ??= symbolicExpression.elementTemplateNodeId;
     input.element.renderSiteNodeId ??= symbolicExpression.renderSiteNodeId;
   }
+}
+
+function resolveSuppliedByComponentNodeId(input: {
+  symbolicExpression: CanonicalClassExpression;
+  context: TraversalContext;
+}): string | undefined {
+  if (
+    input.symbolicExpression.externalContributions.length > 0 &&
+    input.context.externalSupplierComponentNodeId
+  ) {
+    return input.context.externalSupplierComponentNodeId;
+  }
+
+  return input.symbolicExpression.emittingComponentNodeId;
+}
+
+function instantiateExternalContributionTokens(input: {
+  symbolicExpression: CanonicalClassExpression;
+  summary: ClassExpressionSummary;
+  suppliedByComponentNodeId?: string;
+}): TokenAlternative[] {
+  if (
+    input.symbolicExpression.externalContributions.length === 0 ||
+    !input.suppliedByComponentNodeId ||
+    input.summary.value.kind !== "class-set"
+  ) {
+    return [];
+  }
+
+  const knownTokens = new Set(input.symbolicExpression.tokens.map((token) => token.token));
+  const fallbackConditionId =
+    input.symbolicExpression.externalContributions[0]?.conditionId ??
+    input.symbolicExpression.tokens[0]?.conditionId;
+  if (!fallbackConditionId) {
+    return [];
+  }
+
+  const contributions = input.symbolicExpression.externalContributions;
+  const contributionId = contributions[0]?.id;
+  const sourceAnchorByToken = input.summary.classNameSourceAnchors ?? {};
+  const instantiated: TokenAlternative[] = [];
+  const pushInstantiated = (token: string, presence: "always" | "possible") => {
+    if (knownTokens.has(token)) {
+      return;
+    }
+    knownTokens.add(token);
+    instantiated.push({
+      id: `${input.symbolicExpression.id}:external:${token}:${presence}`,
+      token,
+      tokenKind: "external-class",
+      presence,
+      conditionId: fallbackConditionId,
+      ...(sourceAnchorByToken[token] ? { sourceAnchor: sourceAnchorByToken[token] } : {}),
+      confidence: input.symbolicExpression.confidence,
+      ...(contributionId ? { contributionId } : {}),
+    });
+  };
+
+  for (const token of input.summary.value.definite) {
+    pushInstantiated(token, "always");
+  }
+  for (const token of input.summary.value.possible) {
+    pushInstantiated(token, "possible");
+  }
+  return instantiated;
 }
 
 function buildSymbolicExpressionLookup(input: RenderStructureInput): SymbolicExpressionLookup {
@@ -892,12 +983,13 @@ function findSymbolicExpressionForClassSummary(
   return lookup.byAnchor.get(sourceAnchorKey)?.[0];
 }
 
-function buildTokenProvenance(input: {
+function buildTokenProvenanceFromTokens(input: {
+  tokens: TokenAlternative[];
   expression: CanonicalClassExpression;
   emittedByComponentNodeId?: string;
   suppliedByComponentNodeId?: string;
 }): EmissionTokenProvenance[] {
-  return sortTokens(input.expression.tokens).map((token) => ({
+  return sortTokens(input.tokens).map((token) => ({
     token: token.token,
     tokenKind: token.tokenKind,
     presence: token.presence,
