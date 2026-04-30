@@ -1,5 +1,6 @@
 import { sortRenderStructureDiagnostics } from "./diagnostics.js";
 import { buildRenderModelIndexes } from "./indexes.js";
+import { projectLegacyRenderModel } from "./adapters/legacyRenderModelProjection.js";
 import type {
   EmissionSite,
   PlacementCondition,
@@ -14,14 +15,15 @@ import type {
 } from "./types.js";
 
 export function buildRenderStructure(input: RenderStructureInput): RenderStructureResult {
-  const components: RenderedComponent[] = [];
-  const componentBoundaries: RenderedComponentBoundary[] = [];
-  const elements: RenderedElement[] = [];
-  const emissionSites: EmissionSite[] = [];
-  const renderPaths: RenderPath[] = [];
-  const placementConditions: PlacementCondition[] = [];
-  const renderRegions: RenderRegion[] = [];
-  const renderGraph: RenderGraphProjection = {
+  const projected = input.legacy ? projectLegacyRenderModel(input) : undefined;
+  const components: RenderedComponent[] = projected?.components ?? [];
+  const componentBoundaries: RenderedComponentBoundary[] = projected?.componentBoundaries ?? [];
+  const elements: RenderedElement[] = projected?.elements ?? [];
+  const emissionSites: EmissionSite[] = projected?.emissionSites ?? [];
+  const renderPaths: RenderPath[] = projected?.renderPaths ?? [];
+  const placementConditions: PlacementCondition[] = projected?.placementConditions ?? [];
+  const renderRegions: RenderRegion[] = projected?.renderRegions ?? [];
+  const renderGraph: RenderGraphProjection = projected?.renderGraph ?? {
     nodes: [],
     edges: [],
   };
@@ -35,7 +37,10 @@ export function buildRenderStructure(input: RenderStructureInput): RenderStructu
     placementConditions,
     renderRegions,
   });
-  const diagnostics = sortRenderStructureDiagnostics(indexResult.diagnostics);
+  const diagnostics = sortRenderStructureDiagnostics([
+    ...(projected?.diagnostics ?? []),
+    ...indexResult.diagnostics,
+  ]);
 
   return {
     graph: input.graph,

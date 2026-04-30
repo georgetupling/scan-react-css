@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  buildModuleFacts,
+  buildProjectBindingResolution,
+  graphToReactRenderSyntaxInputs,
+} from "../../dist/static-analysis-engine.js";
+import { buildFactGraph } from "../../dist/static-analysis-engine/pipeline/fact-graph/buildFactGraph.js";
+import { buildLanguageFrontends } from "../../dist/static-analysis-engine/pipeline/language-frontends/buildLanguageFrontends.js";
+import { buildRenderModel } from "../../dist/static-analysis-engine/pipeline/render-model/buildRenderModel.js";
+import { collectRenderRegionsFromSubtrees } from "../../dist/static-analysis-engine/pipeline/render-model/render-ir/collectRenderRegionsFromSubtrees.js";
 import { buildRenderStructure } from "../../dist/static-analysis-engine/pipeline/render-structure/buildRenderStructure.js";
 import { evaluateSymbolicExpressions } from "../../dist/static-analysis-engine/pipeline/symbolic-evaluation/evaluateSymbolicExpressions.js";
+import { buildProjectSnapshot } from "../../dist/static-analysis-engine/pipeline/workspace-discovery/buildProjectSnapshot.js";
+import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
 
 test("render structure returns an empty render model for an empty graph", () => {
   const graph = emptyFactGraph();
@@ -65,6 +76,227 @@ test("render structure empty model ids and indexes are deterministic", () => {
     serializeIndexSizes(second.renderModel.indexes),
   );
 });
+
+test("render structure projects the current render model into the stage 5 model", async () => {
+  const fixture = await buildProjectionFixture();
+  const symbolicEvaluation = evaluateSymbolicExpressions({
+    graph: fixture.graph,
+    cssModuleBindingResolution: fixture.symbolResolution,
+  });
+  const legacyModel = buildRenderModel({
+    parsedFiles: fixture.parsedFiles,
+    reactRenderSyntax: graphToReactRenderSyntaxInputs(fixture.graph),
+    symbolResolution: fixture.symbolResolution,
+    moduleFacts: fixture.moduleFacts,
+    includeTraces: true,
+  });
+  const result = buildRenderStructure({
+    graph: fixture.graph,
+    symbolicEvaluation,
+    options: {
+      includeTraces: true,
+    },
+    legacy: {
+      parsedFiles: fixture.parsedFiles,
+      moduleFacts: fixture.moduleFacts,
+      symbolResolution: fixture.symbolResolution,
+    },
+  });
+
+  assert.equal(result.renderModel.components.length, legacyModel.renderGraph.nodes.length);
+  assert.equal(
+    result.renderModel.componentBoundaries.filter(
+      (boundary) => boundary.boundaryKind === "component-root",
+    ).length,
+    legacyModel.renderSubtrees.length,
+  );
+  assert.equal(
+    result.renderModel.componentBoundaries.filter(
+      (boundary) => boundary.boundaryKind === "expanded-component-reference",
+    ).length,
+    countLegacyExpandedComponentBoundaries(legacyModel.renderSubtrees),
+  );
+  assert.equal(
+    result.renderModel.componentBoundaries.filter(
+      (boundary) => boundary.boundaryKind === "unresolved-component-reference",
+    ).length,
+    countLegacyUnresolvedComponentBoundaries(legacyModel.renderSubtrees),
+  );
+  assert.equal(result.renderModel.elements.length, countLegacyElements(legacyModel.renderSubtrees));
+  assert.deepEqual(
+    result.renderModel.renderGraph,
+    normalizeLegacyRenderGraph(legacyModel.renderGraph),
+  );
+  assert.equal(
+    result.renderModel.renderRegions.length,
+    collectRenderRegionsFromSubtrees(legacyModel.renderSubtrees).length,
+  );
+});
+
+test("render structure legacy projection is deterministic across repeated runs", async () => {
+  const fixture = await buildProjectionFixture();
+  const symbolicEvaluation = evaluateSymbolicExpressions({
+    graph: fixture.graph,
+    cssModuleBindingResolution: fixture.symbolResolution,
+  });
+  const input = {
+    graph: fixture.graph,
+    symbolicEvaluation,
+    legacy: {
+      parsedFiles: fixture.parsedFiles,
+      moduleFacts: fixture.moduleFacts,
+      symbolResolution: fixture.symbolResolution,
+    },
+  };
+  const first = buildRenderStructure(input);
+  const second = buildRenderStructure(input);
+
+  assert.deepEqual(first.renderModel.elements, second.renderModel.elements);
+  assert.deepEqual(first.renderModel.componentBoundaries, second.renderModel.componentBoundaries);
+  assert.deepEqual(first.renderModel.renderGraph, second.renderModel.renderGraph);
+  assert.deepEqual(first.renderModel.renderRegions, second.renderModel.renderRegions);
+  assert.deepEqual(
+    serializeIndexSizes(first.renderModel.indexes),
+    serializeIndexSizes(second.renderModel.indexes),
+  );
+});
+
+async function buildProjectionFixture() {
+  const project = await new TestProjectBuilder()
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        'import "./app.css";',
+        'function Child() { return <span className="child"><strong className="label" /></span>; }',
+        "export function App() {",
+        '  return <main className="app"><Child /><MissingWidget className="missing" /></main>;',
+        "}",
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/app.css", ".app, .child, .label, .missing { display: block; }\n")
+    .build();
+
+  try {
+    const snapshot = await buildProjectSnapshot({
+      scanInput: {
+        rootDir: project.rootDir,
+        sourceFilePaths: ["src/App.tsx"],
+        cssFilePaths: ["src/app.css"],
+      },
+      runStage: async (_stage, _message, run) => run(),
+    });
+    const frontends = buildLanguageFrontends({ snapshot });
+    const factGraph = buildFactGraph({ snapshot, frontends });
+    const moduleFacts = buildModuleFacts({
+      source: frontends.source,
+      stylesheetFilePaths: ["src/app.css"],
+    });
+    const symbolResolution = buildProjectBindingResolution({
+      source: frontends.source,
+      moduleFacts,
+      includeTraces: true,
+    });
+
+    return {
+      graph: factGraph.graph,
+      parsedFiles: frontends.source.files.map((file) => file.legacy.parsedFile),
+      moduleFacts,
+      symbolResolution,
+    };
+  } finally {
+    await project.cleanup();
+  }
+}
+
+function countLegacyElements(renderSubtrees) {
+  return renderSubtrees.reduce((count, subtree) => count + countNodes(subtree.root, "element"), 0);
+}
+
+function countLegacyExpandedComponentBoundaries(renderSubtrees) {
+  return renderSubtrees.reduce(
+    (count, subtree) => count + countNodes(subtree.root, "expanded-component-reference"),
+    0,
+  );
+}
+
+function countLegacyUnresolvedComponentBoundaries(renderSubtrees) {
+  return renderSubtrees.reduce(
+    (count, subtree) => count + countNodes(subtree.root, "component-reference"),
+    0,
+  );
+}
+
+function countNodes(node, kind) {
+  let count = 0;
+  if (
+    (kind === "expanded-component-reference" && node.expandedFromComponentReference) ||
+    node.kind === kind
+  ) {
+    count += 1;
+  }
+
+  if (node.kind === "element" || node.kind === "fragment") {
+    return count + node.children.reduce((sum, child) => sum + countNodes(child, kind), 0);
+  }
+
+  if (node.kind === "conditional") {
+    return count + countNodes(node.whenTrue, kind) + countNodes(node.whenFalse, kind);
+  }
+
+  if (node.kind === "repeated-region") {
+    return count + countNodes(node.template, kind);
+  }
+
+  return count;
+}
+
+function normalizeLegacyRenderGraph(renderGraph) {
+  return {
+    nodes: renderGraph.nodes.map(normalizeLegacyRenderGraphNode),
+    edges: renderGraph.edges.map(normalizeLegacyRenderGraphEdge),
+  };
+}
+
+function normalizeLegacyRenderGraphNode(node) {
+  return {
+    componentKey: node.componentKey,
+    componentName: node.componentName,
+    filePath: normalizeProjectPath(node.filePath),
+    exported: node.exported,
+    sourceLocation: normalizeAnchor(node.sourceAnchor),
+  };
+}
+
+function normalizeLegacyRenderGraphEdge(edge) {
+  return {
+    fromComponentKey: edge.fromComponentKey,
+    fromComponentName: edge.fromComponentName,
+    fromFilePath: normalizeProjectPath(edge.fromFilePath),
+    ...(edge.toComponentKey ? { toComponentKey: edge.toComponentKey } : {}),
+    toComponentName: edge.toComponentName,
+    ...(edge.toFilePath ? { toFilePath: normalizeProjectPath(edge.toFilePath) } : {}),
+    ...(edge.targetSourceAnchor
+      ? { targetLocation: normalizeAnchor(edge.targetSourceAnchor) }
+      : {}),
+    sourceLocation: normalizeAnchor(edge.sourceAnchor),
+    resolution: edge.resolution,
+    traversal: "render-structure",
+    renderPath: edge.renderPath,
+    traces: edge.traces,
+  };
+}
+
+function normalizeAnchor(anchor) {
+  return {
+    ...anchor,
+    filePath: normalizeProjectPath(anchor.filePath),
+  };
+}
+
+function normalizeProjectPath(filePath) {
+  return filePath.replace(/\\/g, "/");
+}
 
 function serializeIndexSizes(indexes) {
   return Object.fromEntries(
