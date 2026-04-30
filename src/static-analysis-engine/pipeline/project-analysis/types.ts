@@ -8,6 +8,7 @@ import type {
 } from "../reachability/types.js";
 import type { RenderGraphEdge } from "../render-model/render-graph/types.js";
 import type { RenderSubtree, RenderNode } from "../render-model/render-ir/types.js";
+import type { RenderModel as RenderStructureModel } from "../render-structure/types.js";
 import type { RuntimeDomLibraryHint } from "../runtime-dom/types.js";
 import type { SelectorConstraint, SelectorQueryResult } from "../selector-analysis/types.js";
 import type { FactGraphResult } from "../fact-graph/types.js";
@@ -510,6 +511,7 @@ export type ProjectAnalysisBuildInput = {
   reachabilitySummary: import("../reachability/types.js").ReachabilitySummary;
   renderGraph: import("../render-model/render-graph/types.js").RenderGraph;
   renderSubtrees: RenderSubtree[];
+  renderModel?: RenderStructureModel;
   unsupportedClassReferences: UnsupportedClassReferenceDiagnostic[];
   symbolicEvaluation?: SymbolicEvaluationResult;
   selectorQueryResults: SelectorQueryResult[];

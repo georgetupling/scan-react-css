@@ -27,6 +27,7 @@ import { runModuleFactsStage } from "./stages/moduleFactsStage.js";
 import { runProjectAnalysisStage } from "./stages/projectAnalysisStage.js";
 import { runReachabilityStage } from "./stages/reachabilityStage.js";
 import { runRenderModelStage } from "./stages/renderModelStage.js";
+import { runRenderStructureStage } from "./stages/renderStructureStage.js";
 import { runSelectorAnalysisStage } from "./stages/selectorAnalysisStage.js";
 import { runSymbolResolutionStage } from "./stages/symbolResolutionStage.js";
 import { runSymbolicEvaluationStage } from "./stages/symbolicEvaluationStage.js";
@@ -172,6 +173,19 @@ export function analyzeProjectSourceTexts(input: {
           }),
       )
     : undefined;
+  const renderStructureStage =
+    factGraphStage && symbolicEvaluationStage
+      ? runAnalysisStage(progress, "render-structure", "Building render structure", () =>
+          runRenderStructureStage({
+            factGraph: factGraphStage,
+            symbolicEvaluation: symbolicEvaluationStage,
+            parsedFiles,
+            moduleFacts: moduleFactsStage.moduleFacts,
+            symbolResolution: symbolResolutionStage,
+            includeTraces,
+          }),
+        )
+      : undefined;
   const cssAnalysisStage = runAnalysisStage(progress, "css-analysis", "Analyzing CSS", () =>
     runCssAnalysisStage({
       factGraph: input.factGraph,
@@ -238,6 +252,7 @@ export function analyzeProjectSourceTexts(input: {
         reachabilitySummary: reachabilityStage.reachabilitySummary,
         renderGraph: renderModelStage.renderGraph,
         renderSubtrees: renderModelStage.renderSubtrees,
+        renderModel: renderStructureStage?.renderModel,
         unsupportedClassReferences: renderModelStage.unsupportedClassReferences,
         symbolicEvaluation: symbolicEvaluationStage,
         selectorQueryResults: selectorAnalysisStage.selectorQueryResults,

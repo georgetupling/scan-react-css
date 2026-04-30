@@ -129,7 +129,16 @@ test("render structure projects the current render model into the stage 5 model"
   );
   assert.equal(
     result.renderModel.renderRegions.length,
-    collectRenderRegionsFromSubtrees(legacyModel.renderSubtrees).length,
+    collectRenderRegionsFromSubtrees(legacyModel.renderSubtrees).length +
+      countLegacyUnresolvedComponentBoundaries(legacyModel.renderSubtrees),
+  );
+  assert.ok(
+    result.renderModel.renderRegions.some((region) => region.regionKind === "unknown-barrier"),
+  );
+  assert.ok(
+    result.renderModel.placementConditions.some(
+      (condition) => condition.kind === "unknown-barrier",
+    ),
   );
 });
 

@@ -3,6 +3,7 @@ import { buildRenderModel } from "../../render-model/index.js";
 import { collectRenderRegionsFromSubtrees } from "../../render-model/render-ir/index.js";
 import {
   emissionSiteId,
+  placementConditionId,
   renderedComponentBoundaryId,
   renderedComponentId,
   renderedElementId,
@@ -21,6 +22,7 @@ import type {
   RenderCertainty,
   EmissionSite,
   EmissionTokenProvenance,
+  PlacementCondition,
   RenderGraphProjection,
   RenderGraphProjectionEdge,
   RenderGraphProjectionNode,
@@ -45,8 +47,12 @@ type ProjectionAccumulator = {
   elements: RenderedElement[];
   emissionSites: EmissionSite[];
   renderPaths: RenderPath[];
+  placementConditions: PlacementCondition[];
+  renderRegions: RenderRegion[];
   boundaryById: Map<string, RenderedComponentBoundary>;
   elementById: Map<string, RenderedElement>;
+  placementConditionById: Map<string, PlacementCondition>;
+  renderRegionById: Map<string, RenderRegion>;
   rootBoundaryIdByComponentKey: Map<string, string>;
   rootBoundaryIdBySubtreeKey: Map<string, string>;
   componentNodeIdByComponentKey: Map<string, string>;
@@ -60,6 +66,7 @@ type TraversalContext = {
   boundaryId: string;
   parentElementId?: string;
   pathSegments: RenderPathSegment[];
+  placementConditionIds: string[];
   certainty: RenderCertainty;
 };
 
@@ -78,7 +85,7 @@ export function projectLegacyRenderModel(input: RenderStructureInput): {
   elements: RenderedElement[];
   emissionSites: EmissionSite[];
   renderPaths: RenderPath[];
-  placementConditions: [];
+  placementConditions: PlacementCondition[];
   renderRegions: RenderRegion[];
   renderGraph: RenderGraphProjection;
   diagnostics: RenderStructureDiagnostic[];
@@ -99,8 +106,12 @@ export function projectLegacyRenderModel(input: RenderStructureInput): {
     elements: [],
     emissionSites: [],
     renderPaths: [],
+    placementConditions: [],
+    renderRegions: [],
     boundaryById: new Map(),
     elementById: new Map(),
+    placementConditionById: new Map(),
+    renderRegionById: new Map(),
     rootBoundaryIdByComponentKey: new Map(),
     rootBoundaryIdBySubtreeKey: new Map(),
     componentNodeIdByComponentKey: input.graph.indexes.componentNodeIdByComponentKey,
@@ -127,8 +138,12 @@ export function projectLegacyRenderModel(input: RenderStructureInput): {
     legacyRegions: collectRenderRegionsFromSubtrees(legacyModel.renderSubtrees),
     rootBoundaryIdByComponentKey: accumulator.rootBoundaryIdByComponentKey,
     rootBoundaryIdBySubtreeKey: accumulator.rootBoundaryIdBySubtreeKey,
+    placementConditionById: accumulator.placementConditionById,
   });
   accumulator.renderPaths.push(...regionProjection.renderPaths);
+  for (const region of regionProjection.renderRegions) {
+    addRenderRegion(accumulator, region);
+  }
 
   return {
     components,
@@ -136,8 +151,8 @@ export function projectLegacyRenderModel(input: RenderStructureInput): {
     elements: sortById(accumulator.elements),
     emissionSites: sortById(accumulator.emissionSites),
     renderPaths: sortById(accumulator.renderPaths),
-    placementConditions: [],
-    renderRegions: regionProjection.renderRegions,
+    placementConditions: sortById(accumulator.placementConditions),
+    renderRegions: sortById(accumulator.renderRegions),
     renderGraph,
     diagnostics: [],
   };
@@ -219,6 +234,7 @@ function projectSubtree(input: {
       placementComponentNodeId: componentNodeId,
       boundaryId: rootBoundaryId,
       pathSegments: rootPath.segments,
+      placementConditionIds: [],
       certainty: "definite",
     },
   });
@@ -271,6 +287,48 @@ function projectNode(input: {
   }
 
   if (input.node.kind === "conditional") {
+    const trueBranchConditionId = addPlacementCondition(input.accumulator, {
+      id: placementConditionId({
+        conditionKind: "conditional-branch",
+        key: `${input.context.boundaryId}:when-true:${input.node.conditionSourceText}:${anchorKey(input.node.sourceAnchor)}`,
+      }),
+      kind: "conditional-branch",
+      sourceText: input.node.conditionSourceText,
+      sourceLocation: normalizeAnchor(input.node.sourceAnchor),
+      branch: "when-true",
+      certainty: downgradeCertainty(input.context.certainty),
+      confidence: "medium",
+      traces: input.node.traces ?? [],
+    });
+    const falseBranchConditionId = addPlacementCondition(input.accumulator, {
+      id: placementConditionId({
+        conditionKind: "conditional-branch",
+        key: `${input.context.boundaryId}:when-false:${input.node.conditionSourceText}:${anchorKey(input.node.sourceAnchor)}`,
+      }),
+      kind: "conditional-branch",
+      sourceText: input.node.conditionSourceText,
+      sourceLocation: normalizeAnchor(input.node.sourceAnchor),
+      branch: "when-false",
+      certainty: downgradeCertainty(input.context.certainty),
+      confidence: "medium",
+      traces: input.node.traces ?? [],
+    });
+    for (const skippedBranch of input.node.staticallySkippedBranches ?? []) {
+      addPlacementCondition(input.accumulator, {
+        id: placementConditionId({
+          conditionKind: "statically-skipped-branch",
+          key: `${input.context.boundaryId}:${skippedBranch.skippedBranch}:${skippedBranch.reason}:${skippedBranch.conditionSourceText}:${anchorKey(skippedBranch.sourceAnchor)}`,
+        }),
+        kind: "statically-skipped-branch",
+        sourceText: skippedBranch.conditionSourceText,
+        sourceLocation: normalizeAnchor(skippedBranch.sourceAnchor),
+        branch: skippedBranch.skippedBranch,
+        reason: skippedBranch.reason,
+        certainty: "definite",
+        confidence: "high",
+        traces: [],
+      });
+    }
     return [
       ...projectNode({
         node: input.node.whenTrue,
@@ -278,12 +336,16 @@ function projectNode(input: {
         context: {
           ...input.context,
           certainty: downgradeCertainty(input.context.certainty),
+          placementConditionIds: uniqueSorted([
+            ...input.context.placementConditionIds,
+            trueBranchConditionId,
+          ]),
           pathSegments: [
             ...input.context.pathSegments,
             {
-              kind: "unknown-barrier",
-              reason: `conditional-branch:when-true:${input.node.conditionSourceText}`,
-              location: normalizeAnchor(input.node.sourceAnchor),
+              kind: "conditional-branch",
+              branch: "when-true",
+              conditionId: trueBranchConditionId,
             },
           ],
         },
@@ -294,12 +356,16 @@ function projectNode(input: {
         context: {
           ...input.context,
           certainty: downgradeCertainty(input.context.certainty),
+          placementConditionIds: uniqueSorted([
+            ...input.context.placementConditionIds,
+            falseBranchConditionId,
+          ]),
           pathSegments: [
             ...input.context.pathSegments,
             {
-              kind: "unknown-barrier",
-              reason: `conditional-branch:when-false:${input.node.conditionSourceText}`,
-              location: normalizeAnchor(input.node.sourceAnchor),
+              kind: "conditional-branch",
+              branch: "when-false",
+              conditionId: falseBranchConditionId,
             },
           ],
         },
@@ -308,22 +374,100 @@ function projectNode(input: {
   }
 
   if (input.node.kind === "repeated-region") {
+    const repeatedConditionId = addPlacementCondition(input.accumulator, {
+      id: placementConditionId({
+        conditionKind: "repeated-region",
+        key: `${input.context.boundaryId}:${input.node.reason}:${anchorKey(input.node.sourceAnchor)}`,
+      }),
+      kind: "repeated-region",
+      reason: input.node.reason,
+      sourceLocation: normalizeAnchor(input.node.sourceAnchor),
+      certainty: downgradeCertainty(input.context.certainty),
+      confidence: "medium",
+      traces: input.node.traces ?? [],
+    });
     return projectNode({
       node: input.node.template,
       accumulator: input.accumulator,
       context: {
         ...input.context,
         certainty: downgradeCertainty(input.context.certainty),
+        placementConditionIds: uniqueSorted([
+          ...input.context.placementConditionIds,
+          repeatedConditionId,
+        ]),
         pathSegments: [
           ...input.context.pathSegments,
           {
-            kind: "unknown-barrier",
-            reason: `repeated-template:${input.node.reason}`,
-            location: normalizeAnchor(input.node.sourceAnchor),
+            kind: "repeated-template",
+            conditionId: repeatedConditionId,
           },
         ],
       },
     });
+  }
+
+  if (input.node.kind === "unknown") {
+    const unknownConditionId = addPlacementCondition(input.accumulator, {
+      id: placementConditionId({
+        conditionKind: "unknown-barrier",
+        key: `${input.context.boundaryId}:${input.node.reason}:${anchorKey(input.node.sourceAnchor)}`,
+      }),
+      kind: "unknown-barrier",
+      reason: input.node.reason,
+      sourceLocation: normalizeAnchor(input.node.sourceAnchor),
+      certainty: "unknown",
+      confidence: "low",
+      traces: input.node.traces ?? [],
+    });
+    const pathSegments = [
+      ...input.context.pathSegments,
+      {
+        kind: "unknown-barrier" as const,
+        reason: input.node.reason,
+        location: normalizeAnchor(input.node.sourceAnchor),
+      },
+    ];
+    const pathId = renderPathId({
+      terminalKind: "unknown-region",
+      terminalId: `${input.context.boundaryId}:${anchorKey(input.node.sourceAnchor)}:${input.node.reason}`,
+    });
+    addRenderPath(
+      input.accumulator,
+      createRenderPath({
+        id: pathId,
+        rootComponentNodeId: input.context.rootComponentNodeId,
+        terminalKind: "unknown-region",
+        terminalId: `${input.context.boundaryId}:${anchorKey(input.node.sourceAnchor)}:${input.node.reason}`,
+        segments: pathSegments,
+        placementConditionIds: uniqueSorted([
+          ...input.context.placementConditionIds,
+          unknownConditionId,
+        ]),
+        certainty: "unknown",
+        traces: input.node.traces ?? [],
+      }),
+    );
+    addRenderRegion(input.accumulator, {
+      id: renderRegionId({
+        regionKind: "unknown-barrier",
+        key: `${input.context.boundaryId}:${input.node.reason}:${anchorKey(input.node.sourceAnchor)}:${serializeRenderPathSegments(pathSegments)}`,
+      }),
+      regionKind: "unknown-barrier",
+      boundaryId: input.context.boundaryId,
+      ...(input.context.rootComponentNodeId
+        ? { componentNodeId: input.context.rootComponentNodeId }
+        : {}),
+      renderPathId: pathId,
+      sourceLocation: normalizeAnchor(input.node.sourceAnchor),
+      placementConditionIds: uniqueSorted([
+        ...input.context.placementConditionIds,
+        unknownConditionId,
+      ]),
+      childElementIds: [],
+      childBoundaryIds: [],
+    });
+    return [];
   }
 
   return [];
@@ -362,6 +506,7 @@ function projectExpandedComponentBoundary(input: {
     terminalKind: "component-boundary",
     terminalId: boundaryId,
     segments: pathSegments,
+    placementConditionIds: input.context.placementConditionIds,
     certainty: input.context.certainty,
     traces: expansion.traces,
   });
@@ -379,7 +524,7 @@ function projectExpandedComponentBoundary(input: {
     childBoundaryIds: [],
     rootElementIds: [],
     renderPathId: path.id,
-    placementConditionIds: [],
+    placementConditionIds: input.context.placementConditionIds,
     expansion: { status: "expanded", reason: "legacy-render-model-expansion" },
     traces: expansion.traces,
   };
@@ -401,6 +546,7 @@ function projectExpandedComponentBoundary(input: {
       boundaryId,
       parentElementId: input.context.parentElementId,
       pathSegments,
+      placementConditionIds: input.context.placementConditionIds,
       certainty: input.context.certainty,
     },
   });
@@ -413,6 +559,22 @@ function projectUnresolvedComponentBoundary(input: {
   accumulator: ProjectionAccumulator;
   context: TraversalContext;
 }): void {
+  const unknownConditionId = addPlacementCondition(input.accumulator, {
+    id: placementConditionId({
+      conditionKind: "unknown-barrier",
+      key: `${input.context.boundaryId}:${input.node.reason}:${anchorKey(input.node.sourceAnchor)}`,
+    }),
+    kind: "unknown-barrier",
+    reason: input.node.reason,
+    sourceLocation: normalizeAnchor(input.node.sourceAnchor),
+    certainty: "unknown",
+    confidence: "low",
+    traces: input.node.traces ?? [],
+  });
+  const placementConditionIds = uniqueSorted([
+    ...input.context.placementConditionIds,
+    unknownConditionId,
+  ]);
   const boundaryId = renderedComponentBoundaryId({
     boundaryKind: "unresolved-component-reference",
     key: `${input.node.componentName}:${anchorKey(input.node.sourceAnchor)}`,
@@ -433,6 +595,7 @@ function projectUnresolvedComponentBoundary(input: {
     terminalKind: "component-boundary",
     terminalId: boundaryId,
     segments: pathSegments,
+    placementConditionIds,
     certainty: "unknown",
     traces: input.node.traces ?? [],
   });
@@ -447,13 +610,29 @@ function projectUnresolvedComponentBoundary(input: {
     childBoundaryIds: [],
     rootElementIds: [],
     renderPathId: path.id,
-    placementConditionIds: [],
+    placementConditionIds,
     expansion: { status: "unresolved", reason: input.node.reason },
     traces: input.node.traces ?? [],
   };
 
   addBoundary(input.accumulator, boundary);
   addRenderPath(input.accumulator, path);
+  addRenderRegion(input.accumulator, {
+    id: renderRegionId({
+      regionKind: "unknown-barrier",
+      key: `${boundaryId}:${input.node.reason}:${anchorKey(input.node.sourceAnchor)}`,
+    }),
+    regionKind: "unknown-barrier",
+    boundaryId,
+    ...(input.context.rootComponentNodeId
+      ? { componentNodeId: input.context.rootComponentNodeId }
+      : {}),
+    renderPathId: path.id,
+    sourceLocation: normalizeAnchor(input.node.sourceAnchor),
+    placementConditionIds,
+    childElementIds: [],
+    childBoundaryIds: [],
+  });
   linkBoundaryToParent(input.accumulator, boundary);
 
   if (input.node.className) {
@@ -465,6 +644,7 @@ function projectUnresolvedComponentBoundary(input: {
       context: {
         ...input.context,
         pathSegments,
+        placementConditionIds,
       },
       emissionKind: "unresolved-component-class-prop",
     });
@@ -498,6 +678,7 @@ function projectElement(input: {
     terminalKind: "element",
     terminalId: elementId,
     segments: pathSegments,
+    placementConditionIds: input.context.placementConditionIds,
     certainty: input.context.certainty,
     traces: input.node.traces ?? [],
   });
@@ -517,7 +698,7 @@ function projectElement(input: {
       ? { placementComponentNodeId: input.context.placementComponentNodeId }
       : {}),
     renderPathId: path.id,
-    placementConditionIds: [],
+    placementConditionIds: input.context.placementConditionIds,
     certainty: input.context.certainty,
     traces: input.node.traces ?? [],
   };
@@ -537,6 +718,7 @@ function projectElement(input: {
       context: {
         ...input.context,
         pathSegments,
+        placementConditionIds: input.context.placementConditionIds,
       },
       emissionKind: "rendered-element-class",
     });
@@ -550,6 +732,7 @@ function projectElement(input: {
         ...input.context,
         parentElementId: elementId,
         pathSegments: [...pathSegments, { kind: "child-index", index: childIndex }],
+        placementConditionIds: input.context.placementConditionIds,
       },
     });
   });
@@ -590,6 +773,7 @@ function projectEmissionSite(input: {
     terminalKind: "emission-site",
     terminalId: id,
     segments: input.context.pathSegments,
+    placementConditionIds: input.context.placementConditionIds,
     certainty: input.context.certainty,
     traces: symbolicExpression.traces,
   });
@@ -637,7 +821,7 @@ function projectEmissionSite(input: {
     ),
     confidence: symbolicExpression.confidence,
     renderPathId: path.id,
-    placementConditionIds: [],
+    placementConditionIds: input.context.placementConditionIds,
     traces: symbolicExpression.traces,
   };
 
@@ -843,6 +1027,7 @@ function projectRenderRegions(input: {
   legacyRegions: LegacyRenderRegion[];
   rootBoundaryIdByComponentKey: Map<string, string>;
   rootBoundaryIdBySubtreeKey: Map<string, string>;
+  placementConditionById: Map<string, PlacementCondition>;
 }): {
   renderRegions: RenderRegion[];
   renderPaths: RenderPath[];
@@ -867,6 +1052,21 @@ function projectRenderRegions(input: {
         key: `${region.componentKey ?? region.componentName ?? "unknown"}:${serializeLegacyRegionPath(region.path)}:${anchorKey(region.sourceAnchor)}`,
         index,
       });
+      const placementConditionIds =
+        region.kind === "conditional-branch"
+          ? findMatchingPlacementConditionIds({
+              placementConditionById: input.placementConditionById,
+              kind: "conditional-branch",
+              sourceLocation: normalizeAnchor(region.sourceAnchor),
+              branch: region.path.find((segment) => segment.kind === "conditional-branch")?.branch,
+            })
+          : region.kind === "repeated-template"
+            ? findMatchingPlacementConditionIds({
+                placementConditionById: input.placementConditionById,
+                kind: "repeated-region",
+                sourceLocation: normalizeAnchor(region.sourceAnchor),
+              })
+            : [];
       const path = createRenderPath({
         id: renderPathId({
           terminalKind: region.kind === "subtree-root" ? "component-boundary" : "unknown-region",
@@ -882,6 +1082,7 @@ function projectRenderRegions(input: {
             location: normalizeAnchor(region.sourceAnchor),
           },
         ],
+        placementConditionIds,
         certainty: region.kind === "subtree-root" ? "definite" : "possible",
       });
       renderPaths.push(path);
@@ -893,7 +1094,7 @@ function projectRenderRegions(input: {
         ...(componentNodeId ? { componentNodeId } : {}),
         renderPathId: path.id,
         sourceLocation: normalizeAnchor(region.sourceAnchor),
-        placementConditionIds: [],
+        placementConditionIds,
         childElementIds: [],
         childBoundaryIds: [],
       };
@@ -921,6 +1122,29 @@ function addElement(accumulator: ProjectionAccumulator, element: RenderedElement
 
 function addRenderPath(accumulator: ProjectionAccumulator, renderPath: RenderPath): void {
   accumulator.renderPaths.push(renderPath);
+}
+
+function addPlacementCondition(
+  accumulator: ProjectionAccumulator,
+  placementCondition: PlacementCondition,
+): string {
+  const existing = accumulator.placementConditionById.get(placementCondition.id);
+  if (existing) {
+    return existing.id;
+  }
+
+  accumulator.placementConditionById.set(placementCondition.id, placementCondition);
+  accumulator.placementConditions.push(placementCondition);
+  return placementCondition.id;
+}
+
+function addRenderRegion(accumulator: ProjectionAccumulator, renderRegion: RenderRegion): void {
+  if (accumulator.renderRegionById.has(renderRegion.id)) {
+    return;
+  }
+
+  accumulator.renderRegionById.set(renderRegion.id, renderRegion);
+  accumulator.renderRegions.push(renderRegion);
 }
 
 function linkBoundaryToParent(
@@ -1050,6 +1274,63 @@ function serializeLegacyRegionPath(path: LegacyRenderRegion["path"]): string {
       return "repeated-template";
     })
     .join("/");
+}
+
+function serializeRenderPathSegments(pathSegments: RenderPathSegment[]): string {
+  return pathSegments
+    .map((segment) => {
+      if (segment.kind === "component-root") {
+        return `component-root:${segment.componentNodeId ?? "unknown"}:${anchorKey(segment.location)}`;
+      }
+
+      if (segment.kind === "component-reference") {
+        return `component-reference:${segment.renderSiteNodeId ?? "unknown"}:${anchorKey(segment.location)}`;
+      }
+
+      if (segment.kind === "element") {
+        return `element:${segment.elementId}:${segment.tagName}:${anchorKey(segment.location)}`;
+      }
+
+      if (segment.kind === "child-index") {
+        return `child-index:${segment.index}`;
+      }
+
+      if (segment.kind === "conditional-branch") {
+        return `conditional-branch:${segment.branch}:${segment.conditionId}`;
+      }
+
+      if (segment.kind === "repeated-template") {
+        return `repeated-template:${segment.conditionId}`;
+      }
+
+      return `unknown-barrier:${segment.reason}:${anchorKey(segment.location)}`;
+    })
+    .join("/");
+}
+
+function findMatchingPlacementConditionIds(input: {
+  placementConditionById: Map<string, PlacementCondition>;
+  kind: PlacementCondition["kind"];
+  sourceLocation: SourceAnchor;
+  branch?: "when-true" | "when-false";
+}): string[] {
+  const matches = [...input.placementConditionById.values()].filter((placementCondition) => {
+    if (placementCondition.kind !== input.kind) {
+      return false;
+    }
+
+    if (input.branch && placementCondition.branch !== input.branch) {
+      return false;
+    }
+
+    if (!placementCondition.sourceLocation) {
+      return false;
+    }
+
+    return anchorKey(placementCondition.sourceLocation) === anchorKey(input.sourceLocation);
+  });
+
+  return uniqueSorted(matches.map((placementCondition) => placementCondition.id));
 }
 
 function anchorKey(anchor: SourceAnchor): string {

@@ -6,6 +6,7 @@ import type {
   RenderElementNode,
 } from "../../render-model/render-ir/types.js";
 import type { CanonicalClassExpression } from "../../symbolic-evaluation/types.js";
+import type { EmissionSite, RenderModel } from "../../render-structure/types.js";
 import type { AnalysisTrace } from "../../../types/analysis.js";
 import type { SourceAnchor } from "../../../types/core.js";
 import type {
@@ -38,6 +39,7 @@ import {
 
 export function buildClassReferences(input: {
   renderSubtrees: RenderSubtreeAnalysis[];
+  renderModel?: RenderModel;
   symbolicEvaluation: ProjectAnalysisBuildInput["symbolicEvaluation"];
   factGraph: ProjectAnalysisBuildInput["factGraph"];
   indexes: ProjectAnalysisIndexes;
@@ -48,6 +50,27 @@ export function buildClassReferences(input: {
       collectRenderClassExpressions(renderSubtree, input.indexes),
     ),
   );
+
+  if (input.renderModel && input.symbolicEvaluation) {
+    const emissionReferences = buildClassReferencesFromEmissionSites({
+      renderModel: input.renderModel,
+      symbolicEvaluation: input.symbolicEvaluation,
+      factGraph: input.factGraph,
+      indexes: input.indexes,
+      includeTraces: input.includeTraces,
+    });
+    const fallbackEntries = classExpressions.filter(
+      (entry) => !hasEquivalentEmissionReference(entry, emissionReferences),
+    );
+    const fallbackReferences = fallbackEntries.map((entry, index) =>
+      buildRenderClassReference(input, entry, emissionReferences.length + index),
+    );
+    const references = [...emissionReferences, ...fallbackReferences].sort(compareById);
+
+    sortIndexValues(input.indexes.referencesBySourceFileId);
+    sortIndexValues(input.indexes.referencesByClassName);
+    return references;
+  }
 
   const references = input.symbolicEvaluation
     ? buildSymbolicClassReferences({
@@ -62,6 +85,217 @@ export function buildClassReferences(input: {
   sortIndexValues(input.indexes.referencesBySourceFileId);
   sortIndexValues(input.indexes.referencesByClassName);
   return references.sort(compareById);
+}
+
+export function buildClassReferencesFromEmissionSites(input: {
+  renderModel?: RenderModel;
+  symbolicEvaluation: NonNullable<ProjectAnalysisBuildInput["symbolicEvaluation"]>;
+  factGraph: ProjectAnalysisBuildInput["factGraph"];
+  indexes: ProjectAnalysisIndexes;
+  includeTraces: boolean;
+}): ClassReferenceAnalysis[] {
+  const renderModel = input.renderModel;
+  if (!renderModel) {
+    return [];
+  }
+
+  const expressionsById = new Map(
+    input.symbolicEvaluation.evaluatedExpressions.classExpressions.map((expression) => [
+      expression.id,
+      expression,
+    ]),
+  );
+  const references: ClassReferenceAnalysis[] = [];
+  const emittedReferenceKeys = new Set<string>();
+
+  for (const emissionSite of sortEmissionSites(renderModel.emissionSites)) {
+    const expression = expressionsById.get(emissionSite.classExpressionId);
+    if (!expression) {
+      continue;
+    }
+    const dedupeKey = createEmissionReferenceDedupeKey({
+      emissionSite,
+      expression,
+      factGraph: input.factGraph,
+      indexes: input.indexes,
+    });
+    if (emittedReferenceKeys.has(dedupeKey)) {
+      continue;
+    }
+    emittedReferenceKeys.add(dedupeKey);
+
+    references.push(
+      buildClassReferenceFromEmissionSite({
+        emissionSite,
+        expression,
+        factGraph: input.factGraph,
+        indexes: input.indexes,
+        includeTraces: input.includeTraces,
+        index: references.length,
+      }),
+    );
+  }
+
+  const emittedExpressionIds = new Set(
+    renderModel.emissionSites.map((emissionSite) => emissionSite.classExpressionId),
+  );
+  for (const expression of input.symbolicEvaluation.evaluatedExpressions.classExpressions) {
+    if (
+      expression.classExpressionSiteKind !== "runtime-dom-class" ||
+      emittedExpressionIds.has(expression.id) ||
+      !shouldProjectCanonicalClassExpression(expression)
+    ) {
+      continue;
+    }
+
+    references.push(
+      buildSymbolicClassReference({
+        expression,
+        classExpression: toClassExpressionSummary(expression),
+        factGraph: input.factGraph,
+        indexes: input.indexes,
+        includeTraces: input.includeTraces,
+        index: references.length,
+      }),
+    );
+  }
+
+  sortIndexValues(input.indexes.referencesBySourceFileId);
+  sortIndexValues(input.indexes.referencesByClassName);
+  return references.sort(compareById);
+}
+
+function buildClassReferenceFromEmissionSite(input: {
+  emissionSite: EmissionSite;
+  expression: CanonicalClassExpression;
+  factGraph: ProjectAnalysisBuildInput["factGraph"];
+  indexes: ProjectAnalysisIndexes;
+  includeTraces: boolean;
+  index: number;
+}): ClassReferenceAnalysis {
+  const classExpression = toClassExpressionSummary(input.expression);
+  const site = input.factGraph?.graph.indexes.nodesById.get(
+    input.expression.classExpressionSiteNodeId,
+  );
+  const sourceLocation = normalizeAnchor(input.emissionSite.sourceLocation);
+  const sourceFileId =
+    input.indexes.sourceFileIdByPath.get(sourceLocation.filePath) ??
+    createPathId("source", sourceLocation.filePath);
+  const suppliedByComponentId = projectComponentNodeId(
+    input.emissionSite.suppliedByComponentNodeId,
+    input,
+  );
+  const emittedByComponentId = projectComponentNodeId(
+    input.emissionSite.emittingComponentNodeId,
+    input,
+  );
+  const id = createAnchorId("class-reference", sourceLocation, input.index);
+  const reference: ClassReferenceAnalysis = {
+    id,
+    sourceFileId,
+    componentId: suppliedByComponentId ?? emittedByComponentId,
+    suppliedByComponentId,
+    emittedByComponentId,
+    classNameComponentIds: buildEmissionClassNameComponentIds(input),
+    location: sourceLocation,
+    ...(input.emissionSite.emittedElementLocation
+      ? { emittedElementLocation: normalizeAnchor(input.emissionSite.emittedElementLocation) }
+      : {}),
+    ...(input.emissionSite.placementLocation
+      ? { placementLocation: normalizeAnchor(input.emissionSite.placementLocation) }
+      : {}),
+    origin: "render-ir",
+    ...(site?.kind === "class-expression-site" && site.runtimeDomLibraryHint
+      ? { runtimeLibraryHint: site.runtimeDomLibraryHint }
+      : {}),
+    expressionKind: getReferenceExpressionKind(classExpression),
+    rawExpressionText: input.expression.rawExpressionText,
+    definiteClassNames: [...classExpression.classes.definite],
+    possibleClassNames: [...classExpression.classes.possible],
+    unknownDynamic: classExpression.classes.unknownDynamic,
+    confidence: getReferenceConfidence(classExpression),
+    traces: input.includeTraces
+      ? buildEmissionSiteClassReferenceTraces({
+          emissionSite: input.emissionSite,
+          expression: input.expression,
+          classExpression,
+        })
+      : [],
+    sourceSummary: classExpression,
+  };
+
+  pushMapValue(input.indexes.referencesBySourceFileId, sourceFileId, id);
+  for (const className of collectReferenceClassNames(reference)) {
+    pushMapValue(input.indexes.referencesByClassName, className, id);
+  }
+
+  return reference;
+}
+
+function createEmissionReferenceDedupeKey(input: {
+  emissionSite: EmissionSite;
+  expression: CanonicalClassExpression;
+  factGraph: ProjectAnalysisBuildInput["factGraph"];
+  indexes: ProjectAnalysisIndexes;
+}): string {
+  const classExpression = toClassExpressionSummary(input.expression);
+  const suppliedByComponentId = projectComponentNodeId(
+    input.emissionSite.suppliedByComponentNodeId,
+    input,
+  );
+  const emittedByComponentId = projectComponentNodeId(
+    input.emissionSite.emittingComponentNodeId,
+    input,
+  );
+  const classNameComponentIds = buildEmissionClassNameComponentIds(input);
+
+  return [
+    normalizeProjectPath(classExpression.sourceAnchor.filePath),
+    classExpression.sourceAnchor.startLine,
+    classExpression.sourceAnchor.startColumn,
+    classExpression.sourceAnchor.endLine ?? "",
+    classExpression.sourceAnchor.endColumn ?? "",
+    classExpression.classes.definite.join(" "),
+    classExpression.classes.possible.join(" "),
+    classExpression.classes.unknownDynamic ? "dynamic" : "static",
+    suppliedByComponentId ?? "",
+    emittedByComponentId ?? "",
+    serializeClassNameComponentIds(classNameComponentIds),
+  ].join(":");
+}
+
+function hasEquivalentEmissionReference(
+  entry: RenderClassExpressionEntry,
+  emissionReferences: ClassReferenceAnalysis[],
+): boolean {
+  return emissionReferences.some(
+    (reference) =>
+      compareAnchors(reference.location, entry.classExpression.sourceAnchor) === 0 &&
+      compareOptionalAnchors(reference.emittedElementLocation, entry.emittedElementLocation) ===
+        0 &&
+      (reference.suppliedByComponentId ?? "") === (entry.suppliedByComponentId ?? "") &&
+      (reference.emittedByComponentId ?? "") === (entry.emittedByComponentId ?? "") &&
+      shouldUseSymbolicClassExpressionForRenderEntry(reference.sourceSummary, entry),
+  );
+}
+
+function compareOptionalAnchors(
+  left: SourceAnchor | undefined,
+  right: SourceAnchor | undefined,
+): number {
+  if (left && right) {
+    return compareAnchors(left, right);
+  }
+
+  if (left) {
+    return -1;
+  }
+
+  if (right) {
+    return 1;
+  }
+
+  return 0;
 }
 
 function buildRenderClassReference(
@@ -713,6 +947,101 @@ export function buildCanonicalClassReferenceTraces(input: {
       },
     },
   ];
+}
+
+function buildEmissionSiteClassReferenceTraces(input: {
+  emissionSite: EmissionSite;
+  expression: CanonicalClassExpression;
+  classExpression: ClassExpressionSummary;
+}): AnalysisTrace[] {
+  const anchor = normalizeAnchor(
+    input.emissionSite.emittedElementLocation ?? input.emissionSite.sourceLocation,
+  );
+
+  return [
+    {
+      traceId: `render-structure:class-reference:${normalizeProjectPath(input.emissionSite.sourceLocation.filePath)}:${input.emissionSite.sourceLocation.startLine}:${input.emissionSite.sourceLocation.startColumn}`,
+      category: "render-expansion",
+      summary: "class reference was projected from a render structure emission site",
+      anchor,
+      children: [...input.classExpression.traces],
+      metadata: {
+        origin: "render-ir",
+        expressionId: input.expression.id,
+        emissionSiteId: input.emissionSite.id,
+        classExpressionSiteNodeId: input.expression.classExpressionSiteNodeId,
+        renderPathId: input.emissionSite.renderPathId,
+        componentId:
+          input.emissionSite.suppliedByComponentNodeId ??
+          input.emissionSite.emittingComponentNodeId,
+        suppliedByComponentNodeId: input.emissionSite.suppliedByComponentNodeId,
+        emittedByComponentNodeId: input.emissionSite.emittingComponentNodeId,
+        sourceFilePath: normalizeProjectPath(input.expression.filePath),
+      },
+    },
+  ];
+}
+
+function sortEmissionSites(emissionSites: EmissionSite[]): EmissionSite[] {
+  return [...emissionSites].sort(compareEmissionSites);
+}
+
+function compareEmissionSites(left: EmissionSite, right: EmissionSite): number {
+  return (
+    compareAnchors(left.sourceLocation, right.sourceLocation) ||
+    compareOptionalAnchors(left.emittedElementLocation, right.emittedElementLocation) ||
+    compareOptionalAnchors(left.placementLocation, right.placementLocation) ||
+    (left.suppliedByComponentNodeId ?? "").localeCompare(right.suppliedByComponentNodeId ?? "") ||
+    (left.emittingComponentNodeId ?? "").localeCompare(right.emittingComponentNodeId ?? "") ||
+    left.id.localeCompare(right.id)
+  );
+}
+
+function projectComponentNodeId(
+  componentNodeId: string | undefined,
+  input: {
+    factGraph: ProjectAnalysisBuildInput["factGraph"];
+    indexes: ProjectAnalysisIndexes;
+  },
+): ProjectAnalysisId | undefined {
+  if (!componentNodeId) {
+    return undefined;
+  }
+
+  const componentNode = input.factGraph?.graph.indexes.nodesById.get(componentNodeId);
+  if (componentNode?.kind === "component") {
+    return input.indexes.componentIdByComponentKey.get(componentNode.componentKey);
+  }
+
+  return undefined;
+}
+
+function buildEmissionClassNameComponentIds(input: {
+  emissionSite: EmissionSite;
+  factGraph: ProjectAnalysisBuildInput["factGraph"];
+  indexes: ProjectAnalysisIndexes;
+}): Record<string, ProjectAnalysisId> | undefined {
+  const componentIdsByClassName: Record<string, ProjectAnalysisId> = {};
+
+  for (const provenance of input.emissionSite.tokenProvenance) {
+    const componentId = projectComponentNodeId(provenance.suppliedByComponentNodeId, input);
+    if (componentId) {
+      componentIdsByClassName[provenance.token] = componentId;
+    }
+  }
+
+  return Object.keys(componentIdsByClassName).length > 0 ? componentIdsByClassName : undefined;
+}
+
+function serializeClassNameComponentIds(record: Record<string, string> | undefined): string {
+  if (!record) {
+    return "";
+  }
+
+  return Object.entries(record)
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([className, componentId]) => `${className}=${componentId}`)
+    .join(",");
 }
 
 function shouldProjectCanonicalClassExpression(expression: CanonicalClassExpression): boolean {
