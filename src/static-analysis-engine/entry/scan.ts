@@ -232,6 +232,7 @@ export function analyzeProjectSourceTexts(input: {
         css: input.css,
         selectorCssSources: input.selectorCssSources ?? [],
         renderSubtrees: renderModelStage.renderSubtrees,
+        renderModel: renderStructureStage?.renderModel,
         reachabilitySummary: reachabilityStage.reachabilitySummary,
         symbolicEvaluation: symbolicEvaluationStage,
         includeTraces,

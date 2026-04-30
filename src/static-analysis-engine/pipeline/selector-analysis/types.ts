@@ -10,6 +10,7 @@ import type {
   StylesheetReachabilityContextRecord,
 } from "../reachability/types.js";
 import type { CanonicalClassExpression } from "../symbolic-evaluation/types.js";
+import type { RenderModel } from "../render-structure/types.js";
 
 export type SemanticOutcome = "match" | "possible-match" | "no-match-under-bounded-analysis";
 
@@ -167,4 +168,9 @@ export type SelectorAnalysisTarget = {
 
 export type SelectorSymbolicClassExpressionIndex = {
   classExpressionByAnchorKey: Map<string, CanonicalClassExpression>;
+};
+
+export type SelectorRenderModelIndex = {
+  renderModel: RenderModel;
+  componentKeyByNodeId: Map<string, string>;
 };

@@ -3,6 +3,7 @@ import type { ClassExpressionSummary } from "../../symbolic-evaluation/class-val
 import type {
   ParsedSelectorQuery,
   SelectorAnalysisTarget,
+  SelectorRenderModelIndex,
   SelectorQueryResult,
   SelectorSymbolicClassExpressionIndex,
 } from "../types.js";
@@ -20,6 +21,7 @@ export function analyzeSameNodeClassConjunction(input: {
   selectorQuery: ParsedSelectorQuery;
   constraint: SameNodeConstraint;
   analysisTargets: SelectorAnalysisTarget[];
+  renderModelIndex?: SelectorRenderModelIndex;
   symbolicClassExpressions?: SelectorSymbolicClassExpressionIndex;
   includeTraces?: boolean;
 }): SelectorQueryResult {
@@ -29,11 +31,17 @@ export function analyzeSameNodeClassConjunction(input: {
   const matchedTargets: SelectorAnalysisTarget[] = [];
 
   for (const analysisTarget of input.analysisTargets) {
-    const evaluation = inspectNodeForSameNodeConstraint(
-      analysisTarget.renderSubtree.root,
-      input.constraint.classNames,
-      input.symbolicClassExpressions,
-    );
+    const evaluation =
+      evaluateTargetAgainstEmissionSites({
+        analysisTarget,
+        classNames: input.constraint.classNames,
+        renderModelIndex: input.renderModelIndex,
+      }) ??
+      inspectNodeForSameNodeConstraint(
+        analysisTarget.renderSubtree.root,
+        input.constraint.classNames,
+        input.symbolicClassExpressions,
+      );
     if (evaluation === "match") {
       if (analysisTarget.reachabilityAvailability === "possible") {
         sawPossibleMatch = true;
@@ -289,4 +297,106 @@ function createClassExpressionAnchorKey(className: ClassExpressionSummary): stri
     anchor.endLine ?? "",
     anchor.endColumn ?? "",
   ].join(":");
+}
+
+function evaluateTargetAgainstEmissionSites(input: {
+  analysisTarget: SelectorAnalysisTarget;
+  classNames: string[];
+  renderModelIndex?: SelectorRenderModelIndex;
+}): "match" | "possible-match" | "unsupported" | "no-match" | undefined {
+  if (!input.renderModelIndex) {
+    return undefined;
+  }
+  const renderModelIndex = input.renderModelIndex;
+
+  const subtree = input.analysisTarget.renderSubtree;
+  const renderModel = renderModelIndex.renderModel;
+  const componentKey = subtree.componentKey;
+  const rootAnchor = subtree.root.sourceAnchor;
+  const matchingEmissionSites = renderModel.emissionSites.filter((emissionSite) => {
+    if (!emissionSite.elementId) {
+      return false;
+    }
+    const element = renderModel.indexes.elementById.get(emissionSite.elementId);
+    if (!element) {
+      return false;
+    }
+    if (componentKey) {
+      const emittingComponentKey = element.emittingComponentNodeId
+        ? renderModelIndex.componentKeyByNodeId.get(element.emittingComponentNodeId)
+        : undefined;
+      if (emittingComponentKey !== componentKey) {
+        return false;
+      }
+    }
+    return sourceAnchorContains(rootAnchor, element.sourceLocation);
+  });
+
+  if (matchingEmissionSites.length === 0) {
+    return "no-match";
+  }
+
+  let sawPossible = false;
+  let sawUnsupported = false;
+  for (const emissionSite of matchingEmissionSites) {
+    if (
+      emissionSite.emissionVariants.some((variant) => includesAll(variant.tokens, input.classNames))
+    ) {
+      return "match";
+    }
+
+    if (
+      emissionSite.emissionVariants.length > 0 &&
+      emissionSite.emissionVariants.every(
+        (variant) => variant.completeness === "complete" && !variant.unknownDynamic,
+      )
+    ) {
+      continue;
+    }
+
+    const allPresent = input.classNames.every((className) =>
+      emissionSite.tokens.some(
+        (token) => token.token === className && token.tokenKind !== "css-module-export",
+      ),
+    );
+    if (allPresent) {
+      sawPossible = true;
+      continue;
+    }
+
+    if (emissionSite.confidence === "low" || emissionSite.unsupported.length > 0) {
+      sawUnsupported = true;
+    }
+  }
+
+  if (sawPossible) {
+    return "possible-match";
+  }
+  if (sawUnsupported) {
+    return "unsupported";
+  }
+
+  return "no-match";
+}
+
+function sourceAnchorContains(
+  containing: import("../../../types/core.js").SourceAnchor,
+  contained: import("../../../types/core.js").SourceAnchor,
+): boolean {
+  const containingPath = containing.filePath.replace(/\\/g, "/");
+  const containedPath = contained.filePath.replace(/\\/g, "/");
+  if (containingPath !== containedPath) {
+    return false;
+  }
+
+  const containingStart = containing.startLine * 1_000_000 + containing.startColumn;
+  const containingEnd =
+    (containing.endLine ?? containing.startLine) * 1_000_000 +
+    (containing.endColumn ?? containing.startColumn);
+  const containedStart = contained.startLine * 1_000_000 + contained.startColumn;
+  const containedEnd =
+    (contained.endLine ?? contained.startLine) * 1_000_000 +
+    (contained.endColumn ?? contained.startColumn);
+
+  return containingStart <= containedStart && containingEnd >= containedEnd;
 }

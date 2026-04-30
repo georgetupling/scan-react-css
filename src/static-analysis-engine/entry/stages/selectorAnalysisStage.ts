@@ -2,6 +2,7 @@ import type { ReachabilitySummary } from "../../pipeline/reachability/index.js";
 import { graphToSelectorEntries, type FactGraphResult } from "../../pipeline/fact-graph/index.js";
 import type { CssFrontendFacts } from "../../pipeline/language-frontends/index.js";
 import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.js";
+import type { RenderModel } from "../../pipeline/render-structure/index.js";
 import {
   analyzeSelectorQueries,
   buildParsedSelectorQueries,
@@ -17,6 +18,7 @@ export function runSelectorAnalysisStage(input: {
   css?: CssFrontendFacts;
   selectorCssSources?: SelectorSourceInput[];
   renderSubtrees: RenderSubtree[];
+  renderModel?: RenderModel;
   reachabilitySummary: ReachabilitySummary;
   symbolicEvaluation?: SymbolicEvaluationStageResult;
   includeTraces?: boolean;
@@ -38,6 +40,7 @@ export function runSelectorAnalysisStage(input: {
     selectorQueryResults: analyzeSelectorQueries({
       selectorQueries: parsedSelectorQueries,
       renderSubtrees: input.renderSubtrees,
+      renderModel: input.renderModel,
       reachabilitySummary: input.reachabilitySummary,
       symbolicEvaluation: input.symbolicEvaluation,
       includeTraces: input.includeTraces,

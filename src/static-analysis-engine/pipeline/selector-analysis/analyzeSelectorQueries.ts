@@ -10,11 +10,13 @@ import type {
 } from "../reachability/types.js";
 import type {
   ParsedSelectorQuery,
+  SelectorRenderModelIndex,
   SelectorAnalysisTarget,
   SelectorQueryResult,
   SelectorSymbolicClassExpressionIndex,
 } from "./types.js";
 import type { SymbolicEvaluationResult } from "../symbolic-evaluation/types.js";
+import type { RenderModel } from "../render-structure/types.js";
 import { buildSelectorQueryResult } from "./resultUtils.js";
 import { analyzeAncestorDescendantConstraint } from "./adapters/ancestorDescendant.js";
 import { analyzeParentChildConstraint } from "./adapters/parentChild.js";
@@ -45,6 +47,7 @@ type ReachabilityContextIndex = {
 export function analyzeSelectorQueries(input: {
   selectorQueries: ParsedSelectorQuery[];
   renderSubtrees: RenderSubtree[];
+  renderModel?: RenderModel;
   reachabilitySummary?: ReachabilitySummary;
   symbolicEvaluation?: SymbolicEvaluationResult;
   includeTraces?: boolean;
@@ -54,10 +57,14 @@ export function analyzeSelectorQueries(input: {
   const symbolicClassExpressions = input.symbolicEvaluation
     ? buildSelectorSymbolicClassExpressionIndex(input.symbolicEvaluation)
     : undefined;
+  const renderModelIndex = input.renderModel
+    ? buildSelectorRenderModelIndex(input.renderModel)
+    : undefined;
   return input.selectorQueries.map((selectorQuery) =>
     analyzeSelectorQuery({
       selectorQuery,
       renderSubtrees: input.renderSubtrees,
+      renderModelIndex,
       reachabilitySummary: input.reachabilitySummary,
       symbolicClassExpressions,
       reachabilityTargetCache,
@@ -69,6 +76,7 @@ export function analyzeSelectorQueries(input: {
 function analyzeSelectorQuery(input: {
   selectorQuery: ParsedSelectorQuery;
   renderSubtrees: RenderSubtree[];
+  renderModelIndex?: SelectorRenderModelIndex;
   reachabilitySummary?: ReachabilitySummary;
   symbolicClassExpressions?: SelectorSymbolicClassExpressionIndex;
   reachabilityTargetCache: Map<string, SelectorAnalysisTarget[]>;
@@ -129,6 +137,7 @@ function analyzeSelectorQuery(input: {
       selectorQuery: input.selectorQuery,
       constraint,
       analysisTargets,
+      renderModelIndex: input.renderModelIndex,
       symbolicClassExpressions: input.symbolicClassExpressions,
       includeTraces: input.includeTraces,
     });
@@ -158,6 +167,17 @@ function analyzeSelectorQuery(input: {
     analysisTargets,
     includeTraces: input.includeTraces,
   });
+}
+
+function buildSelectorRenderModelIndex(renderModel: RenderModel): SelectorRenderModelIndex {
+  return {
+    renderModel,
+    componentKeyByNodeId: new Map(
+      renderModel.components
+        .filter((component) => component.componentNodeId)
+        .map((component) => [component.componentNodeId as string, component.componentKey]),
+    ),
+  };
 }
 
 function buildSelectorSymbolicClassExpressionIndex(
