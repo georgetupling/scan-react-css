@@ -3,6 +3,7 @@ import {
   sortSymbolicEvaluationDiagnostics,
   unresolvedClassExpressionSiteDiagnostic,
 } from "./diagnostics.js";
+import { createLegacyAstExpressionStore } from "./adapters/legacyAstExpressionStore.js";
 import { buildEvaluatedExpressionIndexes } from "./indexes.js";
 import { createDefaultSymbolicEvaluatorRegistry } from "./registry.js";
 import type { ClassExpressionSiteNode, ExpressionSyntaxNode } from "../fact-graph/index.js";
@@ -17,7 +18,14 @@ import type {
 export function evaluateSymbolicExpressions(
   input: SymbolicEvaluationInput,
 ): SymbolicEvaluationResult {
-  const evaluatorRegistry = input.evaluatorRegistry ?? createDefaultSymbolicEvaluatorRegistry();
+  const legacyExpressionStore = input.legacy?.parsedFiles
+    ? createLegacyAstExpressionStore({ parsedFiles: input.legacy.parsedFiles })
+    : undefined;
+  const evaluatorRegistry =
+    input.evaluatorRegistry ??
+    createDefaultSymbolicEvaluatorRegistry({
+      ...(legacyExpressionStore ? { legacyExpressionStore } : {}),
+    });
   const classExpressions: CanonicalClassExpression[] = [];
   const conditions: ConditionFact[] = [];
   const diagnostics: SymbolicEvaluationDiagnostic[] = [];
@@ -38,6 +46,7 @@ export function evaluateSymbolicExpressions(
       classExpressionSite: site,
       expressionSyntax,
       options: input.options ?? {},
+      ...(legacyExpressionStore ? { legacyExpressionStore } : {}),
     });
 
     if (result.expression) {

@@ -1,9 +1,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
+import {
+  summarizeClassNameExpression,
+  toAbstractClassSet,
+} from "../../dist/static-analysis-engine.js";
 import { buildFactGraph } from "../../dist/static-analysis-engine/pipeline/fact-graph/buildFactGraph.js";
 import { buildLanguageFrontends } from "../../dist/static-analysis-engine/pipeline/language-frontends/buildLanguageFrontends.js";
 import { toClassExpressionSummary } from "../../dist/static-analysis-engine/pipeline/symbolic-evaluation/adapters/classExpressionSummary.js";
+import { createLegacyAstExpressionStore } from "../../dist/static-analysis-engine/pipeline/symbolic-evaluation/adapters/legacyAstExpressionStore.js";
 import { evaluateSymbolicExpressions } from "../../dist/static-analysis-engine/pipeline/symbolic-evaluation/evaluateSymbolicExpressions.js";
 import { buildProjectSnapshot } from "../../dist/static-analysis-engine/pipeline/workspace-discovery/buildProjectSnapshot.js";
 import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
@@ -60,7 +65,7 @@ test("symbolic evaluation gives every graph class-expression site a fallback can
 });
 
 test("symbolic evaluation reports missing expression syntax without dropping other sites", async () => {
-  const graph = await buildFixtureGraph();
+  const { graph, parsedFiles } = await buildFixtureAnalysis();
   const firstSite = graph.nodes.classExpressionSites[0];
   const graphWithMissingSite = {
     ...graph,
@@ -81,6 +86,9 @@ test("symbolic evaluation reports missing expression syntax without dropping oth
 
   const result = evaluateSymbolicExpressions({
     graph: graphWithMissingSite,
+    legacy: {
+      parsedFiles,
+    },
   });
 
   assert.equal(result.evaluatedExpressions.meta.classExpressionSiteCount, 2);
@@ -96,6 +104,98 @@ test("symbolic evaluation reports missing expression syntax without dropping oth
         severity: "warning",
         code: "missing-expression-syntax",
         classExpressionSiteNodeId: `${firstSite.id}:missing-expression`,
+      },
+    ],
+  );
+});
+
+test("symbolic evaluation uses the legacy AST store for current common class cases", async () => {
+  const { graph, parsedFiles } = await buildFixtureAnalysis([
+    'import "./app.css";',
+    "const active = true;",
+    "function cx(...values) { return values.join(' '); }",
+    "export function App() {",
+    "  return (",
+    "    <>",
+    '      <div className="literal one" />',
+    '      <div className={`template ${"two"}`} />',
+    '      <div className={active ? "choice-a" : "choice-b"} />',
+    '      <div className={active && "logical"} />',
+    '      <div className={["array", active && "array-active"].join(" ")} />',
+    '      <div className={cx("helper", { selected: active })} />',
+    "      <div className={{ objectClass: active }} />",
+    "    </>",
+    "  );",
+    "}",
+    "",
+  ]);
+  const legacyStore = createLegacyAstExpressionStore({ parsedFiles });
+  const result = evaluateSymbolicExpressions({
+    graph,
+    legacy: {
+      parsedFiles,
+    },
+  });
+
+  assert.equal(
+    result.evaluatedExpressions.meta.evaluatedClassExpressionCount,
+    graph.nodes.classExpressionSites.length,
+  );
+  assert.deepEqual(result.evaluatedExpressions.diagnostics, []);
+
+  for (const site of graph.nodes.classExpressionSites) {
+    const match = legacyStore.getExpressionForSite(site);
+    assert.ok(match, `expected legacy AST match for ${site.id}`);
+
+    const expected = toComparableClassSet(
+      toAbstractClassSet(summarizeClassNameExpression(match.expression), site.location),
+    );
+    const expressionId = result.evaluatedExpressions.indexes.classExpressionIdBySiteNodeId.get(
+      site.id,
+    );
+    assert.ok(expressionId);
+    const expression = result.evaluatedExpressions.indexes.classExpressionById.get(expressionId);
+
+    assert.deepEqual(toComparableCanonicalTokens(expression), expected);
+    assert.equal(expression.unsupported.length, expected.unknownDynamic ? 1 : 0);
+  }
+});
+
+test("symbolic evaluation reports raw expression text mismatches from the legacy AST store", async () => {
+  const { graph, parsedFiles } = await buildFixtureAnalysis();
+  const firstSite = graph.nodes.classExpressionSites[0];
+  const graphWithMismatchedRawText = {
+    ...graph,
+    nodes: {
+      ...graph.nodes,
+      classExpressionSites: [
+        {
+          ...firstSite,
+          rawExpressionText: '"changed"',
+        },
+      ],
+    },
+  };
+
+  const result = evaluateSymbolicExpressions({
+    graph: graphWithMismatchedRawText,
+    legacy: {
+      parsedFiles,
+    },
+  });
+
+  assert.equal(result.evaluatedExpressions.meta.evaluatedClassExpressionCount, 1);
+  assert.deepEqual(
+    result.evaluatedExpressions.diagnostics.map((diagnostic) => ({
+      severity: diagnostic.severity,
+      code: diagnostic.code,
+      classExpressionSiteNodeId: diagnostic.classExpressionSiteNodeId,
+    })),
+    [
+      {
+        severity: "warning",
+        code: "legacy-expression-store-mismatch",
+        classExpressionSiteNodeId: firstSite.id,
       },
     ],
   );
@@ -222,16 +322,20 @@ test("symbolic evaluation compatibility summaries preserve unsupported uncertain
 });
 
 async function buildFixtureGraph() {
+  const { graph } = await buildFixtureAnalysis();
+  return graph;
+}
+
+async function buildFixtureAnalysis(
+  sourceText = [
+    'import "./app.css";',
+    'function Child() { return <span className="child" />; }',
+    'export function App() { return <Child className="app" />; }',
+    "",
+  ],
+) {
   const project = await new TestProjectBuilder()
-    .withSourceFile(
-      "src/App.tsx",
-      [
-        'import "./app.css";',
-        'function Child() { return <span className="child" />; }',
-        'export function App() { return <Child className="app" />; }',
-        "",
-      ].join("\n"),
-    )
+    .withSourceFile("src/App.tsx", sourceText.join("\n"))
     .withCssFile("src/app.css", ".app, .child { display: block; }\n")
     .build();
 
@@ -245,7 +349,10 @@ async function buildFixtureGraph() {
       runStage: async (_stage, _message, run) => run(),
     });
     const frontends = buildLanguageFrontends({ snapshot });
-    return buildFactGraph({ snapshot, frontends }).graph;
+    return {
+      graph: buildFactGraph({ snapshot, frontends }).graph,
+      parsedFiles: frontends.source.files.map((file) => file.legacy.parsedFile),
+    };
   } finally {
     await project.cleanup();
   }
@@ -333,6 +440,29 @@ function serializeEvaluatedExpressions(result) {
 
 function mapEntries(map) {
   return [...map.entries()].sort(([left], [right]) => left.localeCompare(right));
+}
+
+function toComparableClassSet(classSet) {
+  return {
+    definite: [...classSet.definite].sort(),
+    possible: [...classSet.possible].sort(),
+    unknownDynamic: classSet.unknownDynamic,
+  };
+}
+
+function toComparableCanonicalTokens(expression) {
+  return {
+    definite: expression.tokens
+      .filter((token) => token.presence === "always")
+      .map((token) => token.token)
+      .sort(),
+    possible: expression.tokens
+      .filter((token) => token.presence === "possible")
+      .map((token) => token.token)
+      .sort(),
+    unknownDynamic:
+      expression.certainty.kind === "unknown" || expression.certainty.kind === "partial",
+  };
 }
 
 function canonicalExpression(overrides = {}) {

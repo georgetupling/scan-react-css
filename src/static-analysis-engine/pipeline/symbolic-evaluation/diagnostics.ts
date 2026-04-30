@@ -77,6 +77,28 @@ export function duplicateEvaluatedExpressionIdDiagnostic(input: {
   };
 }
 
+export function rawExpressionTextMismatchDiagnostic(input: {
+  site: ClassExpressionSiteNode;
+  graphRawExpressionText: string;
+  astRawExpressionText: string;
+}): SymbolicEvaluationDiagnostic {
+  return {
+    stage: "symbolic-evaluation",
+    severity: "warning",
+    code: "legacy-expression-store-mismatch",
+    message: `Class expression site ${input.site.id} raw text differs between graph and legacy AST store`,
+    filePath: input.site.filePath,
+    location: input.site.location,
+    classExpressionSiteNodeId: input.site.id,
+    provenance: symbolicEvaluationProvenance({
+      summary: "Detected raw expression text mismatch between graph and legacy AST store",
+      filePath: input.site.filePath,
+      anchor: input.site.location,
+      upstreamId: input.site.id,
+    }),
+  };
+}
+
 export function sortSymbolicEvaluationDiagnostics(
   diagnostics: SymbolicEvaluationDiagnostic[],
 ): SymbolicEvaluationDiagnostic[] {

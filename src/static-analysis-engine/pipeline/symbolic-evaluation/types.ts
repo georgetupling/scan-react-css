@@ -1,6 +1,10 @@
 import type { AnalysisConfidence, AnalysisSeverity, AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
 import type {
+  LegacyAstExpressionStore,
+  LegacyParsedProjectFile,
+} from "./adapters/legacyAstExpressionStore.js";
+import type {
   ClassExpressionSiteNode,
   ExpressionSyntaxNode,
   FactGraph,
@@ -21,6 +25,9 @@ export type SymbolicEvaluationOptions = {
 export type SymbolicEvaluationInput = {
   graph: FactGraph;
   options?: SymbolicEvaluationOptions;
+  legacy?: {
+    parsedFiles?: LegacyParsedProjectFile[];
+  };
   evaluatorRegistry?: SymbolicEvaluatorRegistry;
 };
 
@@ -229,6 +236,7 @@ export type SymbolicExpressionEvaluatorInput = {
   classExpressionSite: ClassExpressionSiteNode;
   expressionSyntax: ExpressionSyntaxNode;
   options: SymbolicEvaluationOptions;
+  legacyExpressionStore?: LegacyAstExpressionStore;
 };
 
 export type SymbolicExpressionEvaluatorResult = {

@@ -1,4 +1,6 @@
+import type { LegacyAstExpressionStore } from "./adapters/legacyAstExpressionStore.js";
 import { fallbackClassExpressionEvaluator } from "./evaluators/fallbackEvaluator.js";
+import { legacyAstClassExpressionEvaluator } from "./evaluators/legacyAstEvaluator.js";
 import type {
   SymbolicEvaluatorRegistry,
   SymbolicExpressionEvaluator,
@@ -6,24 +8,41 @@ import type {
   SymbolicExpressionEvaluatorResult,
 } from "./types.js";
 
-export function createDefaultSymbolicEvaluatorRegistry(): SymbolicEvaluatorRegistry {
-  return createSymbolicEvaluatorRegistry([fallbackClassExpressionEvaluator]);
+export function createDefaultSymbolicEvaluatorRegistry(input?: {
+  legacyExpressionStore?: LegacyAstExpressionStore;
+}): SymbolicEvaluatorRegistry {
+  return createSymbolicEvaluatorRegistry(
+    [
+      ...(input?.legacyExpressionStore ? [legacyAstClassExpressionEvaluator] : []),
+      fallbackClassExpressionEvaluator,
+    ],
+    input,
+  );
 }
 
 export function createSymbolicEvaluatorRegistry(
   evaluators: SymbolicExpressionEvaluator[],
+  context?: {
+    legacyExpressionStore?: LegacyAstExpressionStore;
+  },
 ): SymbolicEvaluatorRegistry {
   return {
     evaluate(input: SymbolicExpressionEvaluatorInput): SymbolicExpressionEvaluatorResult {
-      const evaluator = evaluators.find((candidate) => candidate.canEvaluate(input));
+      const evaluatorInput = {
+        ...input,
+        ...(context?.legacyExpressionStore
+          ? { legacyExpressionStore: context.legacyExpressionStore }
+          : {}),
+      };
+      const evaluator = evaluators.find((candidate) => candidate.canEvaluate(evaluatorInput));
 
       if (!evaluator) {
         return {};
       }
 
-      return evaluator.evaluate(input);
+      return evaluator.evaluate(evaluatorInput);
     },
   };
 }
 
-export { fallbackClassExpressionEvaluator };
+export { fallbackClassExpressionEvaluator, legacyAstClassExpressionEvaluator };
