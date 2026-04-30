@@ -1,5 +1,10 @@
 import type { RenderNode } from "../../render-model/render-ir/types.js";
-import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
+import type {
+  ParsedSelectorQuery,
+  SelectorAnalysisTarget,
+  SelectorQueryResult,
+  SelectorRenderModelIndex,
+} from "../types.js";
 import { buildSelectorQueryResult } from "../resultUtils.js";
 import type { RenderNodeInspectionAdapter } from "../renderInspection.js";
 import { inspectRenderNode } from "../renderInspection.js";
@@ -21,6 +26,7 @@ export function analyzeParentChildConstraint(input: {
   selectorQuery: ParsedSelectorQuery;
   constraint: ParentChildConstraint;
   analysisTargets: SelectorAnalysisTarget[];
+  renderModelIndex?: SelectorRenderModelIndex;
   includeTraces?: boolean;
 }): SelectorQueryResult {
   const includeTraces = input.includeTraces ?? true;
@@ -29,14 +35,21 @@ export function analyzeParentChildConstraint(input: {
   const matchedTargets: SelectorAnalysisTarget[] = [];
 
   for (const analysisTarget of input.analysisTargets) {
-    const evaluation = inspectRenderNode({
-      node: analysisTarget.renderSubtree.root,
-      state: {
+    const evaluation =
+      evaluateParentChildFromRenderModel({
+        analysisTarget,
         parentClassName: input.constraint.parentClassName,
         childClassName: input.constraint.childClassName,
-      },
-      adapter: parentChildConstraintAdapter,
-    });
+        renderModelIndex: input.renderModelIndex,
+      }) ??
+      inspectRenderNode({
+        node: analysisTarget.renderSubtree.root,
+        state: {
+          parentClassName: input.constraint.parentClassName,
+          childClassName: input.constraint.childClassName,
+        },
+        adapter: parentChildConstraintAdapter,
+      });
 
     if (evaluation === "match") {
       if (analysisTarget.reachabilityAvailability === "possible") {
@@ -174,6 +187,136 @@ export function analyzeParentChildConstraint(input: {
       : [],
     includeTraces,
   });
+}
+
+function evaluateParentChildFromRenderModel(input: {
+  analysisTarget: SelectorAnalysisTarget;
+  parentClassName: string;
+  childClassName: string;
+  renderModelIndex?: SelectorRenderModelIndex;
+}): "match" | "possible-match" | "unsupported" | "no-match" | undefined {
+  if (!input.renderModelIndex) {
+    return undefined;
+  }
+
+  const scopedElements = getScopedElements(input.analysisTarget, input.renderModelIndex);
+  const scopedElementIds = new Set(scopedElements.map((element) => element.id));
+  let sawPossible = false;
+  let sawUnsupported = false;
+
+  for (const childElement of scopedElements) {
+    const parentId = childElement.parentElementId;
+    if (!parentId || !scopedElementIds.has(parentId)) {
+      continue;
+    }
+    const parentPresence = evaluateElementPresence(
+      input.renderModelIndex,
+      parentId,
+      input.parentClassName,
+    );
+    if (parentPresence === "no-match") {
+      continue;
+    }
+    const childPresence = evaluateElementPresence(
+      input.renderModelIndex,
+      childElement.id,
+      input.childClassName,
+    );
+    const combined =
+      childPresence === "no-match" ? "no-match" : combinePresence(parentPresence, childPresence);
+    if (combined === "match") {
+      return "match";
+    }
+    if (combined === "possible-match") {
+      sawPossible = true;
+    }
+    if (combined === "unsupported" || childPresence === "unsupported") {
+      sawUnsupported = true;
+    }
+  }
+
+  if (sawPossible) {
+    return "possible-match";
+  }
+  if (sawUnsupported) {
+    return "unsupported";
+  }
+  return undefined;
+}
+
+function getScopedElements(
+  target: SelectorAnalysisTarget,
+  renderModelIndex: SelectorRenderModelIndex,
+): import("../../render-structure/types.js").RenderedElement[] {
+  const rootAnchor = target.renderSubtree.root.sourceAnchor;
+  const elements = [...renderModelIndex.renderModel.indexes.elementById.values()];
+  return elements.filter((element) => {
+    return containsAnchor(rootAnchor, element.sourceLocation);
+  });
+}
+
+function evaluateElementPresence(
+  renderModelIndex: SelectorRenderModelIndex,
+  elementId: string,
+  className: string,
+): PresenceEvaluation {
+  const emissionSiteIds =
+    renderModelIndex.renderModel.indexes.emissionSiteIdsByElementId.get(elementId) ?? [];
+  if (emissionSiteIds.length === 0) {
+    return "no-match";
+  }
+  let sawPossible = false;
+  let sawUnsupported = false;
+  for (const siteId of emissionSiteIds) {
+    const site = renderModelIndex.renderModel.indexes.emissionSiteById.get(siteId);
+    if (!site) {
+      continue;
+    }
+    if (
+      site.emissionVariants.some(
+        (variant) =>
+          variant.tokens.includes(className) &&
+          variant.completeness === "complete" &&
+          !variant.unknownDynamic,
+      )
+    ) {
+      return "definite";
+    }
+    if (site.emissionVariants.some((variant) => variant.tokens.includes(className))) {
+      sawPossible = true;
+    } else if (site.tokens.some((token) => token.token === className)) {
+      sawPossible = true;
+    } else if (site.unsupported.length > 0 || site.confidence === "low") {
+      sawUnsupported = true;
+    }
+  }
+  if (sawPossible) {
+    return "possible";
+  }
+  if (sawUnsupported) {
+    return "unsupported";
+  }
+  return "no-match";
+}
+
+function containsAnchor(
+  containing: import("../../../types/core.js").SourceAnchor,
+  contained: import("../../../types/core.js").SourceAnchor,
+): boolean {
+  const leftPath = containing.filePath.replace(/\\/g, "/");
+  const rightPath = contained.filePath.replace(/\\/g, "/");
+  if (leftPath !== rightPath) {
+    return false;
+  }
+  const leftStart = containing.startLine * 1_000_000 + containing.startColumn;
+  const leftEnd =
+    (containing.endLine ?? containing.startLine) * 1_000_000 +
+    (containing.endColumn ?? containing.startColumn);
+  const rightStart = contained.startLine * 1_000_000 + contained.startColumn;
+  const rightEnd =
+    (contained.endLine ?? contained.startLine) * 1_000_000 +
+    (contained.endColumn ?? contained.startColumn);
+  return leftStart <= rightStart && leftEnd >= rightEnd;
 }
 
 const parentChildConstraintAdapter: RenderNodeInspectionAdapter<ParentChildState> = {

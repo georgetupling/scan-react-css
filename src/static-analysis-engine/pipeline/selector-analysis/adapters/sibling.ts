@@ -1,8 +1,17 @@
 import type { RenderNode } from "../../render-model/render-ir/types.js";
-import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
+import type {
+  ParsedSelectorQuery,
+  SelectorAnalysisTarget,
+  SelectorQueryResult,
+  SelectorRenderModelIndex,
+} from "../types.js";
 import { buildSelectorQueryResult } from "../resultUtils.js";
 import { attachMatchedReachability } from "../reachabilityResultUtils.js";
-import { combinePresence, evaluateSingleClassPresence } from "../selectorEvaluationUtils.js";
+import {
+  combinePresence,
+  evaluateSingleClassPresence,
+  type PresenceEvaluation,
+} from "../selectorEvaluationUtils.js";
 import { mergeInspectionEvaluations } from "../renderInspection.js";
 
 type SiblingConstraint = Extract<ParsedSelectorQuery["constraint"], { kind: "sibling" }>;
@@ -18,6 +27,7 @@ export function analyzeSiblingConstraint(input: {
   selectorQuery: ParsedSelectorQuery;
   constraint: SiblingConstraint;
   analysisTargets: SelectorAnalysisTarget[];
+  renderModelIndex?: SelectorRenderModelIndex;
   includeTraces?: boolean;
 }): SelectorQueryResult {
   const includeTraces = input.includeTraces ?? true;
@@ -26,10 +36,16 @@ export function analyzeSiblingConstraint(input: {
   const matchedTargets: SelectorAnalysisTarget[] = [];
 
   for (const analysisTarget of input.analysisTargets) {
-    const evaluation = inspectNodeForSiblingConstraint({
-      node: analysisTarget.renderSubtree.root,
-      constraint: input.constraint,
-    });
+    const evaluation =
+      evaluateSiblingFromRenderModel({
+        analysisTarget,
+        constraint: input.constraint,
+        renderModelIndex: input.renderModelIndex,
+      }) ??
+      inspectNodeForSiblingConstraint({
+        node: analysisTarget.renderSubtree.root,
+        constraint: input.constraint,
+      });
 
     if (evaluation === "match") {
       if (analysisTarget.reachabilityAvailability === "possible") {
@@ -166,6 +182,185 @@ export function analyzeSiblingConstraint(input: {
       : [],
     includeTraces,
   });
+}
+
+function evaluateSiblingFromRenderModel(input: {
+  analysisTarget: SelectorAnalysisTarget;
+  constraint: SiblingConstraint;
+  renderModelIndex?: SelectorRenderModelIndex;
+}): "match" | "possible-match" | "unsupported" | "no-match" | undefined {
+  if (!input.renderModelIndex) {
+    return undefined;
+  }
+
+  const scopedElements = getScopedElements(input.analysisTarget, input.renderModelIndex);
+  const byId = new Map(scopedElements.map((element) => [element.id, element]));
+  let sawPossible = false;
+  let sawUnsupported = false;
+
+  for (const left of scopedElements) {
+    const siblingIds =
+      input.renderModelIndex.renderModel.indexes.siblingElementIdsByElementId.get(left.id) ?? [];
+    for (const siblingId of siblingIds) {
+      const right = byId.get(siblingId);
+      if (!right) {
+        continue;
+      }
+
+      if (
+        input.constraint.relation === "adjacent" &&
+        !isAdjacent(input.renderModelIndex, left.id, right.id)
+      ) {
+        continue;
+      }
+
+      const leftPresence = evaluateElementPresence(
+        input.renderModelIndex,
+        left.id,
+        input.constraint.leftClassName,
+      );
+      if (leftPresence === "no-match") {
+        continue;
+      }
+      const rightPresence = evaluateElementPresence(
+        input.renderModelIndex,
+        right.id,
+        input.constraint.rightClassName,
+      );
+      const combined =
+        rightPresence === "no-match" ? "no-match" : combinePresence(leftPresence, rightPresence);
+      if (combined === "match") {
+        return "match";
+      }
+      if (combined === "possible-match") {
+        sawPossible = true;
+      }
+      if (combined === "unsupported" || rightPresence === "unsupported") {
+        sawUnsupported = true;
+      }
+    }
+  }
+
+  if (sawPossible) {
+    return "possible-match";
+  }
+  if (sawUnsupported) {
+    return "unsupported";
+  }
+  return undefined;
+}
+
+function isAdjacent(
+  renderModelIndex: SelectorRenderModelIndex,
+  leftElementId: string,
+  rightElementId: string,
+): boolean {
+  const leftIndex = readChildIndex(renderModelIndex, leftElementId);
+  const rightIndex = readChildIndex(renderModelIndex, rightElementId);
+  if (leftIndex === undefined || rightIndex === undefined) {
+    return false;
+  }
+  return Math.abs(leftIndex - rightIndex) === 1;
+}
+
+function readChildIndex(
+  renderModelIndex: SelectorRenderModelIndex,
+  elementId: string,
+): number | undefined {
+  const element = renderModelIndex.renderModel.indexes.elementById.get(elementId);
+  if (!element) {
+    return undefined;
+  }
+  const path = renderModelIndex.renderModel.indexes.renderPathById.get(element.renderPathId);
+  if (!path) {
+    return undefined;
+  }
+
+  for (let i = path.segments.length - 1; i >= 0; i -= 1) {
+    const segment = path.segments[i];
+    if (segment.kind === "child-index") {
+      return segment.index;
+    }
+    if (segment.kind === "element") {
+      continue;
+    }
+  }
+  return undefined;
+}
+
+function getScopedElements(
+  target: SelectorAnalysisTarget,
+  renderModelIndex: SelectorRenderModelIndex,
+): import("../../render-structure/types.js").RenderedElement[] {
+  const rootAnchor = target.renderSubtree.root.sourceAnchor;
+  const elements = [...renderModelIndex.renderModel.indexes.elementById.values()];
+  return elements.filter((element) => {
+    return containsAnchor(rootAnchor, element.sourceLocation);
+  });
+}
+
+function evaluateElementPresence(
+  renderModelIndex: SelectorRenderModelIndex,
+  elementId: string,
+  className: string,
+): PresenceEvaluation {
+  const emissionSiteIds =
+    renderModelIndex.renderModel.indexes.emissionSiteIdsByElementId.get(elementId) ?? [];
+  if (emissionSiteIds.length === 0) {
+    return "no-match";
+  }
+  let sawPossible = false;
+  let sawUnsupported = false;
+  for (const siteId of emissionSiteIds) {
+    const site = renderModelIndex.renderModel.indexes.emissionSiteById.get(siteId);
+    if (!site) {
+      continue;
+    }
+    if (
+      site.emissionVariants.some(
+        (variant) =>
+          variant.tokens.includes(className) &&
+          variant.completeness === "complete" &&
+          !variant.unknownDynamic,
+      )
+    ) {
+      return "definite";
+    }
+    if (site.emissionVariants.some((variant) => variant.tokens.includes(className))) {
+      sawPossible = true;
+    } else if (site.tokens.some((token) => token.token === className)) {
+      sawPossible = true;
+    } else if (site.unsupported.length > 0 || site.confidence === "low") {
+      sawUnsupported = true;
+    }
+  }
+  if (sawPossible) {
+    return "possible";
+  }
+  if (sawUnsupported) {
+    return "unsupported";
+  }
+  return "no-match";
+}
+
+function containsAnchor(
+  containing: import("../../../types/core.js").SourceAnchor,
+  contained: import("../../../types/core.js").SourceAnchor,
+): boolean {
+  const leftPath = containing.filePath.replace(/\\/g, "/");
+  const rightPath = contained.filePath.replace(/\\/g, "/");
+  if (leftPath !== rightPath) {
+    return false;
+  }
+  const leftStart = containing.startLine * 1_000_000 + containing.startColumn;
+  const leftEnd =
+    (containing.endLine ?? containing.startLine) * 1_000_000 +
+    (containing.endColumn ?? containing.startColumn);
+  const rightStart = contained.startLine * 1_000_000 + contained.startColumn;
+  const rightEnd =
+    (contained.endLine ?? contained.startLine) * 1_000_000 +
+    (contained.endColumn ?? contained.startColumn);
+  return leftStart <= rightStart && leftEnd >= rightEnd;
 }
 
 function inspectNodeForSiblingConstraint(input: {

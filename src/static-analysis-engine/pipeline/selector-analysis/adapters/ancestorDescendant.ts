@@ -1,5 +1,10 @@
 import type { RenderNode } from "../../render-model/render-ir/types.js";
-import type { ParsedSelectorQuery, SelectorAnalysisTarget, SelectorQueryResult } from "../types.js";
+import type {
+  ParsedSelectorQuery,
+  SelectorAnalysisTarget,
+  SelectorQueryResult,
+  SelectorRenderModelIndex,
+} from "../types.js";
 import { buildSelectorQueryResult } from "../resultUtils.js";
 import { attachMatchedReachability } from "../reachabilityResultUtils.js";
 import {
@@ -17,6 +22,7 @@ export function analyzeAncestorDescendantConstraint(input: {
   selectorQuery: ParsedSelectorQuery;
   constraint: AncestorDescendantConstraint;
   analysisTargets: SelectorAnalysisTarget[];
+  renderModelIndex?: SelectorRenderModelIndex;
   includeTraces?: boolean;
 }): SelectorQueryResult {
   const includeTraces = input.includeTraces ?? true;
@@ -25,12 +31,19 @@ export function analyzeAncestorDescendantConstraint(input: {
   const matchedTargets: SelectorAnalysisTarget[] = [];
 
   for (const analysisTarget of input.analysisTargets) {
-    const evaluation = inspectNodeForAncestorDescendantConstraint({
-      node: analysisTarget.renderSubtree.root,
-      ancestorClassName: input.constraint.ancestorClassName,
-      subjectClassName: input.constraint.subjectClassName,
-      ancestorStack: [],
-    });
+    const evaluation =
+      evaluateAncestorDescendantFromRenderModel({
+        analysisTarget,
+        ancestorClassName: input.constraint.ancestorClassName,
+        subjectClassName: input.constraint.subjectClassName,
+        renderModelIndex: input.renderModelIndex,
+      }) ??
+      inspectNodeForAncestorDescendantConstraint({
+        node: analysisTarget.renderSubtree.root,
+        ancestorClassName: input.constraint.ancestorClassName,
+        subjectClassName: input.constraint.subjectClassName,
+        ancestorStack: [],
+      });
 
     if (evaluation === "match") {
       if (analysisTarget.reachabilityAvailability === "possible") {
@@ -168,6 +181,142 @@ export function analyzeAncestorDescendantConstraint(input: {
       : [],
     includeTraces,
   });
+}
+
+function evaluateAncestorDescendantFromRenderModel(input: {
+  analysisTarget: SelectorAnalysisTarget;
+  ancestorClassName: string;
+  subjectClassName: string;
+  renderModelIndex?: SelectorRenderModelIndex;
+}): "match" | "possible-match" | "unsupported" | "no-match" | undefined {
+  if (!input.renderModelIndex) {
+    return undefined;
+  }
+
+  const scopedElements = getScopedElements(input.analysisTarget, input.renderModelIndex);
+  let sawPossible = false;
+  let sawUnsupported = false;
+
+  for (const subjectElement of scopedElements) {
+    const subjectPresence = evaluateElementPresence(
+      input.renderModelIndex,
+      subjectElement.id,
+      input.subjectClassName,
+    );
+    if (subjectPresence === "no-match") {
+      continue;
+    }
+
+    const ancestorIds =
+      input.renderModelIndex.renderModel.indexes.ancestorElementIdsByElementId.get(
+        subjectElement.id,
+      ) ?? [];
+    for (const ancestorId of ancestorIds) {
+      const ancestorPresence = evaluateElementPresence(
+        input.renderModelIndex,
+        ancestorId,
+        input.ancestorClassName,
+      );
+      const combined =
+        ancestorPresence === "no-match"
+          ? "no-match"
+          : combinePresence(ancestorPresence, subjectPresence);
+      if (combined === "match") {
+        return "match";
+      }
+      if (combined === "possible-match") {
+        sawPossible = true;
+      }
+      if (combined === "unsupported" || subjectPresence === "unsupported") {
+        sawUnsupported = true;
+      }
+    }
+  }
+
+  if (sawPossible) {
+    return "possible-match";
+  }
+  if (sawUnsupported) {
+    return "unsupported";
+  }
+  return undefined;
+}
+
+function getScopedElements(
+  target: SelectorAnalysisTarget,
+  renderModelIndex: SelectorRenderModelIndex,
+): import("../../render-structure/types.js").RenderedElement[] {
+  const rootAnchor = target.renderSubtree.root.sourceAnchor;
+  const elements = [...renderModelIndex.renderModel.indexes.elementById.values()];
+  return elements.filter((element) => {
+    return containsAnchor(rootAnchor, element.sourceLocation);
+  });
+}
+
+function evaluateElementPresence(
+  renderModelIndex: SelectorRenderModelIndex,
+  elementId: string,
+  className: string,
+): PresenceEvaluation {
+  const emissionSiteIds =
+    renderModelIndex.renderModel.indexes.emissionSiteIdsByElementId.get(elementId) ?? [];
+  if (emissionSiteIds.length === 0) {
+    return "no-match";
+  }
+  let sawPossible = false;
+  let sawUnsupported = false;
+
+  for (const siteId of emissionSiteIds) {
+    const site = renderModelIndex.renderModel.indexes.emissionSiteById.get(siteId);
+    if (!site) {
+      continue;
+    }
+    if (
+      site.emissionVariants.some(
+        (variant) =>
+          variant.tokens.includes(className) &&
+          variant.completeness === "complete" &&
+          !variant.unknownDynamic,
+      )
+    ) {
+      return "definite";
+    }
+    if (site.emissionVariants.some((variant) => variant.tokens.includes(className))) {
+      sawPossible = true;
+    } else if (site.tokens.some((token) => token.token === className)) {
+      sawPossible = true;
+    } else if (site.unsupported.length > 0 || site.confidence === "low") {
+      sawUnsupported = true;
+    }
+  }
+
+  if (sawPossible) {
+    return "possible";
+  }
+  if (sawUnsupported) {
+    return "unsupported";
+  }
+  return "no-match";
+}
+
+function containsAnchor(
+  containing: import("../../../types/core.js").SourceAnchor,
+  contained: import("../../../types/core.js").SourceAnchor,
+): boolean {
+  const leftPath = containing.filePath.replace(/\\/g, "/");
+  const rightPath = contained.filePath.replace(/\\/g, "/");
+  if (leftPath !== rightPath) {
+    return false;
+  }
+  const leftStart = containing.startLine * 1_000_000 + containing.startColumn;
+  const leftEnd =
+    (containing.endLine ?? containing.startLine) * 1_000_000 +
+    (containing.endColumn ?? containing.startColumn);
+  const rightStart = contained.startLine * 1_000_000 + contained.startColumn;
+  const rightEnd =
+    (contained.endLine ?? contained.startLine) * 1_000_000 +
+    (contained.endColumn ?? contained.startColumn);
+  return leftStart <= rightStart && leftEnd >= rightEnd;
 }
 
 function inspectNodeForAncestorDescendantConstraint(input: {

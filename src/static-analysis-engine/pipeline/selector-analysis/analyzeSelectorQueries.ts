@@ -148,6 +148,7 @@ function analyzeSelectorQuery(input: {
       selectorQuery: input.selectorQuery,
       constraint,
       analysisTargets,
+      renderModelIndex: input.renderModelIndex,
       includeTraces: input.includeTraces,
     });
   }
@@ -157,6 +158,7 @@ function analyzeSelectorQuery(input: {
       selectorQuery: input.selectorQuery,
       constraint,
       analysisTargets,
+      renderModelIndex: input.renderModelIndex,
       includeTraces: input.includeTraces,
     });
   }
@@ -165,6 +167,7 @@ function analyzeSelectorQuery(input: {
     selectorQuery: input.selectorQuery,
     constraint,
     analysisTargets,
+    renderModelIndex: input.renderModelIndex,
     includeTraces: input.includeTraces,
   });
 }
