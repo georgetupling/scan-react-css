@@ -24,7 +24,7 @@ import type {
 import type { ProjectBindingResolution } from "../symbol-resolution/index.js";
 import type { ModuleFacts } from "../module-facts/index.js";
 import type { FactGraphReactRenderSyntaxInputs } from "../fact-graph/index.js";
-import type { RenderModelClassExpressionSummaryRecord } from "../symbolic-evaluation/adapters/renderModelClassExpressions.js";
+import type { RenderModelClassExpressionSummaryRecord } from "./render-ir/class-expressions/classExpressionSummaries.js";
 
 export type RenderModelBuildInput = {
   parsedFiles: Array<{

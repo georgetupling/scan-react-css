@@ -13,7 +13,7 @@ import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.
 import type { SelectorQueryResult } from "../../pipeline/selector-analysis/index.js";
 import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/index.js";
 import type { SymbolicEvaluationResult } from "../../pipeline/symbolic-evaluation/index.js";
-import type { RenderModelClassExpressionSummaryRecord } from "../../pipeline/symbolic-evaluation/adapters/renderModelClassExpressions.js";
+import type { RenderModelClassExpressionSummaryRecord } from "../../pipeline/render-model/render-ir/class-expressions/classExpressionSummaries.js";
 
 export type LanguageFrontendsStageResult = LanguageFrontendsResult;
 

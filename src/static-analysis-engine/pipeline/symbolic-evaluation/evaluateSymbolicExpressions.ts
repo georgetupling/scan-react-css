@@ -20,8 +20,8 @@ export function evaluateSymbolicExpressions(
   const evaluatorRegistry =
     input.evaluatorRegistry ??
     createDefaultSymbolicEvaluatorRegistry({
-      ...(input.legacy?.symbolResolution
-        ? { symbolResolution: input.legacy.symbolResolution }
+      ...(input.cssModuleBindingResolution
+        ? { cssModuleBindingResolution: input.cssModuleBindingResolution }
         : {}),
     });
   const classExpressions: CanonicalClassExpression[] = [];
@@ -45,8 +45,8 @@ export function evaluateSymbolicExpressions(
       expressionSyntax,
       options: input.options ?? {},
       ...(expressionSyntax ? { expressionSyntax } : {}),
-      ...(input.legacy?.symbolResolution
-        ? { symbolResolution: input.legacy.symbolResolution }
+      ...(input.cssModuleBindingResolution
+        ? { cssModuleBindingResolution: input.cssModuleBindingResolution }
         : {}),
     });
 

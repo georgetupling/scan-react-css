@@ -1,11 +1,14 @@
 import ts from "typescript";
 
-import type { SourceAnchor } from "../../../types/core.js";
-import type { BuildContext } from "../../render-model/render-ir/shared/internalTypes.js";
-import type { ClassExpressionSummary } from "../class-values/types.js";
-import { buildClassExpressionTraces } from "../class-values/classExpressionTraces.js";
-import { mergeClassNameValues, toAbstractClassSet } from "../class-values/classValueOperations.js";
-import { summarizeClassNameExpressionInLegacyRenderModel } from "./legacyRenderModelAdapter.js";
+import type { SourceAnchor } from "../../../../types/core.js";
+import type { BuildContext } from "../shared/internalTypes.js";
+import type { ClassExpressionSummary } from "../../../symbolic-evaluation/class-values/types.js";
+import { buildClassExpressionTraces } from "../../../symbolic-evaluation/class-values/classExpressionTraces.js";
+import {
+  mergeClassNameValues,
+  toAbstractClassSet,
+} from "../../../symbolic-evaluation/class-values/classValueOperations.js";
+import { summarizeClassNameExpressionWithRenderContext } from "./renderContextClassExpressionEvaluation.js";
 
 export type RenderModelClassExpressionSummaryRecord = {
   location: SourceAnchor;
@@ -26,7 +29,7 @@ export function summarizeClassNameExpressionForRenderModel(input: {
     return cachedSummary;
   }
 
-  return summarizeClassNameExpressionInLegacyRenderModel(input);
+  return summarizeClassNameExpressionWithRenderContext(input);
 }
 
 export function mergeClassExpressionSummariesForRenderModel(input: {

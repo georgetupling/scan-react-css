@@ -1,7 +1,7 @@
 import ts from "typescript";
 
 import type { ClassExpressionSummary } from "../../../symbolic-evaluation/class-values/types.js";
-import { summarizeClassNameExpressionForRenderModel } from "../../../symbolic-evaluation/adapters/renderModelClassExpressions.js";
+import { summarizeClassNameExpressionForRenderModel } from "../class-expressions/classExpressionSummaries.js";
 import type { BuildContext } from "../shared/internalTypes.js";
 import { toSourceAnchor } from "../shared/renderIrUtils.js";
 import { isIntrinsicTagName, resolveIntrinsicTagName } from "../resolution/resolveExactValues.js";

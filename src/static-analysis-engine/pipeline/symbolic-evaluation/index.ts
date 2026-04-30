@@ -9,12 +9,6 @@ export {
 } from "./class-values/index.js";
 export { toClassExpressionSummary } from "./adapters/classExpressionSummary.js";
 export {
-  createClassExpressionSummaryAnchorKey,
-  mergeClassExpressionSummariesForRenderModel,
-  type RenderModelClassExpressionSummaryRecord,
-  summarizeClassNameExpressionForRenderModel,
-} from "./adapters/renderModelClassExpressions.js";
-export {
   canonicalClassExpressionId,
   classEmissionVariantId,
   conditionId,

@@ -14,9 +14,7 @@ export function runSymbolicEvaluationStage(input: {
     },
     ...(input.symbolResolution
       ? {
-          legacy: {
-            symbolResolution: input.symbolResolution,
-          },
+          cssModuleBindingResolution: input.symbolResolution,
         }
       : {}),
   });

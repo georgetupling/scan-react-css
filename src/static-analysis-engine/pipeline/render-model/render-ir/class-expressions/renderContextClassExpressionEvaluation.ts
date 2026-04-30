@@ -1,22 +1,22 @@
 import ts from "typescript";
 
-import type { SourceAnchor } from "../../../types/core.js";
-import { mergeClassNameValues, toAbstractClassSet } from "../class-values/index.js";
-import { buildClassExpressionTraces } from "../class-values/classExpressionTraces.js";
-import { summarizeClassNameExpression } from "../class-values/classExpressions.js";
-import type { ClassExpressionSummary } from "../class-values/index.js";
-import type { BuildContext } from "../../render-model/render-ir/shared/internalTypes.js";
+import type { SourceAnchor } from "../../../../types/core.js";
 import {
-  toSourceAnchor,
-  unwrapExpression,
-} from "../../render-model/render-ir/shared/renderIrUtils.js";
-import { resolveDeclaredValueSymbol } from "../../render-model/render-ir/collection/shared/indexExpressionBindingsBySymbolId.js";
+  mergeClassNameValues,
+  toAbstractClassSet,
+} from "../../../symbolic-evaluation/class-values/index.js";
+import { buildClassExpressionTraces } from "../../../symbolic-evaluation/class-values/classExpressionTraces.js";
+import { summarizeClassNameExpression } from "../../../symbolic-evaluation/class-values/classExpressions.js";
+import type { ClassExpressionSummary } from "../../../symbolic-evaluation/class-values/index.js";
+import type { BuildContext } from "../shared/internalTypes.js";
+import { toSourceAnchor, unwrapExpression } from "../shared/renderIrUtils.js";
+import { resolveDeclaredValueSymbol } from "../collection/shared/indexExpressionBindingsBySymbolId.js";
 import {
   mergeExpressionBindings,
   resolveBoundExpressionContext,
   resolveHelperCallContext,
-} from "../../render-model/render-ir/resolution/resolveBindings.js";
-import { resolveExactTruthyExpression } from "../../render-model/render-ir/resolution/resolveExactValues.js";
+} from "../resolution/resolveBindings.js";
+import { resolveExactTruthyExpression } from "../resolution/resolveExactValues.js";
 
 const MAX_CLASS_NAME_RESOLUTION_DEPTH = 100;
 const MAX_EXACT_CLASS_ARRAY_RESOLUTION_DEPTH = 100;
@@ -32,7 +32,7 @@ type ExactClassArrayResolutionState = {
   depth: number;
 };
 
-export function summarizeClassNameExpressionInLegacyRenderModel(input: {
+export function summarizeClassNameExpressionWithRenderContext(input: {
   expression: ts.Expression;
   context: BuildContext;
 }): ClassExpressionSummary {

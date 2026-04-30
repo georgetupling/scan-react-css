@@ -2,6 +2,12 @@ export { buildRenderModel } from "./buildRenderModel.js";
 export type { RenderModel, RenderModelBuildInput } from "./buildRenderModel.js";
 export { toAbstractClassSet } from "../symbolic-evaluation/class-values/index.js";
 export { toClassExpressionSummary } from "../symbolic-evaluation/adapters/classExpressionSummary.js";
+export {
+  createClassExpressionSummaryAnchorKey,
+  mergeClassExpressionSummariesForRenderModel,
+  summarizeClassNameExpressionForRenderModel,
+  type RenderModelClassExpressionSummaryRecord,
+} from "./render-ir/class-expressions/classExpressionSummaries.js";
 export { collectUnsupportedClassReferences } from "./class-reference-diagnostics/index.js";
 export {
   buildSameFileRenderSubtrees,

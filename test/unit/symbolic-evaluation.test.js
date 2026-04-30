@@ -613,9 +613,7 @@ async function evaluateRenderAwareFixture(sourceText, extraSourceFiles = {}, ext
       graph,
       result: evaluateSymbolicExpressions({
         graph,
-        legacy: {
-          symbolResolution,
-        },
+        cssModuleBindingResolution: symbolResolution,
       }),
     };
   } finally {

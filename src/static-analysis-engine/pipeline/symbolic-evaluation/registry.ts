@@ -11,12 +11,12 @@ import type {
 } from "./types.js";
 
 export function createDefaultSymbolicEvaluatorRegistry(input?: {
-  symbolResolution?: ProjectBindingResolution;
+  cssModuleBindingResolution?: ProjectBindingResolution;
 }): SymbolicEvaluatorRegistry {
   return createSymbolicEvaluatorRegistry(
     [
       runtimeDomClassExpressionEvaluator,
-      ...(input?.symbolResolution ? [cssModuleClassExpressionEvaluator] : []),
+      ...(input?.cssModuleBindingResolution ? [cssModuleClassExpressionEvaluator] : []),
       normalizedClassExpressionEvaluator,
       fallbackClassExpressionEvaluator,
     ],
@@ -27,14 +27,16 @@ export function createDefaultSymbolicEvaluatorRegistry(input?: {
 export function createSymbolicEvaluatorRegistry(
   evaluators: SymbolicExpressionEvaluator[],
   context?: {
-    symbolResolution?: ProjectBindingResolution;
+    cssModuleBindingResolution?: ProjectBindingResolution;
   },
 ): SymbolicEvaluatorRegistry {
   return {
     evaluate(input: SymbolicExpressionEvaluatorInput): SymbolicExpressionEvaluatorResult {
       const evaluatorInput = {
         ...input,
-        ...(context?.symbolResolution ? { symbolResolution: context.symbolResolution } : {}),
+        ...(context?.cssModuleBindingResolution
+          ? { cssModuleBindingResolution: context.cssModuleBindingResolution }
+          : {}),
       };
       const evaluator = evaluators.find((candidate) => candidate.canEvaluate(evaluatorInput));
 

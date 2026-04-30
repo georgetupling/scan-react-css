@@ -29,7 +29,7 @@ import type {
 export const cssModuleClassExpressionEvaluator: SymbolicExpressionEvaluator = {
   name: "css-module-class-expression",
   canEvaluate(input) {
-    if (!input.symbolResolution || !input.expressionSyntax) {
+    if (!input.cssModuleBindingResolution || !input.expressionSyntax) {
       return false;
     }
 
@@ -41,7 +41,7 @@ export const cssModuleClassExpressionEvaluator: SymbolicExpressionEvaluator = {
     );
   },
   evaluate(input) {
-    if (!input.expressionSyntax || !input.symbolResolution) {
+    if (!input.expressionSyntax || !input.cssModuleBindingResolution) {
       return {};
     }
 
@@ -89,7 +89,7 @@ function resolveCssModuleReferenceFromExpressionSyntax(input: {
     }
 
     const result = resolveCssModuleMemberAccess({
-      symbolResolution: input.input.symbolResolution!,
+      symbolResolution: input.input.cssModuleBindingResolution!,
       filePath: input.input.classExpressionSite.filePath,
       localName: objectExpression.name,
       memberName: expression.propertyName,
@@ -108,7 +108,7 @@ function resolveCssModuleReferenceFromExpressionSyntax(input: {
     }
 
     const result = resolveCssModuleMemberAccess({
-      symbolResolution: input.input.symbolResolution!,
+      symbolResolution: input.input.cssModuleBindingResolution!,
       filePath: input.input.classExpressionSite.filePath,
       localName: objectExpression.name,
       memberName: argumentExpression.value,
@@ -118,7 +118,7 @@ function resolveCssModuleReferenceFromExpressionSyntax(input: {
 
   if (expression.expressionKind === "identifier") {
     const binding = resolveCssModuleMember({
-      symbolResolution: input.input.symbolResolution!,
+      symbolResolution: input.input.cssModuleBindingResolution!,
       filePath: input.input.classExpressionSite.filePath,
       localName: expression.name,
     });
@@ -275,12 +275,12 @@ function buildUnsupportedCssModuleExpression(input: {
 function findCssModuleDiagnosticForSite(
   input: SymbolicExpressionEvaluatorInput,
 ): ResolvedCssModuleBindingDiagnostic | undefined {
-  if (!input.symbolResolution) {
+  if (!input.cssModuleBindingResolution) {
     return undefined;
   }
 
   return getCssModuleBindingsForFile({
-    symbolResolution: input.symbolResolution,
+    symbolResolution: input.cssModuleBindingResolution,
     filePath: input.classExpressionSite.filePath,
   }).diagnostics.find(
     (diagnostic) =>

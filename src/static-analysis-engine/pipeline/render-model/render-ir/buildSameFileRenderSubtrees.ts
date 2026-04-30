@@ -33,7 +33,7 @@ import {
 } from "./resolution/resolveBindings.js";
 import { resolveExactBooleanExpression } from "./resolution/resolveExactValues.js";
 import { isRenderableExpression } from "./collection/shared/renderableExpressionGuards.js";
-import { mergeClassExpressionSummariesForRenderModel } from "../../symbolic-evaluation/adapters/renderModelClassExpressions.js";
+import { mergeClassExpressionSummariesForRenderModel } from "./class-expressions/classExpressionSummaries.js";
 import type { RenderNode, RenderSubtree } from "./types.js";
 
 const MAX_RENDER_EXPRESSION_RESOLUTION_DEPTH = 100;

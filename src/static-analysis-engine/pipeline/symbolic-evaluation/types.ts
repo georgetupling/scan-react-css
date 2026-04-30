@@ -22,9 +22,7 @@ export type SymbolicEvaluationOptions = {
 export type SymbolicEvaluationInput = {
   graph: FactGraph;
   options?: SymbolicEvaluationOptions;
-  legacy?: {
-    symbolResolution?: ProjectBindingResolution;
-  };
+  cssModuleBindingResolution?: ProjectBindingResolution;
   evaluatorRegistry?: SymbolicEvaluatorRegistry;
 };
 
@@ -232,7 +230,7 @@ export type SymbolicExpressionEvaluatorInput = {
   classExpressionSite: ClassExpressionSiteNode;
   expressionSyntax?: ExpressionSyntaxNode;
   options: SymbolicEvaluationOptions;
-  symbolResolution?: ProjectBindingResolution;
+  cssModuleBindingResolution?: ProjectBindingResolution;
 };
 
 export type SymbolicExpressionEvaluatorResult = {
