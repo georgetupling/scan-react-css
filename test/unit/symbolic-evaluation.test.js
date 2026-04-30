@@ -333,6 +333,125 @@ test("symbolic evaluation preserves finite string values and array find/join sup
   );
 });
 
+test("symbolic evaluation preserves conditional branch alternatives canonically", async () => {
+  const { graph, parsedFiles } = await buildFixtureAnalysis([
+    "const condition = true;",
+    "export function App() {",
+    '  return <div className={condition ? "a" : "b"} />;',
+    "}",
+    "",
+  ]);
+
+  const result = evaluateSymbolicExpressions({
+    graph,
+    legacy: {
+      parsedFiles,
+    },
+  });
+  const expression = getOnlyExpression(result);
+  const summary = toClassExpressionSummary(expression);
+  const exclusiveGroupIds = unique(
+    expression.tokens.map((token) => token.exclusiveGroupId).filter(Boolean),
+  );
+
+  assert.deepEqual(summary.classes.definite, []);
+  assert.deepEqual(summary.classes.possible, ["a", "b"]);
+  assert.equal(exclusiveGroupIds.length, 1);
+  assert.deepEqual(
+    expression.tokens.map((token) => ({
+      token: token.token,
+      presence: token.presence,
+      hasBranchCondition: result.evaluatedExpressions.indexes.conditionById.has(token.conditionId),
+    })),
+    [
+      { token: "a", presence: "possible", hasBranchCondition: true },
+      { token: "b", presence: "possible", hasBranchCondition: true },
+    ],
+  );
+});
+
+test("symbolic evaluation preserves non-whitespace join separators as complete emissions", async () => {
+  const { graph, parsedFiles } = await buildFixtureAnalysis([
+    "export function App() {",
+    '  return <div className={["a", "b"].join("-")} />;',
+    "}",
+    "",
+  ]);
+
+  const result = evaluateSymbolicExpressions({
+    graph,
+    legacy: {
+      parsedFiles,
+    },
+  });
+  const expression = getOnlyExpression(result);
+
+  assert.deepEqual(
+    expression.tokens.map((token) => token.token),
+    ["a-b"],
+  );
+  assert.deepEqual(expression.emissionVariants, [
+    {
+      id: `${expression.id}:variant:0`,
+      conditionId: `${expression.id}:condition:always`,
+      tokens: ["a-b"],
+      completeness: "complete",
+      unknownDynamic: false,
+    },
+  ]);
+});
+
+test("symbolic evaluation keeps nullish fallback possible for unknown left operands", async () => {
+  const { graph, parsedFiles } = await buildFixtureAnalysis([
+    "export function App(props) {",
+    '  return <div className={props.className ?? "fallback"} />;',
+    "}",
+    "",
+  ]);
+
+  const result = evaluateSymbolicExpressions({
+    graph,
+    legacy: {
+      parsedFiles,
+    },
+  });
+  const expression = getOnlyExpression(result);
+  const summary = toClassExpressionSummary(expression);
+
+  assert.deepEqual(summary.classes.definite, []);
+  assert.deepEqual(summary.classes.possible, ["fallback"]);
+  assert.equal(summary.classes.unknownDynamic, true);
+  assert.deepEqual(toComparableCanonicalTokens(expression), {
+    definite: [],
+    possible: ["fallback"],
+    unknownDynamic: true,
+  });
+});
+
+test("symbolic evaluation promotes definitely truthy object map entries", async () => {
+  const { graph, parsedFiles } = await buildFixtureAnalysis([
+    "const c = Math.random() > 0.5;",
+    "export function App() {",
+    "  return <div className={{ a: true, b: false, c }} />;",
+    "}",
+    "",
+  ]);
+
+  const result = evaluateSymbolicExpressions({
+    graph,
+    legacy: {
+      parsedFiles,
+    },
+  });
+  const expression = getOnlyExpression(result);
+
+  assert.deepEqual(toComparableCanonicalTokens(expression), {
+    definite: ["a"],
+    possible: ["c"],
+    unknownDynamic: false,
+  });
+});
+
 test("analyzeProjectSourceTexts produces internal symbolic evaluation facts when graph input exists", async () => {
   const { snapshot, frontends, factGraph } = await buildEngineFlowFixture([
     'const localClass = "internal-symbolic";',

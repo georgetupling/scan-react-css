@@ -40,7 +40,7 @@ export function toAbstractClassSet(
     return {
       definite: definite.sort((left, right) => left.localeCompare(right)),
       possible: possible.sort((left, right) => left.localeCompare(right)),
-      mutuallyExclusiveGroups: [],
+      mutuallyExclusiveGroups: value.mutuallyExclusiveGroups ?? [],
       unknownDynamic: false,
       derivedFrom: [
         {
@@ -55,7 +55,7 @@ export function toAbstractClassSet(
     return {
       definite: [...value.definite].sort((left, right) => left.localeCompare(right)),
       possible: [...value.possible].sort((left, right) => left.localeCompare(right)),
-      mutuallyExclusiveGroups: [],
+      mutuallyExclusiveGroups: value.mutuallyExclusiveGroups ?? [],
       unknownDynamic: value.unknownDynamic,
       derivedFrom: [
         {
@@ -125,6 +125,11 @@ export function mergeClassSets(values: AbstractValue[], reason: string): Abstrac
     kind: "class-set",
     definite: [...definite].sort((left, right) => left.localeCompare(right)),
     possible: [...possible].sort((left, right) => left.localeCompare(right)),
+    mutuallyExclusiveGroups: values.flatMap((value) =>
+      value.kind === "string-set" || value.kind === "class-set"
+        ? (value.mutuallyExclusiveGroups ?? [])
+        : [],
+    ),
     unknownDynamic,
     reason,
   };
@@ -133,12 +138,14 @@ export function mergeClassSets(values: AbstractValue[], reason: string): Abstrac
 export function toClassSet(value: AbstractValue): {
   definite: string[];
   possible: string[];
+  mutuallyExclusiveGroups: string[][];
   unknownDynamic: boolean;
 } {
   if (value.kind === "string-exact") {
     return {
       definite: tokenizeClassNames(value.value),
       possible: [],
+      mutuallyExclusiveGroups: [],
       unknownDynamic: false,
     };
   }
@@ -163,17 +170,24 @@ export function toClassSet(value: AbstractValue): {
     return {
       definite,
       possible,
+      mutuallyExclusiveGroups: value.mutuallyExclusiveGroups ?? [],
       unknownDynamic: false,
     };
   }
 
   if (value.kind === "class-set") {
-    return value;
+    return {
+      definite: value.definite,
+      possible: value.possible,
+      mutuallyExclusiveGroups: value.mutuallyExclusiveGroups ?? [],
+      unknownDynamic: value.unknownDynamic,
+    };
   }
 
   return {
     definite: [],
     possible: [],
+    mutuallyExclusiveGroups: [],
     unknownDynamic: true,
   };
 }

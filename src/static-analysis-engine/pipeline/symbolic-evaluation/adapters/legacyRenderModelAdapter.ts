@@ -277,8 +277,19 @@ function summarizeBoundClassNameExpression(
         context,
         nextClassNameResolutionState(state),
       );
+      const rightClassSet = toAbstractClassSet(
+        right.value,
+        toSourceAnchor(expression.right, expression.right.getSourceFile(), context.filePath),
+      );
       return {
-        value: mergeClassNameValues([left.value, right.value], "nullish coalescing expression"),
+        value: {
+          kind: "class-set",
+          definite: [],
+          possible: uniqueSorted([...rightClassSet.definite, ...rightClassSet.possible]),
+          mutuallyExclusiveGroups: rightClassSet.mutuallyExclusiveGroups,
+          unknownDynamic: true,
+          reason: "nullish coalescing expression",
+        },
         sourceExpression: expression,
       };
     }
@@ -372,6 +383,49 @@ function summarizeJoinedClassArrayExpression(
   const sourceElements = resolveExactClassArrayElements(expression.expression.expression, context);
   if (!sourceElements) {
     return undefined;
+  }
+
+  const separator = getJoinSeparator(expression.arguments);
+  if (separator === undefined) {
+    return {
+      value: { kind: "unknown", reason: "unsupported-join-separator" },
+      sourceExpression: expression,
+    };
+  }
+
+  if (!/^\s*$/.test(separator)) {
+    let candidates = [""];
+    for (const element of sourceElements) {
+      const elementValue = summarizeBoundClassNameExpression(
+        element,
+        context,
+        nextClassNameResolutionState(state),
+      ).value;
+      const elementCandidates = getStringCandidates(elementValue);
+      if (!elementCandidates) {
+        return {
+          value: { kind: "unknown", reason: "non-whitespace-join-separator" },
+          sourceExpression: expression,
+        };
+      }
+
+      candidates = candidates.flatMap((prefix) =>
+        elementCandidates.map((candidate) =>
+          prefix.length === 0 ? candidate : `${prefix}${separator}${candidate}`,
+        ),
+      );
+      if (candidates.length > MAX_TEMPLATE_STRING_COMBINATIONS) {
+        return {
+          value: { kind: "unknown", reason: "string-concatenation-budget-exceeded" },
+          sourceExpression: expression,
+        };
+      }
+    }
+
+    return {
+      value: toStringValue(candidates),
+      sourceExpression: expression,
+    };
   }
 
   return {
@@ -623,6 +677,23 @@ function getJoinedClassArrayElements(
   }
 
   return resolveExactClassArrayElements(expression.expression.expression, context);
+}
+
+function getJoinSeparator(args: ts.NodeArray<ts.Expression>): string | undefined {
+  if (args.length === 0) {
+    return ",";
+  }
+
+  if (args.length !== 1) {
+    return undefined;
+  }
+
+  const separator = unwrapExpression(args[0]);
+  if (ts.isStringLiteral(separator) || ts.isNoSubstitutionTemplateLiteral(separator)) {
+    return separator.text;
+  }
+
+  return undefined;
 }
 
 function isClassNamesHelperExpression(expression: ts.Expression): boolean {

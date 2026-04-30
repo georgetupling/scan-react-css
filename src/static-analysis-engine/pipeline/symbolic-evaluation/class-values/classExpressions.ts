@@ -39,7 +39,8 @@ export function summarizeClassNameExpression(expression: ts.Expression): Abstrac
 
     if (
       expression.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
-      expression.operatorToken.kind === ts.SyntaxKind.BarBarToken
+      expression.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+      expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken
     ) {
       return summarizeLogicalExpression(expression);
     }
@@ -54,6 +55,9 @@ export function summarizeClassNameExpression(expression: ts.Expression): Abstrac
       return {
         kind: "string-set",
         values: stringCandidates,
+        mutuallyExclusiveGroups: [
+          uniqueSorted(stringCandidates.flatMap((candidate) => tokenizeClassNames(candidate))),
+        ],
       };
     }
 
@@ -188,6 +192,21 @@ function summarizeLogicalExpression(expression: ts.BinaryExpression): AbstractVa
   }
 
   const left = summarizeClassNameExpression(expression.left);
+  if (expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) {
+    if (left.kind !== "unknown") {
+      return left;
+    }
+
+    return {
+      kind: "class-set",
+      definite: [],
+      possible: uniqueSorted([...rightClassSet.definite, ...rightClassSet.possible]),
+      mutuallyExclusiveGroups: rightClassSet.mutuallyExclusiveGroups,
+      unknownDynamic: true,
+      reason: "nullish coalescing expression",
+    };
+  }
+
   return mergeClassSets([left, right], "logical-or expression");
 }
 
@@ -198,7 +217,7 @@ function summarizeClassNameCall(expression: ts.CallExpression): AbstractValue {
 
   const arrayJoinTarget = getArrayJoinTarget(expression);
   if (arrayJoinTarget) {
-    return summarizeClassArray(arrayJoinTarget.elements);
+    return summarizeClassArrayJoin(arrayJoinTarget.elements, expression.arguments);
   }
 
   return {
@@ -258,10 +277,16 @@ function summarizeClassNamesHelperArg(expression: ts.Expression): AbstractValue 
 }
 
 function summarizeClassObject(expression: ts.ObjectLiteralExpression): AbstractValue {
+  const definite: string[] = [];
   const possible: string[] = [];
   let unknownDynamic = false;
 
   for (const property of expression.properties) {
+    if (ts.isShorthandPropertyAssignment(property)) {
+      possible.push(...tokenizeClassNames(property.name.text));
+      continue;
+    }
+
     if (!ts.isPropertyAssignment(property)) {
       unknownDynamic = true;
       continue;
@@ -277,12 +302,17 @@ function summarizeClassObject(expression: ts.ObjectLiteralExpression): AbstractV
       continue;
     }
 
+    if (isDefinitelyTruthy(property.initializer)) {
+      definite.push(...tokenizeClassNames(key));
+      continue;
+    }
+
     possible.push(...tokenizeClassNames(key));
   }
 
   return {
     kind: "class-set",
-    definite: [],
+    definite: uniqueSorted(definite),
     possible: uniqueSorted(possible),
     unknownDynamic,
     reason: "object class map",
@@ -292,6 +322,39 @@ function summarizeClassObject(expression: ts.ObjectLiteralExpression): AbstractV
 function summarizeClassArray(elements: ts.NodeArray<ts.Expression>): AbstractValue {
   const parts = elements.map((element) => summarizeClassNamesHelperArg(element));
   return mergeClassSets(parts, "class array");
+}
+
+function summarizeClassArrayJoin(
+  elements: ts.NodeArray<ts.Expression>,
+  args: ts.NodeArray<ts.Expression>,
+): AbstractValue {
+  const separator = getJoinSeparator(args);
+  if (separator === undefined) {
+    return { kind: "unknown", reason: "unsupported-join-separator" };
+  }
+
+  if (/^\s*$/.test(separator)) {
+    return summarizeClassArray(elements);
+  }
+
+  let candidates = [""];
+  for (const element of elements) {
+    const elementCandidates = getStringCandidates(summarizeClassNamesHelperArg(element));
+    if (!elementCandidates) {
+      return { kind: "unknown", reason: "non-whitespace-join-separator" };
+    }
+
+    candidates = candidates.flatMap((prefix) =>
+      elementCandidates.map((candidate) =>
+        prefix.length === 0 ? candidate : `${prefix}${separator}${candidate}`,
+      ),
+    );
+    if (candidates.length > MAX_STRING_COMBINATIONS) {
+      return { kind: "unknown", reason: "string-concatenation-budget-exceeded" };
+    }
+  }
+
+  return toStringValue(candidates);
 }
 
 function combineStringLikeValues(left: AbstractValue, right: AbstractValue): AbstractValue {
@@ -385,6 +448,23 @@ function getArrayJoinTarget(expression: ts.CallExpression): ts.ArrayLiteralExpre
   return expression.expression.expression;
 }
 
+function getJoinSeparator(args: ts.NodeArray<ts.Expression>): string | undefined {
+  if (args.length === 0) {
+    return ",";
+  }
+
+  if (args.length !== 1) {
+    return undefined;
+  }
+
+  const separator = unwrapExpression(args[0]);
+  if (ts.isStringLiteral(separator) || ts.isNoSubstitutionTemplateLiteral(separator)) {
+    return separator.text;
+  }
+
+  return undefined;
+}
+
 function getStaticPropertyName(name: ts.PropertyName): string | undefined {
   if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
     return name.text;
@@ -402,5 +482,16 @@ function isDefinitelyFalsy(expression: ts.Expression): boolean {
     expression.kind === ts.SyntaxKind.UndefinedKeyword ||
     (ts.isNumericLiteral(expression) && Number(expression.text) === 0) ||
     (ts.isStringLiteral(expression) && expression.text.length === 0)
+  );
+}
+
+function isDefinitelyTruthy(expression: ts.Expression): boolean {
+  expression = unwrapExpression(expression);
+
+  return (
+    expression.kind === ts.SyntaxKind.TrueKeyword ||
+    (ts.isNumericLiteral(expression) && Number(expression.text) !== 0) ||
+    (ts.isStringLiteral(expression) && expression.text.length > 0) ||
+    (ts.isNoSubstitutionTemplateLiteral(expression) && expression.text.length > 0)
   );
 }

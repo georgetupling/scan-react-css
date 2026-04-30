@@ -38,7 +38,7 @@ export const legacyRenderModelClassExpressionEvaluator: SymbolicExpressionEvalua
 
     return {
       expression,
-      conditions: buildConditions(expression.id),
+      conditions: buildConditions(expression.id, record.summary.value),
       diagnostics,
     };
   },

@@ -61,7 +61,7 @@ export const legacyAstClassExpressionEvaluator: SymbolicExpressionEvaluator = {
 
     return {
       expression,
-      conditions: buildConditions(expression.id),
+      conditions: buildConditions(expression.id, value),
       diagnostics,
     };
   },
@@ -107,7 +107,17 @@ export function buildCanonicalClassExpressionFromValue(input: {
         token,
         index: index + abstractClassSet.definite.length,
         presence: "possible",
-        conditionId: possibleConditionId,
+        conditionId:
+          getExclusiveTokenConditionId({
+            expressionId,
+            token,
+            mutuallyExclusiveGroups: abstractClassSet.mutuallyExclusiveGroups,
+          }) ?? possibleConditionId,
+        exclusiveGroupId: getExclusiveTokenGroupId({
+          expressionId,
+          token,
+          mutuallyExclusiveGroups: abstractClassSet.mutuallyExclusiveGroups,
+        }),
         confidence: "medium",
         sourceAnchor: tokenAnchors[token]?.[0] ?? input.input.classExpressionSite.location,
       }),
@@ -182,6 +192,7 @@ function buildTokenAlternative(input: {
   conditionId: string;
   confidence: TokenAlternative["confidence"];
   sourceAnchor: TokenAlternative["sourceAnchor"];
+  exclusiveGroupId?: string;
 }): TokenAlternative {
   return {
     id: tokenAlternativeId({
@@ -193,13 +204,14 @@ function buildTokenAlternative(input: {
     tokenKind: "global-class",
     presence: input.presence,
     conditionId: input.conditionId,
+    ...(input.exclusiveGroupId ? { exclusiveGroupId: input.exclusiveGroupId } : {}),
     ...(input.sourceAnchor ? { sourceAnchor: input.sourceAnchor } : {}),
     confidence: input.confidence,
   };
 }
 
-export function buildConditions(expressionId: string): ConditionFact[] {
-  return [
+export function buildConditions(expressionId: string, value?: AbstractValue): ConditionFact[] {
+  const conditions: ConditionFact[] = [
     {
       id: conditionId({
         expressionId,
@@ -217,6 +229,60 @@ export function buildConditions(expressionId: string): ConditionFact[] {
       confidence: "medium",
     },
   ];
+
+  const groups =
+    value && (value.kind === "string-set" || value.kind === "class-set")
+      ? (value.mutuallyExclusiveGroups ?? [])
+      : [];
+
+  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+    for (let tokenIndex = 0; tokenIndex < groups[groupIndex].length; tokenIndex += 1) {
+      conditions.push({
+        id: conditionId({
+          expressionId,
+          conditionKey: `exclusive-${groupIndex}-${tokenIndex}`,
+        }),
+        kind: "unknown",
+        confidence: "medium",
+      });
+    }
+  }
+
+  return conditions;
+}
+
+function getExclusiveTokenGroupId(input: {
+  expressionId: string;
+  token: string;
+  mutuallyExclusiveGroups: string[][];
+}): string | undefined {
+  const groupIndex = input.mutuallyExclusiveGroups.findIndex((group) =>
+    group.includes(input.token),
+  );
+  if (groupIndex < 0) {
+    return undefined;
+  }
+
+  return `${input.expressionId}:exclusive-group:${groupIndex}`;
+}
+
+function getExclusiveTokenConditionId(input: {
+  expressionId: string;
+  token: string;
+  mutuallyExclusiveGroups: string[][];
+}): string | undefined {
+  const groupIndex = input.mutuallyExclusiveGroups.findIndex((group) =>
+    group.includes(input.token),
+  );
+  if (groupIndex < 0) {
+    return undefined;
+  }
+
+  const tokenIndex = input.mutuallyExclusiveGroups[groupIndex].indexOf(input.token);
+  return conditionId({
+    expressionId: input.expressionId,
+    conditionKey: `exclusive-${groupIndex}-${tokenIndex}`,
+  });
 }
 
 function buildEmissionVariants(input: {
@@ -370,6 +436,14 @@ function toUnsupportedReasonCode(reason: string): UnsupportedReasonCode {
 
   if (reason.startsWith("unsupported-call")) {
     return "unsupported-call";
+  }
+
+  if (reason.includes("unsupported-join-separator")) {
+    return "unsupported-join-separator";
+  }
+
+  if (reason.includes("non-whitespace-join-separator")) {
+    return "non-whitespace-join-separator";
   }
 
   return "unsupported-expression-kind";
