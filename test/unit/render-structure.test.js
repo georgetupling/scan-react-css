@@ -133,6 +133,102 @@ test("render structure projects the current render model into the stage 5 model"
   );
 });
 
+test("render structure builds emission sites from legacy render classes and stage 4 facts", async () => {
+  const fixture = await buildProjectionFixture();
+  const symbolicEvaluation = evaluateSymbolicExpressions({
+    graph: fixture.graph,
+    cssModuleBindingResolution: fixture.symbolResolution,
+  });
+  const legacyModel = buildRenderModel({
+    parsedFiles: fixture.parsedFiles,
+    reactRenderSyntax: graphToReactRenderSyntaxInputs(fixture.graph),
+    symbolResolution: fixture.symbolResolution,
+    moduleFacts: fixture.moduleFacts,
+    includeTraces: true,
+  });
+  const result = buildRenderStructure({
+    graph: fixture.graph,
+    symbolicEvaluation,
+    options: {
+      includeTraces: true,
+    },
+    legacy: {
+      parsedFiles: fixture.parsedFiles,
+      moduleFacts: fixture.moduleFacts,
+      symbolResolution: fixture.symbolResolution,
+    },
+  });
+  const expressionsById = new Map(
+    symbolicEvaluation.evaluatedExpressions.classExpressions.map((expression) => [
+      expression.id,
+      expression,
+    ]),
+  );
+  const appComponentNodeId = componentNodeIdByName(fixture.graph, "App");
+  const childComponentNodeId = componentNodeIdByName(fixture.graph, "Child");
+
+  assert.equal(
+    result.renderModel.emissionSites.length,
+    countLegacyClassReferences(legacyModel.renderSubtrees),
+  );
+
+  for (const emissionSite of result.renderModel.emissionSites) {
+    const expression = expressionsById.get(emissionSite.classExpressionId);
+    assert.ok(expression);
+    assert.equal(emissionSite.classExpressionSiteNodeId, expression.classExpressionSiteNodeId);
+    assert.deepEqual(
+      emissionSite.tokens.map((token) => token.token).sort(),
+      expression.tokens.map((token) => token.token).sort(),
+    );
+    assert.deepEqual(emissionSite.emissionVariants, expression.emissionVariants);
+    assert.deepEqual(
+      emissionSite.tokenProvenance.map((provenance) => ({
+        token: provenance.token,
+        sourceClassExpressionSiteNodeId: provenance.sourceClassExpressionSiteNodeId,
+        sourceExpressionId: provenance.sourceExpressionId,
+        emittedByComponentNodeId: provenance.emittedByComponentNodeId,
+        suppliedByComponentNodeId: provenance.suppliedByComponentNodeId,
+      })),
+      emissionSite.tokens.map((token) => ({
+        token: token.token,
+        sourceClassExpressionSiteNodeId: expression.classExpressionSiteNodeId,
+        sourceExpressionId: expression.id,
+        emittedByComponentNodeId: emissionSite.emittingComponentNodeId,
+        suppliedByComponentNodeId: emissionSite.suppliedByComponentNodeId,
+      })),
+    );
+
+    if (emissionSite.elementId) {
+      assert.ok(
+        result.renderModel.indexes.emissionSiteIdsByElementId
+          .get(emissionSite.elementId)
+          ?.includes(emissionSite.id),
+      );
+    }
+  }
+
+  const appEmission = findEmissionByToken(result.renderModel.emissionSites, "app");
+  assert.equal(appEmission.emittingComponentNodeId, appComponentNodeId);
+  assert.equal(appEmission.suppliedByComponentNodeId, appComponentNodeId);
+
+  const childEmissions = result.renderModel.emissionSites.filter((emissionSite) =>
+    emissionSite.tokens.some((token) => token.token === "child"),
+  );
+  assert.ok(childEmissions.length > 0);
+  assert.ok(
+    childEmissions.every(
+      (emissionSite) =>
+        emissionSite.emittingComponentNodeId === childComponentNodeId &&
+        emissionSite.suppliedByComponentNodeId === childComponentNodeId,
+    ),
+  );
+
+  const missingEmission = findEmissionByToken(result.renderModel.emissionSites, "missing");
+  assert.equal(missingEmission.emissionKind, "unresolved-component-class-prop");
+  assert.equal(missingEmission.emittingComponentNodeId, appComponentNodeId);
+  assert.equal(missingEmission.suppliedByComponentNodeId, appComponentNodeId);
+});
+
 test("render structure legacy projection is deterministic across repeated runs", async () => {
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
@@ -225,6 +321,49 @@ function countLegacyUnresolvedComponentBoundaries(renderSubtrees) {
     (count, subtree) => count + countNodes(subtree.root, "component-reference"),
     0,
   );
+}
+
+function countLegacyClassReferences(renderSubtrees) {
+  return renderSubtrees.reduce(
+    (count, subtree) => count + countClassReferencesInNode(subtree.root),
+    0,
+  );
+}
+
+function countClassReferencesInNode(node) {
+  let count = node.className ? 1 : 0;
+
+  if (node.kind === "element" || node.kind === "fragment") {
+    return count + node.children.reduce((sum, child) => sum + countClassReferencesInNode(child), 0);
+  }
+
+  if (node.kind === "conditional") {
+    return (
+      count + countClassReferencesInNode(node.whenTrue) + countClassReferencesInNode(node.whenFalse)
+    );
+  }
+
+  if (node.kind === "repeated-region") {
+    return count + countClassReferencesInNode(node.template);
+  }
+
+  return count;
+}
+
+function findEmissionByToken(emissionSites, token) {
+  const emissionSite = emissionSites.find((candidate) =>
+    candidate.tokens.some((candidateToken) => candidateToken.token === token),
+  );
+  assert.ok(emissionSite);
+  return emissionSite;
+}
+
+function componentNodeIdByName(graph, componentName) {
+  const component = graph.nodes.components.find(
+    (candidate) => candidate.componentName === componentName,
+  );
+  assert.ok(component);
+  return component.id;
 }
 
 function countNodes(node, kind) {

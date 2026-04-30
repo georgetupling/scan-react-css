@@ -2,6 +2,7 @@ import { graphToReactRenderSyntaxInputs } from "../../fact-graph/index.js";
 import { buildRenderModel } from "../../render-model/index.js";
 import { collectRenderRegionsFromSubtrees } from "../../render-model/render-ir/index.js";
 import {
+  emissionSiteId,
   renderedComponentBoundaryId,
   renderedComponentId,
   renderedElementId,
@@ -18,6 +19,8 @@ import type {
 } from "../../render-model/render-ir/index.js";
 import type {
   RenderCertainty,
+  EmissionSite,
+  EmissionTokenProvenance,
   RenderGraphProjection,
   RenderGraphProjectionEdge,
   RenderGraphProjectionNode,
@@ -30,31 +33,50 @@ import type {
   RenderedComponentBoundary,
   RenderedElement,
 } from "../types.js";
+import type { ClassExpressionSummary } from "../../symbolic-evaluation/class-values/types.js";
+import type {
+  CanonicalClassExpression,
+  TokenAlternative,
+} from "../../symbolic-evaluation/types.js";
 import type { SourceAnchor } from "../../../types/core.js";
 
 type ProjectionAccumulator = {
   componentBoundaries: RenderedComponentBoundary[];
   elements: RenderedElement[];
+  emissionSites: EmissionSite[];
   renderPaths: RenderPath[];
   boundaryById: Map<string, RenderedComponentBoundary>;
   elementById: Map<string, RenderedElement>;
   rootBoundaryIdByComponentKey: Map<string, string>;
   rootBoundaryIdBySubtreeKey: Map<string, string>;
+  componentNodeIdByComponentKey: Map<string, string>;
+  symbolicExpressions: SymbolicExpressionLookup;
 };
 
 type TraversalContext = {
   rootComponentNodeId?: string;
+  emittingComponentNodeId?: string;
+  placementComponentNodeId?: string;
   boundaryId: string;
   parentElementId?: string;
   pathSegments: RenderPathSegment[];
   certainty: RenderCertainty;
 };
 
+type SymbolicExpressionLookup = {
+  byId: Map<string, CanonicalClassExpression>;
+  bySiteNodeId: Map<string, CanonicalClassExpression>;
+  byExpressionNodeId: Map<string, CanonicalClassExpression[]>;
+  byAnchor: Map<string, CanonicalClassExpression[]>;
+  siteNodeIdByAnchor: Map<string, string>;
+  expressionNodeIdBySiteNodeId: Map<string, string>;
+};
+
 export function projectLegacyRenderModel(input: RenderStructureInput): {
   components: RenderedComponent[];
   componentBoundaries: RenderedComponentBoundary[];
   elements: RenderedElement[];
-  emissionSites: [];
+  emissionSites: EmissionSite[];
   renderPaths: RenderPath[];
   placementConditions: [];
   renderRegions: RenderRegion[];
@@ -75,11 +97,14 @@ export function projectLegacyRenderModel(input: RenderStructureInput): {
   const accumulator: ProjectionAccumulator = {
     componentBoundaries: [],
     elements: [],
+    emissionSites: [],
     renderPaths: [],
     boundaryById: new Map(),
     elementById: new Map(),
     rootBoundaryIdByComponentKey: new Map(),
     rootBoundaryIdBySubtreeKey: new Map(),
+    componentNodeIdByComponentKey: input.graph.indexes.componentNodeIdByComponentKey,
+    symbolicExpressions: buildSymbolicExpressionLookup(input),
   };
 
   for (const [index, subtree] of legacyModel.renderSubtrees.entries()) {
@@ -109,7 +134,7 @@ export function projectLegacyRenderModel(input: RenderStructureInput): {
     components,
     componentBoundaries: sortById(accumulator.componentBoundaries),
     elements: sortById(accumulator.elements),
-    emissionSites: [],
+    emissionSites: sortById(accumulator.emissionSites),
     renderPaths: sortById(accumulator.renderPaths),
     placementConditions: [],
     renderRegions: regionProjection.renderRegions,
@@ -190,6 +215,8 @@ function projectSubtree(input: {
     accumulator: input.accumulator,
     context: {
       rootComponentNodeId: componentNodeId,
+      emittingComponentNodeId: componentNodeId,
+      placementComponentNodeId: componentNodeId,
       boundaryId: rootBoundaryId,
       pathSegments: rootPath.segments,
       certainty: "definite",
@@ -316,6 +343,9 @@ function projectExpandedComponentBoundary(input: {
     boundaryKind: "expanded-component-reference",
     key: `${expansion.componentKey}:${anchorKey(expansion.sourceAnchor)}`,
   });
+  const expandedComponentNodeId = input.accumulator.componentNodeIdByComponentKey.get(
+    expansion.componentKey,
+  );
   const pathSegments: RenderPathSegment[] = [
     ...input.context.pathSegments,
     {
@@ -338,6 +368,7 @@ function projectExpandedComponentBoundary(input: {
   const boundary: RenderedComponentBoundary = {
     id: boundaryId,
     boundaryKind: "expanded-component-reference",
+    ...(expandedComponentNodeId ? { componentNodeId: expandedComponentNodeId } : {}),
     componentKey: expansion.componentKey,
     componentName: expansion.componentName,
     filePath: normalizeProjectPath(expansion.filePath),
@@ -365,6 +396,8 @@ function projectExpandedComponentBoundary(input: {
     accumulator: input.accumulator,
     context: {
       rootComponentNodeId: input.context.rootComponentNodeId,
+      emittingComponentNodeId: expandedComponentNodeId ?? input.context.emittingComponentNodeId,
+      placementComponentNodeId: input.context.rootComponentNodeId,
       boundaryId,
       parentElementId: input.context.parentElementId,
       pathSegments,
@@ -422,6 +455,20 @@ function projectUnresolvedComponentBoundary(input: {
   addBoundary(input.accumulator, boundary);
   addRenderPath(input.accumulator, path);
   linkBoundaryToParent(input.accumulator, boundary);
+
+  if (input.node.className) {
+    projectEmissionSite({
+      accumulator: input.accumulator,
+      classExpression: input.node.className,
+      boundaryId,
+      placementLocation: input.node.placementAnchor,
+      context: {
+        ...input.context,
+        pathSegments,
+      },
+      emissionKind: "unresolved-component-class-prop",
+    });
+  }
 }
 
 function projectElement(input: {
@@ -463,6 +510,12 @@ function projectElement(input: {
     childElementIds: [],
     childBoundaryIds: [],
     emissionSiteIds: [],
+    ...(input.context.emittingComponentNodeId
+      ? { emittingComponentNodeId: input.context.emittingComponentNodeId }
+      : {}),
+    ...(input.context.placementComponentNodeId
+      ? { placementComponentNodeId: input.context.placementComponentNodeId }
+      : {}),
     renderPathId: path.id,
     placementConditionIds: [],
     certainty: input.context.certainty,
@@ -472,6 +525,22 @@ function projectElement(input: {
   addElement(input.accumulator, element);
   addRenderPath(input.accumulator, path);
   linkElementToParent(input.accumulator, element);
+
+  if (input.node.className) {
+    projectEmissionSite({
+      accumulator: input.accumulator,
+      classExpression: input.node.className,
+      element,
+      boundaryId: input.context.boundaryId,
+      emittedElementLocation: input.node.sourceAnchor,
+      placementLocation: input.node.placementAnchor,
+      context: {
+        ...input.context,
+        pathSegments,
+      },
+      emissionKind: "rendered-element-class",
+    });
+  }
 
   input.node.children.forEach((child, childIndex) => {
     projectNode({
@@ -486,6 +555,210 @@ function projectElement(input: {
   });
 
   return [elementId];
+}
+
+function projectEmissionSite(input: {
+  accumulator: ProjectionAccumulator;
+  classExpression: ClassExpressionSummary;
+  element?: RenderedElement;
+  boundaryId: string;
+  emittedElementLocation?: SourceAnchor;
+  placementLocation?: SourceAnchor;
+  context: TraversalContext;
+  emissionKind: EmissionSite["emissionKind"];
+}): void {
+  const symbolicExpression = findSymbolicExpressionForClassSummary(
+    input.accumulator.symbolicExpressions,
+    input.classExpression,
+  );
+  if (!symbolicExpression) {
+    return;
+  }
+
+  const sourceLocation = normalizeAnchor(symbolicExpression.location);
+  const siteKey = `${symbolicExpression.classExpressionSiteNodeId}:${input.element?.id ?? input.boundaryId}`;
+  const id = emissionSiteId({
+    classExpressionId: symbolicExpression.id,
+    key: siteKey,
+  });
+  const path = createRenderPath({
+    id: renderPathId({
+      terminalKind: "emission-site",
+      terminalId: id,
+    }),
+    rootComponentNodeId: input.context.rootComponentNodeId,
+    terminalKind: "emission-site",
+    terminalId: id,
+    segments: input.context.pathSegments,
+    certainty: input.context.certainty,
+    traces: symbolicExpression.traces,
+  });
+  const emissionSite: EmissionSite = {
+    id,
+    emissionKind: input.emissionKind,
+    ...(input.element ? { elementId: input.element.id } : {}),
+    boundaryId: input.boundaryId,
+    classExpressionId: symbolicExpression.id,
+    classExpressionSiteNodeId: symbolicExpression.classExpressionSiteNodeId,
+    sourceExpressionIds: [symbolicExpression.id],
+    sourceLocation,
+    ...(input.emittedElementLocation
+      ? { emittedElementLocation: normalizeAnchor(input.emittedElementLocation) }
+      : {}),
+    ...(input.placementLocation
+      ? { placementLocation: normalizeAnchor(input.placementLocation) }
+      : {}),
+    ...(input.context.emittingComponentNodeId
+      ? { emittingComponentNodeId: input.context.emittingComponentNodeId }
+      : {}),
+    ...(symbolicExpression.emittingComponentNodeId
+      ? { suppliedByComponentNodeId: symbolicExpression.emittingComponentNodeId }
+      : {}),
+    ...(input.context.placementComponentNodeId
+      ? { placementComponentNodeId: input.context.placementComponentNodeId }
+      : {}),
+    tokenProvenance: buildTokenProvenance({
+      expression: symbolicExpression,
+      emittedByComponentNodeId: input.context.emittingComponentNodeId,
+      suppliedByComponentNodeId: symbolicExpression.emittingComponentNodeId,
+    }),
+    tokens: sortTokens(symbolicExpression.tokens),
+    emissionVariants: [...symbolicExpression.emissionVariants].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+    externalContributions: [...symbolicExpression.externalContributions].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+    cssModuleContributions: [...symbolicExpression.cssModuleContributions].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+    unsupported: [...symbolicExpression.unsupported].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+    confidence: symbolicExpression.confidence,
+    renderPathId: path.id,
+    placementConditionIds: [],
+    traces: symbolicExpression.traces,
+  };
+
+  input.accumulator.emissionSites.push(emissionSite);
+  addRenderPath(input.accumulator, path);
+
+  if (input.element) {
+    input.element.emissionSiteIds = uniqueSorted([...input.element.emissionSiteIds, id]);
+    input.element.elementTemplateNodeId ??= symbolicExpression.elementTemplateNodeId;
+    input.element.renderSiteNodeId ??= symbolicExpression.renderSiteNodeId;
+  }
+}
+
+function buildSymbolicExpressionLookup(input: RenderStructureInput): SymbolicExpressionLookup {
+  const byId = new Map<string, CanonicalClassExpression>();
+  const bySiteNodeId = new Map<string, CanonicalClassExpression>();
+  const byExpressionNodeId = new Map<string, CanonicalClassExpression[]>();
+  const byAnchor = new Map<string, CanonicalClassExpression[]>();
+  const siteNodeIdByAnchor = new Map<string, string>();
+  const expressionNodeIdBySiteNodeId = new Map<string, string>();
+
+  for (const site of input.graph.nodes.classExpressionSites) {
+    siteNodeIdByAnchor.set(anchorKey(site.location), site.id);
+    expressionNodeIdBySiteNodeId.set(site.id, site.expressionNodeId);
+  }
+
+  for (const expression of input.symbolicEvaluation.evaluatedExpressions.classExpressions) {
+    byId.set(expression.id, expression);
+    bySiteNodeId.set(expression.classExpressionSiteNodeId, expression);
+    pushMapValue(byExpressionNodeId, expression.expressionNodeId, expression);
+    pushMapValue(byAnchor, anchorKey(expression.location), expression);
+  }
+
+  sortLookupValues(byExpressionNodeId);
+  sortLookupValues(byAnchor);
+
+  return {
+    byId,
+    bySiteNodeId,
+    byExpressionNodeId,
+    byAnchor,
+    siteNodeIdByAnchor,
+    expressionNodeIdBySiteNodeId,
+  };
+}
+
+function findSymbolicExpressionForClassSummary(
+  lookup: SymbolicExpressionLookup,
+  classExpression: ClassExpressionSummary,
+): CanonicalClassExpression | undefined {
+  const sourceAnchorKey = anchorKey(classExpression.sourceAnchor);
+  const siteNodeId = lookup.siteNodeIdByAnchor.get(sourceAnchorKey);
+  if (siteNodeId) {
+    const expression = lookup.bySiteNodeId.get(siteNodeId);
+    if (expression) {
+      return expression;
+    }
+
+    const expressionNodeId = lookup.expressionNodeIdBySiteNodeId.get(siteNodeId);
+    const expressionByExpressionNodeId = expressionNodeId
+      ? lookup.byExpressionNodeId.get(expressionNodeId)?.[0]
+      : undefined;
+    if (expressionByExpressionNodeId) {
+      return expressionByExpressionNodeId;
+    }
+  }
+
+  // Temporary compatibility fallback while legacy render trees only expose source anchors.
+  return lookup.byAnchor.get(sourceAnchorKey)?.[0];
+}
+
+function buildTokenProvenance(input: {
+  expression: CanonicalClassExpression;
+  emittedByComponentNodeId?: string;
+  suppliedByComponentNodeId?: string;
+}): EmissionTokenProvenance[] {
+  return sortTokens(input.expression.tokens).map((token) => ({
+    token: token.token,
+    tokenKind: token.tokenKind,
+    presence: token.presence,
+    sourceExpressionId: input.expression.id,
+    sourceClassExpressionSiteNodeId: input.expression.classExpressionSiteNodeId,
+    ...(token.sourceAnchor ? { sourceLocation: normalizeAnchor(token.sourceAnchor) } : {}),
+    ...(input.suppliedByComponentNodeId
+      ? { suppliedByComponentNodeId: input.suppliedByComponentNodeId }
+      : {}),
+    ...(input.emittedByComponentNodeId
+      ? { emittedByComponentNodeId: input.emittedByComponentNodeId }
+      : {}),
+    conditionId: token.conditionId,
+    confidence: token.confidence,
+  }));
+}
+
+function sortTokens(tokens: TokenAlternative[]): TokenAlternative[] {
+  return [...tokens].sort(
+    (left, right) =>
+      left.token.localeCompare(right.token) ||
+      left.presence.localeCompare(right.presence) ||
+      left.id.localeCompare(right.id),
+  );
+}
+
+function pushMapValue<Key, Value>(map: Map<Key, Value[]>, key: Key, value: Value): void {
+  const values = map.get(key) ?? [];
+  values.push(value);
+  map.set(key, values);
+}
+
+function sortLookupValues(map: Map<string, CanonicalClassExpression[]>): void {
+  for (const [key, values] of map.entries()) {
+    map.set(
+      key,
+      values.sort(
+        (left, right) =>
+          left.id.localeCompare(right.id) ||
+          compareAnchors(left.location, right.location) ||
+          left.rawExpressionText.localeCompare(right.rawExpressionText),
+      ),
+    );
+  }
 }
 
 function projectComponents(input: {
