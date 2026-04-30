@@ -11,6 +11,7 @@ export {
   graphToReactRenderSyntaxInputs,
   graphToStylesheetFilePaths,
 } from "./pipeline/fact-graph/index.js";
+export { evaluateSymbolicExpressions } from "./pipeline/symbolic-evaluation/index.js";
 export { buildModuleFacts } from "./pipeline/module-facts/buildModuleFacts.js";
 export {
   collectAvailableExportedNames,
@@ -129,6 +130,27 @@ export type {
   SelectorNode,
   StyleSheetNode,
 } from "./pipeline/fact-graph/index.js";
+export type {
+  CanonicalClassExpression,
+  CanonicalExpressionKind,
+  Certainty,
+  ClassEmissionVariant,
+  ConditionFact,
+  ConditionId,
+  CssModuleClassContribution,
+  EvaluatedExpressionFacts,
+  EvaluatedExpressionId,
+  EvaluatedExpressionIndexes,
+  ExternalClassContribution,
+  SymbolicEvaluationDiagnostic,
+  SymbolicEvaluationInput,
+  SymbolicEvaluationOptions,
+  SymbolicEvaluationProvenance,
+  SymbolicEvaluationResult,
+  TokenAlternative,
+  UnsupportedReason,
+  UnsupportedReasonCode,
+} from "./pipeline/symbolic-evaluation/index.js";
 export type {
   ActiveExternalCssProvider,
   ExternalCssAnalysisInput,

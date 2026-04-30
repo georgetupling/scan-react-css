@@ -12,10 +12,13 @@ import type { RenderGraph } from "../../pipeline/render-model/render-graph/index
 import type { RenderSubtree } from "../../pipeline/render-model/render-ir/index.js";
 import type { SelectorQueryResult } from "../../pipeline/selector-analysis/index.js";
 import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/index.js";
+import type { SymbolicEvaluationResult } from "../../pipeline/symbolic-evaluation/index.js";
 
 export type LanguageFrontendsStageResult = LanguageFrontendsResult;
 
 export type FactGraphStageResult = FactGraphResult;
+
+export type SymbolicEvaluationStageResult = SymbolicEvaluationResult;
 
 export type ParsedProjectFile = {
   filePath: string;

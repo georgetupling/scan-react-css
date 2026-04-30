@@ -1,0 +1,49 @@
+export { evaluateSymbolicExpressions } from "./evaluateSymbolicExpressions.js";
+export {
+  canonicalClassExpressionId,
+  classEmissionVariantId,
+  conditionId,
+  cssModuleContributionId,
+  externalContributionId,
+  tokenAlternativeId,
+  unsupportedReasonId,
+} from "./ids.js";
+export { buildEvaluatedExpressionIndexes } from "./indexes.js";
+export {
+  createDefaultSymbolicEvaluatorRegistry,
+  createSymbolicEvaluatorRegistry,
+  fallbackClassExpressionEvaluator,
+} from "./registry.js";
+export { createSymbolicEvaluationTrace, traceList } from "./traces.js";
+export {
+  duplicateEvaluatedExpressionIdDiagnostic,
+  missingExpressionSyntaxDiagnostic,
+  sortSymbolicEvaluationDiagnostics,
+  symbolicEvaluationProvenance,
+  unresolvedClassExpressionSiteDiagnostic,
+} from "./diagnostics.js";
+export type {
+  CanonicalClassExpression,
+  CanonicalExpressionKind,
+  Certainty,
+  ClassEmissionVariant,
+  ConditionFact,
+  ConditionId,
+  CssModuleClassContribution,
+  EvaluatedExpressionFacts,
+  EvaluatedExpressionId,
+  EvaluatedExpressionIndexes,
+  ExternalClassContribution,
+  SymbolicEvaluationDiagnostic,
+  SymbolicEvaluationInput,
+  SymbolicEvaluationOptions,
+  SymbolicEvaluationProvenance,
+  SymbolicEvaluationResult,
+  SymbolicEvaluatorRegistry,
+  SymbolicExpressionEvaluator,
+  SymbolicExpressionEvaluatorInput,
+  SymbolicExpressionEvaluatorResult,
+  TokenAlternative,
+  UnsupportedReason,
+  UnsupportedReasonCode,
+} from "./types.js";
