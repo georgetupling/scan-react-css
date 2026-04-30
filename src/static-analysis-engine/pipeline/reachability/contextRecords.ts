@@ -1,10 +1,11 @@
 import type { AnalysisTrace } from "../../types/analysis.js";
-import type { RenderRegion, RenderSubtree } from "../render-model/render-ir/index.js";
+import type { RenderRegion } from "../render-model/render-ir/index.js";
 import type { ReachabilityDerivation, StylesheetReachabilityContextRecord } from "./types.js";
 import type {
   ComponentAvailabilityRecord,
   PlacedChildRenderRegion,
   ReachabilityGraphContext,
+  ReachabilityComponentRoot,
   UnknownReachabilityBarrier,
 } from "./internalTypes.js";
 import { normalizeProjectPath } from "./pathUtils.js";
@@ -102,9 +103,9 @@ export function buildContextRecords(input: {
     if (wholeComponentRegionAvailability) {
       addRenderSubtreeRootContexts({
         contextRecordsByKey,
-        renderSubtrees: [
-          input.reachabilityGraphContext.renderSubtreesByComponentKey.get(componentKey),
-        ].filter((subtree): subtree is RenderSubtree => Boolean(subtree)),
+        componentRoots: [
+          input.reachabilityGraphContext.componentRootsByComponentKey.get(componentKey),
+        ].filter((root): root is ReachabilityComponentRoot => Boolean(root)),
         availability: wholeComponentRegionAvailability.availability,
         reason:
           wholeComponentRegionAvailability.reasons[0] ??
@@ -112,10 +113,10 @@ export function buildContextRecords(input: {
         derivations: wholeComponentRegionAvailability.derivations,
         traces: wholeComponentRegionAvailability.traces,
         includeTraces: input.includeTraces,
-        predicate: (subtree) =>
-          (normalizeProjectPath(subtree.sourceAnchor.filePath) ?? subtree.sourceAnchor.filePath) ===
+        predicate: (root) =>
+          (normalizeProjectPath(root.filePath) ?? root.filePath) ===
             (normalizeProjectPath(node.filePath) ?? node.filePath) &&
-          subtree.componentKey === node.componentKey,
+          root.componentKey === node.componentKey,
       });
       addRenderRegionContexts({
         contextRecordsByKey,
@@ -144,8 +145,8 @@ export function buildContextRecords(input: {
     if (!availableComponentKeys.has(componentKey)) {
       addUnknownBarrierContexts({
         contextRecordsByKey,
-        renderSubtree:
-          input.reachabilityGraphContext.renderSubtreesByComponentKey.get(componentKey),
+        componentRoot:
+          input.reachabilityGraphContext.componentRootsByComponentKey.get(componentKey),
         renderRegions:
           input.reachabilityGraphContext.renderRegionsByComponentKey.get(componentKey) ?? [],
         renderRegionsByPathKey:
@@ -278,16 +279,16 @@ function addPlacedChildRenderRegionContexts(input: {
 
 function addUnknownBarrierContexts(input: {
   contextRecordsByKey: Map<string, StylesheetReachabilityContextRecord>;
-  renderSubtree?: RenderSubtree;
+  componentRoot?: ReachabilityComponentRoot;
   renderRegions: RenderRegion[];
   renderRegionsByPathKey: Map<string, RenderRegion[]>;
   unknownBarriers: UnknownReachabilityBarrier[];
   includeTraces: boolean;
 }): void {
   if (
-    !input.renderSubtree ||
+    !input.componentRoot ||
     input.unknownBarriers.length === 0 ||
-    !input.renderSubtree.componentName
+    !input.componentRoot.componentName
   ) {
     return;
   }
@@ -306,10 +307,9 @@ function addUnknownBarrierContexts(input: {
       context: {
         kind: "component",
         filePath:
-          normalizeProjectPath(input.renderSubtree.sourceAnchor.filePath) ??
-          input.renderSubtree.sourceAnchor.filePath,
-        componentKey: input.renderSubtree.componentKey,
-        componentName: input.renderSubtree.componentName,
+          normalizeProjectPath(input.componentRoot.filePath) ?? input.componentRoot.filePath,
+        componentKey: input.componentRoot.componentKey,
+        componentName: input.componentRoot.componentName,
       },
       availability: "unknown",
       reasons: [
@@ -326,15 +326,14 @@ function addUnknownBarrierContexts(input: {
       context: {
         kind: "render-subtree-root",
         filePath:
-          normalizeProjectPath(input.renderSubtree.sourceAnchor.filePath) ??
-          input.renderSubtree.sourceAnchor.filePath,
-        componentKey: input.renderSubtree.componentKey,
-        componentName: input.renderSubtree.componentName,
+          normalizeProjectPath(input.componentRoot.filePath) ?? input.componentRoot.filePath,
+        componentKey: input.componentRoot.componentKey,
+        componentName: input.componentRoot.componentName,
         rootAnchor: {
-          startLine: input.renderSubtree.root.sourceAnchor.startLine,
-          startColumn: input.renderSubtree.root.sourceAnchor.startColumn,
-          endLine: input.renderSubtree.root.sourceAnchor.endLine,
-          endColumn: input.renderSubtree.root.sourceAnchor.endColumn,
+          startLine: input.componentRoot.rootSourceAnchor.startLine,
+          startColumn: input.componentRoot.rootSourceAnchor.startColumn,
+          endLine: input.componentRoot.rootSourceAnchor.endLine,
+          endColumn: input.componentRoot.rootSourceAnchor.endColumn,
         },
       },
       availability: "unknown",
@@ -543,29 +542,28 @@ function toAnchorPositionValue(line: number, column: number): number {
 
 function addRenderSubtreeRootContexts(input: {
   contextRecordsByKey: Map<string, StylesheetReachabilityContextRecord>;
-  renderSubtrees: RenderSubtree[];
+  componentRoots: ReachabilityComponentRoot[];
   availability: StylesheetReachabilityContextRecord["availability"];
   reason: string;
   derivations: ReachabilityDerivation[];
   traces: AnalysisTrace[];
   includeTraces: boolean;
-  predicate: (subtree: RenderSubtree) => boolean;
+  predicate: (root: ReachabilityComponentRoot) => boolean;
 }): void {
-  for (const subtree of input.renderSubtrees.filter(input.predicate)) {
+  for (const root of input.componentRoots.filter(input.predicate)) {
     addContextRecord(
       input.contextRecordsByKey,
       {
         context: {
           kind: "render-subtree-root",
-          filePath:
-            normalizeProjectPath(subtree.sourceAnchor.filePath) ?? subtree.sourceAnchor.filePath,
-          componentKey: subtree.componentKey,
-          componentName: subtree.componentName,
+          filePath: normalizeProjectPath(root.filePath) ?? root.filePath,
+          componentKey: root.componentKey,
+          componentName: root.componentName,
           rootAnchor: {
-            startLine: subtree.root.sourceAnchor.startLine,
-            startColumn: subtree.root.sourceAnchor.startColumn,
-            endLine: subtree.root.sourceAnchor.endLine,
-            endColumn: subtree.root.sourceAnchor.endColumn,
+            startLine: root.rootSourceAnchor.startLine,
+            startColumn: root.rootSourceAnchor.startColumn,
+            endLine: root.rootSourceAnchor.endLine,
+            endColumn: root.rootSourceAnchor.endColumn,
           },
         },
         availability: input.availability,

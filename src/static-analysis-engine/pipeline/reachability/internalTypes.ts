@@ -1,6 +1,6 @@
 import type { AnalysisTrace } from "../../types/analysis.js";
 import type { RenderGraphEdge, RenderGraphNode } from "../render-model/render-graph/types.js";
-import type { RenderRegion, RenderSubtree } from "../render-model/render-ir/index.js";
+import type { RenderRegion } from "../render-model/render-ir/index.js";
 import type { ExternalCssSummary } from "../external-css/types.js";
 import type { ReachabilityDerivation, StylesheetReachabilityContextRecord } from "./types.js";
 import type { SourceAnchor } from "../../types/core.js";
@@ -25,7 +25,7 @@ export type ReachabilityGraphContext = {
   componentKeys: string[];
   renderRegionsByComponentKey: Map<string, RenderRegion[]>;
   renderRegionsByPathKeyByComponentKey: Map<string, Map<string, RenderRegion[]>>;
-  renderSubtreesByComponentKey: Map<string, RenderSubtree>;
+  componentRootsByComponentKey: Map<string, ReachabilityComponentRoot>;
   unknownBarriersByComponentKey: Map<string, UnknownReachabilityBarrier[]>;
   placedChildRenderRegionsByComponentKey: Map<string, PlacedChildRenderRegion[]>;
   renderGraphNodesByKey: Map<string, RenderGraphNode>;
@@ -49,4 +49,12 @@ export type StylesheetImportRecord = {
   importerFilePath: string;
   specifier: string;
   resolvedFilePath: string;
+};
+
+export type ReachabilityComponentRoot = {
+  filePath: string;
+  componentKey?: string;
+  componentName: string;
+  rootSourceAnchor: SourceAnchor;
+  declarationSourceAnchor: SourceAnchor;
 };

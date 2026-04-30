@@ -213,6 +213,7 @@ export function analyzeProjectSourceTexts(input: {
         factGraph: input.factGraph,
         renderGraph: renderModelStage.renderGraph,
         renderSubtrees: renderModelStage.renderSubtrees,
+        renderModel: renderStructureStage?.renderModel,
         css: input.css,
         selectorCssSources: input.selectorCssSources ?? [],
         resourceEdges: mergedResourceEdges,
