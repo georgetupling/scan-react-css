@@ -17,22 +17,24 @@ export function renderStructureProvenance(input: {
   ];
 }
 
-export function duplicateRenderModelIdDiagnostic(input: {
+export function duplicateRenderStructureIdDiagnostic(input: {
   id: string;
   recordKind: string;
 }): RenderStructureDiagnostic {
   return {
     stage: "render-structure",
     severity: "error",
-    code: "duplicate-render-model-id",
-    message: `Duplicate ${input.recordKind} id in render model: ${input.id}`,
+    code: "duplicate-render-structure-id",
+    message: `Duplicate ${input.recordKind} id in render structure: ${input.id}`,
     provenance: renderStructureProvenance({
-      summary: "Detected duplicate render model id",
+      summary: "Detected duplicate render structure id",
       upstreamId: input.id,
     }),
     traces: [],
   };
 }
+
+export const duplicateRenderModelIdDiagnostic = duplicateRenderStructureIdDiagnostic;
 
 export function sortRenderStructureDiagnostics(
   diagnostics: RenderStructureDiagnostic[],

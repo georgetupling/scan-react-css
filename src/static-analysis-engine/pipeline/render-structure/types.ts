@@ -290,8 +290,8 @@ export type RenderStructureDiagnostic = {
     | "unsupported-component-props"
     | "unsupported-render-syntax"
     | "render-expansion-budget-exceeded"
-    | "duplicate-render-model-id"
-    | "dangling-render-model-reference";
+    | "duplicate-render-structure-id"
+    | "dangling-render-structure-reference";
   message: string;
   filePath?: string;
   location?: SourceAnchor;

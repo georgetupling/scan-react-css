@@ -1,4 +1,4 @@
-import { duplicateRenderModelIdDiagnostic } from "./diagnostics.js";
+import { duplicateRenderStructureIdDiagnostic } from "./diagnostics.js";
 import type {
   EmissionSite,
   PlacementCondition,
@@ -186,7 +186,7 @@ function setUnique<T>(
   diagnostics: RenderStructureDiagnostic[],
 ): void {
   if (map.has(key)) {
-    diagnostics.push(duplicateRenderModelIdDiagnostic({ id: key, recordKind }));
+    diagnostics.push(duplicateRenderStructureIdDiagnostic({ id: key, recordKind }));
   }
 
   map.set(key, value);

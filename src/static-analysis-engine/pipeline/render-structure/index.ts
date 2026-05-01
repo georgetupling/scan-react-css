@@ -1,6 +1,6 @@
 export { buildRenderStructure } from "./buildRenderStructure.js";
 export {
-  duplicateRenderModelIdDiagnostic,
+  duplicateRenderStructureIdDiagnostic,
   renderStructureProvenance,
   sortRenderStructureDiagnostics,
 } from "./diagnostics.js";

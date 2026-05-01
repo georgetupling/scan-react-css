@@ -7,7 +7,7 @@ import type {
 } from "../reachability/types.js";
 import type {
   RenderGraphProjectionEdge,
-  RenderModel as RenderStructureModel,
+  RenderModel,
   UnsupportedClassReferenceDiagnostic,
 } from "../render-structure/types.js";
 import type { RuntimeDomLibraryHint } from "../runtime-dom/types.js";
@@ -391,7 +391,7 @@ export type ProjectEvidenceBuildInput = {
   cssModuleLocalsConvention?: CssModuleLocalsConvention;
   externalCssSummary: ExternalCssSummary;
   reachabilitySummary: import("../reachability/types.js").ReachabilitySummary;
-  renderModel: RenderStructureModel;
+  renderModel: RenderModel;
   unsupportedClassReferences?: UnsupportedClassReferenceDiagnostic[];
   symbolicEvaluation?: SymbolicEvaluationResult;
   selectorReachability?: SelectorReachabilityResult;

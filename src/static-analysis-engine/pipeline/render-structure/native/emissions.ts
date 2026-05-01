@@ -148,7 +148,7 @@ export function buildNativeEmissionSites(input: {
       if (!basePath) {
         diagnostics.push(
           buildDiagnostic({
-            code: "dangling-render-model-reference",
+            code: "dangling-render-structure-reference",
             message: "class expression site resolved to a missing render path",
             classSite,
             evaluatedExpressionId: expression.id,
