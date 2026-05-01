@@ -1,6 +1,12 @@
 import type { AnalysisTrace, SourceAnchor } from "../../static-analysis-engine/index.js";
 import type { RuleContext, RuleDefinition, UnresolvedFinding } from "../types.js";
-import { isIntentionallySharedStylesheetPath } from "./ownershipRuleUtils.js";
+import {
+  getClassOwnershipEvidence,
+  getOwnerCandidateId,
+  getOwnerCandidateKind,
+  isIntentionallySharedStylesheetPath,
+  type RuleClassOwnershipEvidence,
+} from "./ownershipRuleUtils.js";
 
 const COLOCATION_REASONS = new Set([
   "same-directory",
@@ -19,7 +25,7 @@ export const singleComponentStyleNotColocatedRule: RuleDefinition = {
 function runSingleComponentStyleNotColocatedRule(context: RuleContext): UnresolvedFinding[] {
   const groups = new Map<string, NotColocatedFindingGroup>();
 
-  for (const ownership of context.analysis.entities.classOwnership) {
+  for (const ownership of getClassOwnershipEvidence(context)) {
     const definition = context.analysis.indexes.classDefinitionsById.get(
       ownership.classDefinitionId,
     );
@@ -98,18 +104,18 @@ function runSingleComponentStyleNotColocatedRule(context: RuleContext): Unresolv
 }
 
 function hasColocationEvidence(
-  ownership: RuleContext["analysis"]["entities"]["classOwnership"][number],
+  ownership: RuleClassOwnershipEvidence,
   componentId: string,
 ): boolean {
   return ownership.ownerCandidates.some(
     (candidate) =>
-      candidate.kind === "component" &&
-      candidate.id === componentId &&
+      getOwnerCandidateKind(candidate) === "component" &&
+      getOwnerCandidateId(candidate) === componentId &&
       candidate.reasons.some((reason) => COLOCATION_REASONS.has(reason)),
   );
 }
 
-type ClassOwnership = RuleContext["analysis"]["entities"]["classOwnership"][number];
+type ClassOwnership = RuleClassOwnershipEvidence;
 type ComponentAnalysis = RuleContext["analysis"]["entities"]["components"][number];
 
 type NotColocatedFindingGroup = {
@@ -237,7 +243,7 @@ function sortLocations(locations: SourceAnchor[]): SourceAnchor[] {
 }
 
 function buildNotColocatedTraces(input: {
-  ownership: RuleContext["analysis"]["entities"]["classOwnership"][number];
+  ownership: RuleClassOwnershipEvidence;
   componentName: string;
   stylesheetFilePath?: string;
 }): AnalysisTrace[] {

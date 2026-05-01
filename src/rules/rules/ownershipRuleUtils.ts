@@ -1,3 +1,9 @@
+import type {
+  ClassOwnershipEvidence,
+  StyleOwnerCandidate,
+} from "../../static-analysis-engine/index.js";
+import type { RuleContext } from "../types.js";
+
 const BROAD_STYLESHEET_SEGMENTS = new Set([
   "common",
   "design-system",
@@ -18,6 +24,35 @@ const PRIVATE_OWNER_REASONS = new Set([
   "sibling-basename-convention",
   "component-folder-convention",
 ]);
+
+export type RuleClassOwnershipEvidence = ClassOwnershipEvidence & {
+  ownerCandidates: StyleOwnerCandidate[];
+};
+
+type OwnerCandidateLike = {
+  kind?: string;
+  ownerKind?: string;
+  confidence: string;
+  reasons: string[];
+  id?: string;
+  ownerId?: string;
+};
+
+export function getClassOwnershipEvidence(context: RuleContext): RuleClassOwnershipEvidence[] {
+  const ownershipInference = context.analysis.evidence.ownershipInference;
+  if (!ownershipInference) {
+    return [];
+  }
+
+  return ownershipInference.classOwnership
+    .map((ownership) => ({
+      ...ownership,
+      ownerCandidates: ownership.ownerCandidateIds
+        .map((candidateId) => ownershipInference.indexes.ownerCandidateById.get(candidateId))
+        .filter((candidate): candidate is StyleOwnerCandidate => Boolean(candidate)),
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
 
 export function isIntentionallyBroadStylesheetPath(filePath: string | undefined): boolean {
   if (!filePath) {
@@ -58,37 +93,35 @@ export function isIntentionallySharedStylesheetPath(input: {
 }
 
 export function hasPrivateComponentOwnerEvidence(input: {
-  ownerCandidates: Array<{
-    kind: string;
-    confidence: string;
-    reasons: string[];
-    id?: string;
-  }>;
+  ownerCandidates: OwnerCandidateLike[];
 }): boolean {
   return input.ownerCandidates.some(
     (candidate) =>
-      candidate.kind === "component" &&
-      candidate.id &&
+      getOwnerCandidateKind(candidate) === "component" &&
+      getOwnerCandidateId(candidate) &&
       candidate.confidence === "high" &&
       candidate.reasons.some((reason) => PRIVATE_OWNER_REASONS.has(reason)),
   );
 }
 
-export function findPrivateComponentOwnerCandidate<
-  TCandidate extends {
-    kind: string;
-    confidence: string;
-    reasons: string[];
-    id?: string;
-  },
->(candidates: TCandidate[]): TCandidate | undefined {
+export function findPrivateComponentOwnerCandidate<TCandidate extends OwnerCandidateLike>(
+  candidates: TCandidate[],
+): TCandidate | undefined {
   return candidates.find(
     (candidate) =>
-      candidate.kind === "component" &&
-      candidate.id &&
+      getOwnerCandidateKind(candidate) === "component" &&
+      getOwnerCandidateId(candidate) &&
       candidate.confidence === "high" &&
       candidate.reasons.some((reason) => PRIVATE_OWNER_REASONS.has(reason)),
   );
+}
+
+export function getOwnerCandidateId(candidate: OwnerCandidateLike): string | undefined {
+  return candidate.ownerId ?? candidate.id;
+}
+
+export function getOwnerCandidateKind(candidate: OwnerCandidateLike): string | undefined {
+  return candidate.ownerKind ?? candidate.kind;
 }
 
 export function isOwnerFamilyConsumer(input: {

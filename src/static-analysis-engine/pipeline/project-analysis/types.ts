@@ -13,6 +13,7 @@ import type {
 import type { RuntimeDomLibraryHint } from "../runtime-dom/types.js";
 import type { SelectorConstraint, SelectorQueryResult } from "../selector-analysis/types.js";
 import type { SelectorReachabilityResult } from "../selector-reachability/types.js";
+import type { OwnershipInferenceResult } from "../ownership-inference/types.js";
 import type { FactGraphResult } from "../fact-graph/types.js";
 import type { SymbolicEvaluationResult } from "../symbolic-evaluation/types.js";
 import type { AnalysisConfidence, AnalysisTrace } from "../../types/analysis.js";
@@ -54,6 +55,7 @@ export type ProjectAnalysisInputs = {
 
 export type ProjectAnalysisEvidence = {
   selectorReachability?: SelectorReachabilityResult;
+  ownershipInference?: OwnershipInferenceResult;
 };
 
 export type SourceFileRecord = {

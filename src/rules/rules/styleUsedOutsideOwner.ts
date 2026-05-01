@@ -2,9 +2,12 @@ import type { AnalysisTrace, SourceAnchor } from "../../static-analysis-engine/i
 import type { RuleContext, RuleDefinition, UnresolvedFinding } from "../types.js";
 import {
   findPrivateComponentOwnerCandidate,
+  getClassOwnershipEvidence,
+  getOwnerCandidateId,
   isContextualPrimitiveOverrideClass,
   isGenericStateClassToken,
   isOwnerFamilyConsumer,
+  type RuleClassOwnershipEvidence,
 } from "./ownershipRuleUtils.js";
 
 export const styleUsedOutsideOwnerRule: RuleDefinition = {
@@ -17,7 +20,7 @@ export const styleUsedOutsideOwnerRule: RuleDefinition = {
 function runStyleUsedOutsideOwnerRule(context: RuleContext): UnresolvedFinding[] {
   const groups = new Map<string, OutsideOwnerFindingGroup>();
 
-  for (const ownership of context.analysis.entities.classOwnership) {
+  for (const ownership of getClassOwnershipEvidence(context)) {
     const definition = context.analysis.indexes.classDefinitionsById.get(
       ownership.classDefinitionId,
     );
@@ -32,7 +35,12 @@ function runStyleUsedOutsideOwnerRule(context: RuleContext): UnresolvedFinding[]
     }
 
     const ownerCandidate = findPrivateComponentOwnerCandidate(ownership.ownerCandidates);
-    if (!ownerCandidate?.id) {
+    if (!ownerCandidate) {
+      continue;
+    }
+
+    const ownerComponentId = getOwnerCandidateId(ownerCandidate);
+    if (!ownerComponentId) {
       continue;
     }
 
@@ -40,7 +48,7 @@ function runStyleUsedOutsideOwnerRule(context: RuleContext): UnresolvedFinding[]
       continue;
     }
 
-    const ownerComponent = context.analysis.indexes.componentsById.get(ownerCandidate.id);
+    const ownerComponent = context.analysis.indexes.componentsById.get(ownerComponentId);
     if (!ownerComponent) {
       continue;
     }
@@ -130,7 +138,7 @@ function runStyleUsedOutsideOwnerRule(context: RuleContext): UnresolvedFinding[]
 }
 
 function buildOutsideOwnerTraces(input: {
-  ownership: RuleContext["analysis"]["entities"]["classOwnership"][number];
+  ownership: RuleClassOwnershipEvidence;
   ownerName: string;
   consumerNames: string[];
   stylesheetFilePath?: string;
@@ -159,7 +167,7 @@ function buildOutsideOwnerTraces(input: {
   ];
 }
 
-type ClassOwnership = RuleContext["analysis"]["entities"]["classOwnership"][number];
+type ClassOwnership = RuleClassOwnershipEvidence;
 type ComponentAnalysis = RuleContext["analysis"]["entities"]["components"][number];
 
 type OutsideOwnerFindingGroup = {

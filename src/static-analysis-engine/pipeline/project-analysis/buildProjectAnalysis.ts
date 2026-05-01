@@ -115,6 +115,7 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
     },
     evidence: {
       ...(input.selectorReachability ? { selectorReachability: input.selectorReachability } : {}),
+      ownershipInference,
     },
     entities: {
       sourceFiles,

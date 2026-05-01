@@ -1,8 +1,10 @@
 import type { AnalysisTrace, SourceAnchor } from "../../static-analysis-engine/index.js";
 import type { RuleContext, RuleDefinition, UnresolvedFinding } from "../types.js";
 import {
+  getClassOwnershipEvidence,
   hasPrivateComponentOwnerEvidence,
   isIntentionallySharedStylesheetForConsumers,
+  type RuleClassOwnershipEvidence,
 } from "./ownershipRuleUtils.js";
 
 export const styleSharedWithoutSharedOwnerRule: RuleDefinition = {
@@ -15,7 +17,7 @@ export const styleSharedWithoutSharedOwnerRule: RuleDefinition = {
 function runStyleSharedWithoutSharedOwnerRule(context: RuleContext): UnresolvedFinding[] {
   const groups = new Map<string, SharedWithoutOwnerFindingGroup>();
 
-  for (const ownership of context.analysis.entities.classOwnership) {
+  for (const ownership of getClassOwnershipEvidence(context)) {
     const definition = context.analysis.indexes.classDefinitionsById.get(
       ownership.classDefinitionId,
     );
@@ -97,7 +99,7 @@ function runStyleSharedWithoutSharedOwnerRule(context: RuleContext): UnresolvedF
 }
 
 function buildSharedWithoutOwnerTraces(input: {
-  ownership: RuleContext["analysis"]["entities"]["classOwnership"][number];
+  ownership: RuleClassOwnershipEvidence;
   componentNames: string[];
   stylesheetFilePath?: string;
 }): AnalysisTrace[] {
@@ -124,7 +126,7 @@ function buildSharedWithoutOwnerTraces(input: {
   ];
 }
 
-type ClassOwnership = RuleContext["analysis"]["entities"]["classOwnership"][number];
+type ClassOwnership = RuleClassOwnershipEvidence;
 type ComponentAnalysis = RuleContext["analysis"]["entities"]["components"][number];
 
 type SharedWithoutOwnerFindingGroup = {
