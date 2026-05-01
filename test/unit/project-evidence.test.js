@@ -61,3 +61,177 @@ test("project evidence assembly returns deterministic empty facts", () => {
   assert.equal(result.indexes.diagnosticById.size, 0);
   assert.equal(result.indexes.diagnosticsByTargetId.size, 0);
 });
+
+test("project evidence assembly sorts relations and builds relation indexes", () => {
+  const result = buildProjectEvidence({
+    entities: {
+      sourceFiles: [
+        { id: "source:b", filePath: "src/B.tsx", moduleKind: "source" },
+        { id: "source:a", filePath: "src/A.tsx", moduleKind: "source" },
+      ],
+      stylesheets: [
+        {
+          id: "stylesheet:b",
+          filePath: "src/b.css",
+          origin: "project-css",
+          definitions: [],
+          selectors: [],
+        },
+        {
+          id: "stylesheet:a",
+          filePath: "src/a.css",
+          origin: "project-css",
+          definitions: [],
+          selectors: [],
+        },
+      ],
+      components: [
+        {
+          id: "component:b",
+          componentKey: "src/B.tsx#B",
+          filePath: "src/B.tsx",
+          componentName: "B",
+          exported: true,
+          location: anchor("src/B.tsx", 1, 1),
+        },
+        {
+          id: "component:a",
+          componentKey: "src/A.tsx#A",
+          filePath: "src/A.tsx",
+          componentName: "A",
+          exported: true,
+          location: anchor("src/A.tsx", 1, 1),
+        },
+      ],
+      classDefinitions: [
+        classDefinition("definition:b", "stylesheet:b", "button"),
+        classDefinition("definition:a", "stylesheet:a", "button"),
+      ],
+      classReferences: [
+        classReference("reference:b", "source:b", "component:b", "button"),
+        classReference("reference:a", "source:a", "component:a", "button"),
+      ],
+      selectorBranches: [
+        selectorBranch("selector-branch:b", "stylesheet:b"),
+        selectorBranch("selector-branch:a", "stylesheet:a"),
+      ],
+    },
+    relations: {
+      referenceMatches: [
+        referenceMatch("reference-match:b", "reference:b", "definition:b", "button"),
+        referenceMatch("reference-match:a", "reference:a", "definition:a", "button"),
+      ],
+      stylesheetReachability: [
+        stylesheetReachability("stylesheet:b", "source:b", "component:b", "possible"),
+        stylesheetReachability("stylesheet:a", "source:a", "component:a", "definite"),
+      ],
+    },
+  });
+
+  assert.deepEqual(
+    result.relations.referenceMatches.map((match) => match.id),
+    ["reference-match:a", "reference-match:b"],
+  );
+  assert.deepEqual(result.indexes.classDefinitionIdsByClassName.get("button"), [
+    "definition:a",
+    "definition:b",
+  ]);
+  assert.deepEqual(result.indexes.classReferenceIdsByClassName.get("button"), [
+    "reference:a",
+    "reference:b",
+  ]);
+  assert.deepEqual(result.indexes.classReferenceMatchIdsByDefinitionId.get("definition:a"), [
+    "reference-match:a",
+  ]);
+  assert.deepEqual(result.indexes.classReferenceMatchIdsByReferenceId.get("reference:b"), [
+    "reference-match:b",
+  ]);
+  assert.deepEqual(result.indexes.selectorBranchIdsByStylesheetId.get("stylesheet:a"), [
+    "selector-branch:a",
+  ]);
+  assert.deepEqual(result.indexes.stylesheetReachabilityIdsByStylesheetId.get("stylesheet:a"), [
+    "project-evidence:stylesheet-reachability:stylesheet:a:source:a:component:a:definite",
+  ]);
+});
+
+function anchor(filePath, startLine, startColumn) {
+  return { filePath, startLine, startColumn };
+}
+
+function classDefinition(id, stylesheetId, className) {
+  return {
+    id,
+    stylesheetId,
+    className,
+    selectorText: `.${className}`,
+    selectorKind: "simple-root",
+    line: 1,
+    atRuleContext: [],
+    declarationProperties: [],
+    declarationSignature: "",
+    isCssModule: false,
+    sourceDefinition: {},
+  };
+}
+
+function classReference(id, sourceFileId, componentId, className) {
+  return {
+    id,
+    sourceFileId,
+    componentId,
+    location: anchor("src/App.tsx", 1, 1),
+    origin: "render-ir",
+    expressionKind: "exact-string",
+    rawExpressionText: `"${className}"`,
+    definiteClassNames: [className],
+    possibleClassNames: [],
+    unknownDynamic: false,
+    confidence: "high",
+    traces: [],
+    sourceSummary: {},
+  };
+}
+
+function selectorBranch(id, stylesheetId) {
+  return {
+    id,
+    selectorQueryId: `query:${id}`,
+    stylesheetId,
+    selectorText: ".button",
+    selectorListText: ".button",
+    branchIndex: 0,
+    branchCount: 1,
+    ruleKey: `rule:${id}`,
+    outcome: "matchable",
+    status: "supported",
+    confidence: "high",
+    traces: [],
+    sourceQuery: {},
+  };
+}
+
+function referenceMatch(id, referenceId, definitionId, className) {
+  return {
+    id,
+    referenceId,
+    definitionId,
+    className,
+    referenceClassKind: "definite",
+    reachability: "definite",
+    matchKind: "reachable-stylesheet",
+    reasons: [],
+    traces: [],
+  };
+}
+
+function stylesheetReachability(stylesheetId, sourceFileId, componentId, availability) {
+  return {
+    stylesheetId,
+    sourceFileId,
+    componentId,
+    availability,
+    contexts: [],
+    reasons: [],
+    traces: [],
+  };
+}

@@ -1,25 +1,20 @@
 import type { ProjectAnalysis, ProjectAnalysisBuildInput } from "./types.js";
-import { buildCssModuleMemberMatches } from "./entities/cssModules.js";
 import {
   createEmptyIndexes,
   indexEntities,
   indexRelations,
   indexClassOwnership,
 } from "./internal/indexes.js";
-import { buildProjectEvidence, buildProjectEvidenceEntities } from "../project-evidence/index.js";
-import { buildStylesheetReachability } from "./relations/stylesheetReachability.js";
-import { buildReferenceMatches } from "./relations/referenceMatches.js";
 import {
-  buildProviderClassSatisfactions,
-  buildSelectorMatches,
-} from "./relations/providerAndSelectorMatches.js";
+  buildProjectEvidence,
+  buildProjectEvidenceEntities,
+  buildProjectEvidenceRelations,
+} from "../project-evidence/index.js";
 import { buildClassOwnership } from "./relations/classOwnership.js";
-import { buildModuleImports, buildComponentRenders } from "./relations/moduleAndComponent.js";
 
 export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectAnalysis {
   const includeTraces = input.includeTraces ?? true;
   const indexes = createEmptyIndexes();
-  const renderGraph = input.renderModel.renderGraph;
   const projectEvidence = buildProjectEvidence({
     entities: buildProjectEvidenceEntities({
       projectInput: input,
@@ -45,7 +40,6 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
     cssModuleMemberReferences,
     cssModuleReferenceDiagnostics,
   } = projectEvidence.entities;
-
   indexEntities({
     sourceFiles,
     stylesheets,
@@ -64,26 +58,24 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
     cssModuleReferenceDiagnostics,
     indexes,
   });
-  const stylesheetReachability = buildStylesheetReachability(input, indexes, includeTraces);
-  const referenceMatches = buildReferenceMatches({
-    references: classReferences,
-    definitions: classDefinitions,
-    reachability: stylesheetReachability,
-    indexes,
-    includeTraces,
+  const projectEvidenceWithRelations = buildProjectEvidence({
+    entities: projectEvidence.entities,
+    relations: buildProjectEvidenceRelations({
+      projectInput: input,
+      entities: projectEvidence.entities,
+      indexes,
+      includeTraces,
+    }),
   });
-  const providerClassSatisfactions = buildProviderClassSatisfactions({
-    references: classReferences,
-    input,
-    includeTraces,
-  });
-  const selectorMatches = buildSelectorMatches(selectorQueries, includeTraces);
-  const cssModuleMemberMatches = buildCssModuleMemberMatches({
-    references: cssModuleMemberReferences,
-    indexes,
-    localsConvention: input.cssModuleLocalsConvention,
-    includeTraces,
-  });
+  const {
+    moduleImports,
+    componentRenders,
+    stylesheetReachability,
+    referenceMatches,
+    selectorMatches,
+    providerClassSatisfactions,
+    cssModuleMemberMatches,
+  } = projectEvidenceWithRelations.relations;
   const classOwnership = buildClassOwnership({
     input,
     definitions: classDefinitions,
@@ -138,8 +130,8 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
       cssModuleReferenceDiagnostics,
     },
     relations: {
-      moduleImports: buildModuleImports(input, indexes),
-      componentRenders: buildComponentRenders(renderGraph.edges, indexes, includeTraces),
+      moduleImports,
+      componentRenders,
       stylesheetReachability,
       referenceMatches,
       selectorMatches,

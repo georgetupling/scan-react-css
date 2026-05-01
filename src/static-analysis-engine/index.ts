@@ -76,6 +76,7 @@ export {
 export {
   buildProjectEvidence,
   buildProjectEvidenceEntities,
+  buildProjectEvidenceRelations,
   projectEvidenceDiagnosticId,
   stylesheetReachabilityEvidenceId,
 } from "./pipeline/project-evidence/index.js";
