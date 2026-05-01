@@ -1,8 +1,10 @@
 export { buildProjectEvidence } from "./buildProjectEvidence.js";
+export { buildProjectEvidenceAssembly } from "./buildProjectEvidenceAssembly.js";
 export { buildProjectEvidenceEntities } from "./entities.js";
 export { buildProjectEvidenceRelations } from "./relations.js";
 export { createEmptyIndexes, indexEntities } from "./internal/indexes.js";
 export type { ProjectEvidenceAssemblyInput } from "./buildProjectEvidence.js";
+export type { BuildProjectEvidenceAssemblyInput } from "./buildProjectEvidenceAssembly.js";
 export { projectEvidenceDiagnosticId, stylesheetReachabilityEvidenceId } from "./ids.js";
 export type {
   ClassContextAnalysis,
