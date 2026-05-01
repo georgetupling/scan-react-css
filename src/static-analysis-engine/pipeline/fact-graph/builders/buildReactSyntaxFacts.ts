@@ -298,6 +298,7 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
         ...(classSite.runtimeDomLibraryHint
           ? { runtimeDomLibraryHint: classSite.runtimeDomLibraryHint }
           : {}),
+        ...(classSite.componentPropName ? { componentPropName: classSite.componentPropName } : {}),
         ...(classSite.emittingComponentKey
           ? { emittingComponentNodeId: componentNodeId(classSite.emittingComponentKey) }
           : {}),

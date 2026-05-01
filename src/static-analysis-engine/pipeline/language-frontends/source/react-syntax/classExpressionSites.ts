@@ -67,6 +67,7 @@ export function tryCreateJsxClassExpressionSite(input: {
       rawExpressionText: anchorNode.getText(input.sourceFile),
       ...(emittingComponentKey ? { emittingComponentKey } : {}),
       ...(placementComponentKey ? { placementComponentKey } : {}),
+      ...(!isIntrinsicTagName(tagName) ? { componentPropName: "className" } : {}),
       ...(input.renderSite ? { renderSiteKey: input.renderSite.siteKey } : {}),
       ...(input.template ? { elementTemplateKey: input.template.templateKey } : {}),
     },

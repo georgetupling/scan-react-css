@@ -14,6 +14,8 @@ import {
   buildConditions,
 } from "./canonicalClassExpressionBuilder.js";
 import type { ExpressionSyntaxNode } from "../../fact-graph/index.js";
+import { conditionId, externalContributionId } from "../ids.js";
+import type { ExternalClassContribution } from "../types.js";
 import type { SymbolicExpressionEvaluator, SymbolicExpressionEvaluatorInput } from "../types.js";
 
 const MAX_STRING_COMBINATIONS = 32;
@@ -37,6 +39,11 @@ export const normalizedClassExpressionEvaluator: SymbolicExpressionEvaluator = {
       value,
       rawExpressionText: input.expressionSyntax.rawText,
       provenanceSummary: "Evaluated class expression from normalized graph expression syntax",
+    });
+    expression.externalContributions = buildExternalContributions({
+      input,
+      expression,
+      syntax: input.expressionSyntax,
     });
 
     return {
@@ -125,6 +132,80 @@ function summarizeNormalizedClassExpression(input: {
         reason: `unsupported-expression:${expression.expressionKind}`,
       };
   }
+}
+
+function buildExternalContributions(input: {
+  input: SymbolicExpressionEvaluatorInput;
+  expression: { id: string };
+  syntax: ExpressionSyntaxNode;
+}): ExternalClassContribution[] {
+  const syntax = input.syntax;
+  const componentNodeId = input.input.classExpressionSite.emittingComponentNodeId;
+  if (!componentNodeId) {
+    return [];
+  }
+  const bindingNodeId =
+    input.input.graph.indexes.componentPropBindingNodeIdByComponentNodeId.get(componentNodeId);
+  const bindingNode = bindingNodeId
+    ? input.input.graph.indexes.nodesById.get(bindingNodeId)
+    : undefined;
+  if (!bindingNode || bindingNode.kind !== "component-prop-binding") {
+    return [];
+  }
+
+  const pushContribution = (
+    contributionKey: string,
+    payload: Omit<ExternalClassContribution, "id">,
+  ): ExternalClassContribution[] => [
+    {
+      id: externalContributionId({
+        expressionId: input.expression.id,
+        contributionKey,
+        index: 0,
+      }),
+      ...payload,
+    },
+  ];
+
+  if (bindingNode.bindingKind === "destructured-props" && syntax.expressionKind === "identifier") {
+    const property = bindingNode.properties.find(
+      (candidate) => candidate.localName === syntax.name,
+    );
+    if (!property) {
+      return [];
+    }
+    return pushContribution(property.propertyName, {
+      contributionKind: "component-prop",
+      localName: property.localName,
+      propertyName: property.propertyName,
+      sourceAnchor: syntax.location,
+      conditionId: conditionId({ expressionId: input.expression.id, conditionKey: "always" }),
+      confidence: "high",
+      reason: `component prop "${property.propertyName}" via destructured binding`,
+    });
+  }
+
+  if (bindingNode.bindingKind === "props-identifier" && syntax.expressionKind === "member-access") {
+    const objectExpression = getExpressionSyntax(input.input, syntax.objectExpressionId);
+    if (
+      !objectExpression ||
+      objectExpression.expressionKind !== "identifier" ||
+      objectExpression.name !== bindingNode.identifierName
+    ) {
+      return [];
+    }
+    return pushContribution(syntax.propertyName, {
+      contributionKind: "component-prop",
+      localName: bindingNode.identifierName,
+      propertyName: syntax.propertyName,
+      sourceAnchor: syntax.location,
+      conditionId: conditionId({ expressionId: input.expression.id, conditionKey: "always" }),
+      confidence: "high",
+      reason: `component prop "${syntax.propertyName}" via props member access`,
+    });
+  }
+
+  return [];
 }
 
 function summarizeTemplateExpressionSyntax(input: {

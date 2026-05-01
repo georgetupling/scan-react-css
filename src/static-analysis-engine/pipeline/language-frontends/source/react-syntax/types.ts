@@ -59,6 +59,7 @@ export type ReactClassExpressionSiteFact = {
   rawExpressionText: string;
   emittingComponentKey?: string;
   placementComponentKey?: string;
+  componentPropName?: string;
   renderSiteKey?: string;
   elementTemplateKey?: string;
 };

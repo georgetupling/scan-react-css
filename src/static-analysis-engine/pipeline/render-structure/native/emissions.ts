@@ -224,6 +224,7 @@ type ComponentPropSupply = {
   classSite: RenderStructureInput["graph"]["nodes"]["classExpressionSites"][number];
   expression: RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number];
   suppliedByComponentNodeId?: string;
+  componentPropName?: string;
   consumed: boolean;
 };
 
@@ -324,6 +325,7 @@ function buildComponentPropSuppliesByBoundaryId(input: {
         expression,
         suppliedByComponentNodeId:
           expression.emittingComponentNodeId ?? classSite.emittingComponentNodeId,
+        componentPropName: classSite.componentPropName,
         consumed: false,
       });
     }
@@ -353,7 +355,22 @@ function instantiateExternalContributionEmissionSite(input: {
     return undefined;
   }
 
-  const supply = input.componentPropSupplies.find((candidate) => !candidate.consumed);
+  const fallbackSupply = input.componentPropSupplies.find((candidate) => !candidate.consumed);
+  const contributionPropNames = new Set(
+    input.expression.externalContributions
+      .map((contribution) => contribution.propertyName ?? contribution.localName)
+      .filter((name): name is string => Boolean(name)),
+  );
+  const matchedSupply =
+    contributionPropNames.size > 0
+      ? input.componentPropSupplies.find(
+          (candidate) =>
+            !candidate.consumed &&
+            candidate.componentPropName &&
+            contributionPropNames.has(candidate.componentPropName),
+        )
+      : undefined;
+  const supply = matchedSupply ?? fallbackSupply;
   if (!supply) {
     return undefined;
   }

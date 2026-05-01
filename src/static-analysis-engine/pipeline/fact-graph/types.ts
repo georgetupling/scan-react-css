@@ -206,6 +206,7 @@ export type ClassExpressionSiteNode = FactNodeBase & {
   rawExpressionText: string;
   runtimeDomClassText?: string;
   runtimeDomLibraryHint?: RuntimeDomLibraryHint;
+  componentPropName?: string;
   emittingComponentNodeId?: FactNodeId;
   placementComponentNodeId?: FactNodeId;
   renderSiteNodeId?: FactNodeId;
