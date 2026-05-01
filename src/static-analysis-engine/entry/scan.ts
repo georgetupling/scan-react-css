@@ -147,7 +147,6 @@ export function analyzeProjectSourceTexts(input: {
       })),
     );
   const cssFrontendFacts = input.css ?? syntheticFrontends?.css;
-  const parsedFiles = sourceFrontendFacts.files.map((file) => file.legacy.parsedFile);
   const factGraphStage: FactGraphResult =
     input.factGraph ??
     runAnalysisStage(progress, "fact-graph", "Building fact graph", () => {
@@ -208,9 +207,6 @@ export function analyzeProjectSourceTexts(input: {
       runRenderStructureStage({
         factGraph: factGraphStage,
         symbolicEvaluation: symbolicEvaluationStage,
-        parsedFiles,
-        moduleFacts: moduleFactsStage.moduleFacts,
-        symbolResolution: symbolResolutionStage,
         includeTraces,
       }),
   );

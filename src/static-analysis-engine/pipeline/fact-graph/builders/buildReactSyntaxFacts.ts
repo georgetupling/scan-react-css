@@ -13,7 +13,11 @@ import type {
   RenderSiteNode,
 } from "../types.js";
 import type { RuntimeDomLibraryHint } from "../../language-frontends/types.js";
-import type { ReactClassExpressionSiteFact } from "../../language-frontends/source/react-syntax/index.js";
+import type {
+  ReactClassExpressionSiteFact,
+  ReactComponentDeclarationFact,
+  ReactElementTemplateFact,
+} from "../../language-frontends/source/react-syntax/index.js";
 import {
   classExpressionSiteNodeId,
   componentNodeId,
@@ -69,6 +73,7 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
   const contains: ContainsEdge[] = [];
   const renders: RendersEdge[] = [];
   const referencesClassExpression: ReferencesClassExpressionEdge[] = [];
+  const componentResolution = buildComponentResolutionContext(input);
 
   for (const file of input.frontends.source.files) {
     const moduleId = moduleNodeId(file.filePath);
@@ -84,6 +89,10 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
         exported: component.exported,
         declarationKind: component.declarationKind,
         location: component.location,
+        ...(component.rendersChildrenProp ? { rendersChildrenProp: true } : {}),
+        ...(component.renderedPropNames?.length
+          ? { renderedPropNames: [...component.renderedPropNames].sort() }
+          : {}),
         confidence: "high",
         provenance: frontendFileProvenance({
           filePath: component.filePath,
@@ -119,6 +128,9 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
         kind: "helper-definition",
         ownerNodeId,
         ...(helper.returnExpressionId ? { returnExpressionNodeId: helper.returnExpressionId } : {}),
+        ...(helper.returnExpressionIds
+          ? { returnExpressionNodeIds: [...helper.returnExpressionIds] }
+          : {}),
         confidence: "high",
         provenance: frontendFileProvenance({
           filePath: helper.filePath,
@@ -183,15 +195,34 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
         ...(renderSite.parentSiteKey
           ? { parentRenderSiteNodeId: renderSiteNodeId(renderSite.parentSiteKey) }
           : {}),
+        ...(renderSite.parentRenderRelation
+          ? { parentRenderRelation: renderSite.parentRenderRelation }
+          : {}),
+        ...(renderSite.parentRenderAttributeName
+          ? { parentRenderAttributeName: renderSite.parentRenderAttributeName }
+          : {}),
         ...(renderSite.repeatedRegion
           ? {
               repeatedRegion: {
                 repeatKind: renderSite.repeatedRegion.repeatKind,
                 sourceText: renderSite.repeatedRegion.sourceText,
                 sourceLocation: renderSite.repeatedRegion.sourceLocation,
+                ...(renderSite.repeatedRegion.callbackParameterNames?.length
+                  ? {
+                      callbackParameterNames: [
+                        ...renderSite.repeatedRegion.callbackParameterNames,
+                      ].sort(),
+                    }
+                  : {}),
                 certainty: renderSite.repeatedRegion.certainty,
               },
             }
+          : {}),
+        ...(renderSite.conditionExpressionId
+          ? { conditionExpressionId: renderSite.conditionExpressionId }
+          : {}),
+        ...(renderSite.conditionSourceText
+          ? { conditionSourceText: renderSite.conditionSourceText }
           : {}),
         confidence: "high",
         provenance: frontendFileProvenance({
@@ -222,6 +253,13 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
 
     for (const template of file.reactSyntax.elementTemplates) {
       const nodeId = elementTemplateNodeId(template.templateKey);
+      const resolvedComponentNodeId =
+        template.kind === "component-candidate"
+          ? resolveTemplateTargetComponentNodeId({
+              template,
+              componentResolution,
+            })
+          : undefined;
       elementTemplates.push({
         id: nodeId,
         kind: "element-template",
@@ -237,6 +275,7 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
         ...(template.placementComponentKey
           ? { placementComponentNodeId: componentNodeId(template.placementComponentKey) }
           : {}),
+        ...(resolvedComponentNodeId ? { resolvedComponentNodeId } : {}),
         confidence: "high",
         provenance: frontendFileProvenance({
           filePath: template.filePath,
@@ -252,10 +291,12 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
       );
 
       if (template.kind === "component-candidate" && template.emittingComponentKey) {
-        const targetComponentId = findComponentNodeIdByName({
-          components,
-          componentName: template.name.split(".").at(-1) ?? template.name,
-        });
+        const targetComponentId =
+          resolvedComponentNodeId ??
+          findComponentNodeIdByName({
+            components: componentResolution.components,
+            componentName: template.name.split(".").at(-1) ?? template.name,
+          });
         if (targetComponentId) {
           renders.push(
             buildRendersEdge(componentNodeId(template.emittingComponentKey), targetComponentId),
@@ -366,6 +407,248 @@ export function buildReactSyntaxFacts(input: FactGraphInput): BuiltReactSyntaxFa
     renders: sortEdges(renders),
     referencesClassExpression: sortEdges(referencesClassExpression),
   };
+}
+
+type ComponentResolutionContext = {
+  components: ComponentNode[];
+  componentsByFilePathAndName: Map<string, ComponentNode[]>;
+  importBindingsByFilePathAndLocalName: Map<string, ImportBindingResolution>;
+};
+
+type ImportBindingResolution = {
+  localName: string;
+  importedName: string;
+  bindingKind: "default" | "named" | "namespace";
+  resolvedFilePath?: string;
+};
+
+function buildComponentResolutionContext(input: FactGraphInput): ComponentResolutionContext {
+  const componentNodes = input.frontends.source.files
+    .flatMap((file) => file.reactSyntax.components)
+    .map(toComponentNodeForResolution);
+  const componentsByFilePathAndName = new Map<string, ComponentNode[]>();
+  for (const component of componentNodes) {
+    pushMapValue(
+      componentsByFilePathAndName,
+      componentFileAndNameKey(component.filePath, component.componentName),
+      component,
+    );
+  }
+
+  const resolvedImportPathByImporterAndSpecifier = new Map<string, string>();
+  const knownSourceFilePaths = new Set(
+    input.frontends.source.files.map((file) => normalizeProjectPath(file.filePath)),
+  );
+  for (const edge of input.snapshot.edges) {
+    if (
+      edge.kind === "source-import" &&
+      edge.importKind === "source" &&
+      edge.resolutionStatus === "resolved" &&
+      edge.resolvedFilePath
+    ) {
+      resolvedImportPathByImporterAndSpecifier.set(
+        importSpecifierKey(edge.importerFilePath, edge.specifier),
+        normalizeProjectPath(edge.resolvedFilePath),
+      );
+    }
+  }
+
+  const importBindingsByFilePathAndLocalName = new Map<string, ImportBindingResolution>();
+  for (const file of input.frontends.source.files) {
+    for (const importRecord of file.moduleSyntax.imports) {
+      if (importRecord.importKind !== "source" && importRecord.importKind !== "unknown") {
+        continue;
+      }
+      const resolvedFilePath =
+        resolvedImportPathByImporterAndSpecifier.get(
+          importSpecifierKey(file.filePath, importRecord.specifier),
+        ) ??
+        resolveRelativeSourceSpecifier({
+          importerFilePath: file.filePath,
+          specifier: importRecord.specifier,
+          knownSourceFilePaths,
+        });
+      for (const importName of importRecord.importNames) {
+        if (importName.typeOnly) {
+          continue;
+        }
+        importBindingsByFilePathAndLocalName.set(
+          importBindingKey(file.filePath, importName.localName),
+          {
+            localName: importName.localName,
+            importedName: importName.importedName,
+            bindingKind: importName.kind,
+            ...(resolvedFilePath ? { resolvedFilePath } : {}),
+          },
+        );
+      }
+    }
+  }
+
+  return {
+    components: componentNodes,
+    componentsByFilePathAndName,
+    importBindingsByFilePathAndLocalName,
+  };
+}
+
+function toComponentNodeForResolution(component: ReactComponentDeclarationFact): ComponentNode {
+  return {
+    id: componentNodeId(component.componentKey),
+    kind: "component",
+    componentKey: component.componentKey,
+    componentName: component.componentName,
+    filePath: component.filePath,
+    exported: component.exported,
+    declarationKind: component.declarationKind,
+    location: component.location,
+    ...(component.rendersChildrenProp ? { rendersChildrenProp: true } : {}),
+    confidence: "high",
+    provenance: frontendFileProvenance({
+      filePath: component.filePath,
+      summary: "Extracted React component declaration frontend fact",
+    }),
+  };
+}
+
+function resolveTemplateTargetComponentNodeId(input: {
+  template: ReactElementTemplateFact;
+  componentResolution: ComponentResolutionContext;
+}): string | undefined {
+  const tag = splitComponentTagName(input.template.name);
+  const importedBinding = input.componentResolution.importBindingsByFilePathAndLocalName.get(
+    importBindingKey(input.template.filePath, tag.rootName),
+  );
+  if (importedBinding?.resolvedFilePath) {
+    const importedComponentName =
+      importedBinding.bindingKind === "namespace"
+        ? tag.memberName
+        : importedBinding.importedName === "default"
+          ? importedBinding.localName
+          : importedBinding.importedName;
+    const importedComponent = findUniqueComponentInFile({
+      componentsByFilePathAndName: input.componentResolution.componentsByFilePathAndName,
+      filePath: importedBinding.resolvedFilePath,
+      componentName: importedComponentName,
+    });
+    if (importedComponent) {
+      return importedComponent.id;
+    }
+
+    if (importedBinding.bindingKind === "default") {
+      const defaultFallback = findSingleComponentInFile({
+        components: input.componentResolution.components,
+        filePath: importedBinding.resolvedFilePath,
+      });
+      if (defaultFallback) {
+        return defaultFallback.id;
+      }
+    }
+  }
+
+  const localComponent = findUniqueComponentInFile({
+    componentsByFilePathAndName: input.componentResolution.componentsByFilePathAndName,
+    filePath: input.template.filePath,
+    componentName: tag.memberName,
+  });
+  return localComponent?.id;
+}
+
+function splitComponentTagName(name: string): { rootName: string; memberName: string } {
+  const parts = name.split(".");
+  const rootName = parts[0] ?? name;
+  const memberName = parts.at(-1) ?? rootName;
+  return { rootName, memberName };
+}
+
+function findUniqueComponentInFile(input: {
+  componentsByFilePathAndName: Map<string, ComponentNode[]>;
+  filePath: string;
+  componentName: string;
+}): ComponentNode | undefined {
+  const matches =
+    input.componentsByFilePathAndName.get(
+      componentFileAndNameKey(input.filePath, input.componentName),
+    ) ?? [];
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function findSingleComponentInFile(input: {
+  components: ComponentNode[];
+  filePath: string;
+}): ComponentNode | undefined {
+  const matches = input.components.filter(
+    (component) =>
+      normalizeProjectPath(component.filePath) === normalizeProjectPath(input.filePath),
+  );
+  return matches.length === 1 ? matches[0] : undefined;
+}
+
+function componentFileAndNameKey(filePath: string, componentName: string): string {
+  return `${normalizeProjectPath(filePath)}:${componentName}`;
+}
+
+function importSpecifierKey(filePath: string, specifier: string): string {
+  return `${normalizeProjectPath(filePath)}:${specifier}`;
+}
+
+function importBindingKey(filePath: string, localName: string): string {
+  return `${normalizeProjectPath(filePath)}:${localName}`;
+}
+
+function resolveRelativeSourceSpecifier(input: {
+  importerFilePath: string;
+  specifier: string;
+  knownSourceFilePaths: ReadonlySet<string>;
+}): string | undefined {
+  if (!input.specifier.startsWith(".")) {
+    return undefined;
+  }
+
+  const importerDirectory = getDirectoryName(normalizeProjectPath(input.importerFilePath));
+  const basePath = normalizePathSegments(`${importerDirectory}/${input.specifier}`);
+  const candidates = [
+    basePath,
+    `${basePath}.tsx`,
+    `${basePath}.ts`,
+    `${basePath}.jsx`,
+    `${basePath}.js`,
+    `${basePath}/index.tsx`,
+    `${basePath}/index.ts`,
+    `${basePath}/index.jsx`,
+    `${basePath}/index.js`,
+  ];
+  return candidates.find((candidate) => input.knownSourceFilePaths.has(candidate));
+}
+
+function getDirectoryName(filePath: string): string {
+  const index = filePath.lastIndexOf("/");
+  return index >= 0 ? filePath.slice(0, index) : ".";
+}
+
+function normalizePathSegments(filePath: string): string {
+  const output: string[] = [];
+  for (const segment of filePath.split("/")) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      output.pop();
+      continue;
+    }
+    output.push(segment);
+  }
+  return output.join("/");
+}
+
+function normalizeProjectPath(filePath: string): string {
+  return filePath.replace(/\\/g, "/");
+}
+
+function pushMapValue<Key, Value>(map: Map<Key, Value[]>, key: Key, value: Value): void {
+  const values = map.get(key) ?? [];
+  values.push(value);
+  map.set(key, values);
 }
 
 function helperOwnerNodeId(helper: {

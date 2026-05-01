@@ -16,63 +16,82 @@ export type CreatedReactClassExpressionSite = {
   expressionSyntax: SourceExpressionSyntaxFact[];
 };
 
-export function tryCreateJsxClassExpressionSite(input: {
+export function createJsxClassExpressionSites(input: {
   node: ts.Node;
   filePath: string;
   sourceFile: ts.SourceFile;
   renderSite?: ReactRenderSiteFact;
   template?: ReactElementTemplateFact;
   emittingComponentKey?: string;
-}): CreatedReactClassExpressionSite | undefined {
+}): CreatedReactClassExpressionSite[] {
   if (!ts.isJsxElement(input.node) && !ts.isJsxSelfClosingElement(input.node)) {
-    return undefined;
-  }
-
-  const attributes = ts.isJsxElement(input.node)
-    ? input.node.openingElement.attributes.properties
-    : input.node.attributes.properties;
-  const classNameAttribute = attributes.find(
-    (attribute): attribute is ts.JsxAttribute =>
-      ts.isJsxAttribute(attribute) &&
-      ts.isIdentifier(attribute.name) &&
-      attribute.name.text === "className",
-  );
-  if (!classNameAttribute?.initializer) {
-    return undefined;
+    return [];
   }
 
   const tagName = getJsxTagName(input.node) ?? "";
-  const expression = unwrapJsxAttributeInitializer(classNameAttribute.initializer);
-  const anchorNode = expression ?? classNameAttribute.initializer;
-  const location = toSourceAnchor(anchorNode, input.sourceFile, input.filePath);
+  const intrinsicTag = isIntrinsicTagName(tagName);
+  const attributes = ts.isJsxElement(input.node)
+    ? input.node.openingElement.attributes.properties
+    : input.node.attributes.properties;
+  const classAttributes = attributes.filter(
+    (attribute): attribute is ts.JsxAttribute =>
+      ts.isJsxAttribute(attribute) &&
+      ts.isIdentifier(attribute.name) &&
+      Boolean(attribute.initializer) &&
+      isClassLikeJsxAttributeName({
+        attributeName: attribute.name.text,
+        intrinsicTag,
+      }),
+  );
+  if (classAttributes.length === 0) {
+    return [];
+  }
+
   const emittingComponentKey = input.renderSite?.emittingComponentKey ?? input.emittingComponentKey;
   const placementComponentKey = input.renderSite?.placementComponentKey ?? emittingComponentKey;
-  const expressionSyntax = collectExpressionSyntaxForNode({
-    node: anchorNode,
-    filePath: input.filePath,
-    sourceFile: input.sourceFile,
-  });
+  const sites: CreatedReactClassExpressionSite[] = [];
 
-  return {
-    site: {
-      siteKey: createSiteKey(
-        "class-expression",
-        location,
-        input.renderSite?.siteKey ?? "standalone-jsx-class",
-      ),
-      kind: isIntrinsicTagName(tagName) ? "jsx-class" : "component-prop-class",
+  for (const classAttribute of classAttributes) {
+    if (!ts.isIdentifier(classAttribute.name)) {
+      continue;
+    }
+    const attributeName = classAttribute.name.text;
+    const initializer = classAttribute.initializer;
+    if (!initializer) {
+      continue;
+    }
+    const expression = unwrapJsxAttributeInitializer(initializer);
+    const anchorNode = expression ?? initializer;
+    const location = toSourceAnchor(anchorNode, input.sourceFile, input.filePath);
+    const expressionSyntax = collectExpressionSyntaxForNode({
+      node: anchorNode,
       filePath: input.filePath,
-      location,
-      expressionId: expressionSyntax.rootExpressionId,
-      rawExpressionText: anchorNode.getText(input.sourceFile),
-      ...(emittingComponentKey ? { emittingComponentKey } : {}),
-      ...(placementComponentKey ? { placementComponentKey } : {}),
-      ...(!isIntrinsicTagName(tagName) ? { componentPropName: "className" } : {}),
-      ...(input.renderSite ? { renderSiteKey: input.renderSite.siteKey } : {}),
-      ...(input.template ? { elementTemplateKey: input.template.templateKey } : {}),
-    },
-    expressionSyntax: expressionSyntax.expressions,
-  };
+      sourceFile: input.sourceFile,
+    });
+
+    sites.push({
+      site: {
+        siteKey: createSiteKey(
+          "class-expression",
+          location,
+          `${input.renderSite?.siteKey ?? "standalone-jsx-class"}:${attributeName}`,
+        ),
+        kind: intrinsicTag ? "jsx-class" : "component-prop-class",
+        filePath: input.filePath,
+        location,
+        expressionId: expressionSyntax.rootExpressionId,
+        rawExpressionText: anchorNode.getText(input.sourceFile),
+        ...(emittingComponentKey ? { emittingComponentKey } : {}),
+        ...(placementComponentKey ? { placementComponentKey } : {}),
+        ...(!intrinsicTag ? { componentPropName: attributeName } : {}),
+        ...(input.renderSite ? { renderSiteKey: input.renderSite.siteKey } : {}),
+        ...(input.template ? { elementTemplateKey: input.template.templateKey } : {}),
+      },
+      expressionSyntax: expressionSyntax.expressions,
+    });
+  }
+
+  return sites;
 }
 
 export function tryCreateCssModuleClassExpressionSite(input: {
@@ -191,4 +210,15 @@ function getStaticPropertyName(name: ts.PropertyName): string | undefined {
   }
 
   return undefined;
+}
+
+function isClassLikeJsxAttributeName(input: {
+  attributeName: string;
+  intrinsicTag: boolean;
+}): boolean {
+  if (input.intrinsicTag) {
+    return input.attributeName === "className";
+  }
+
+  return input.attributeName === "className" || input.attributeName.endsWith("ClassName");
 }

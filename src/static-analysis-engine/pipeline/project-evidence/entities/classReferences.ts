@@ -74,12 +74,34 @@ function buildClassReferencesFromEmissionSites(input: {
       expression,
     ]),
   );
+  const skippedConditions = input.renderModel.placementConditions
+    .filter(isStaticallySkippedCondition)
+    .sort(comparePlacementConditions);
   const references: ClassReferenceAnalysis[] = [];
   const emittedReferenceKeys = new Set<string>();
+  const consumedComponentPropExpressionIds = collectConsumedComponentPropExpressionIds(
+    input.renderModel.emissionSites,
+  );
+  const unconsumedComponentPropExpressionIds = collectDiagnosticExpressionIds(
+    input.renderModel,
+    "unconsumed-component-class-prop",
+  );
 
   for (const emissionSite of sortEmissionSites(input.renderModel.emissionSites)) {
     const expression = expressionsById.get(emissionSite.classExpressionId);
     if (!expression) {
+      continue;
+    }
+    if (isExpressionInsideSkippedCondition(expression, skippedConditions)) {
+      continue;
+    }
+    if (
+      shouldSkipConsumedComponentPropFallback({
+        emissionSite,
+        expression,
+        consumedComponentPropExpressionIds,
+      })
+    ) {
       continue;
     }
     const dedupeKey = createEmissionReferenceDedupeKey({
@@ -111,20 +133,27 @@ function buildClassReferencesFromEmissionSites(input: {
   const emittedSiteNodeIds = new Set(
     input.renderModel.emissionSites.map((emissionSite) => emissionSite.classExpressionSiteNodeId),
   );
-  const skippedConditions = input.renderModel.placementConditions
-    .filter(isStaticallySkippedCondition)
-    .sort(comparePlacementConditions);
   for (const expression of input.symbolicEvaluation.evaluatedExpressions.classExpressions) {
     if (
       emittedExpressionIds.has(expression.id) ||
       emittedSiteNodeIds.has(expression.classExpressionSiteNodeId) ||
+      (expression.classExpressionSiteKind === "component-prop-class" &&
+        (shouldSkipConsumedComponentPropSymbolicFallback(
+          expression,
+          consumedComponentPropExpressionIds,
+        ) ||
+          unconsumedComponentPropExpressionIds.has(expression.id))) ||
       isExpressionInsideSkippedCondition(expression, skippedConditions) ||
-      !shouldProjectCanonicalClassExpression(expression)
+      !shouldProjectSymbolicClassReference(expression)
     ) {
       continue;
     }
 
-    if (expression.classExpressionSiteKind !== "runtime-dom-class") {
+    if (
+      expression.classExpressionSiteKind !== "runtime-dom-class" &&
+      expression.classExpressionSiteKind !== "jsx-class" &&
+      expression.classExpressionSiteKind !== "component-prop-class"
+    ) {
       continue;
     }
 
@@ -145,6 +174,65 @@ function buildClassReferencesFromEmissionSites(input: {
   return references.sort(compareById);
 }
 
+function collectDiagnosticExpressionIds(
+  renderModel: RenderModel,
+  code: RenderModel["diagnostics"][number]["code"],
+): Set<string> {
+  return new Set(
+    renderModel.diagnostics
+      .filter((diagnostic) => diagnostic.code === code)
+      .map((diagnostic) => diagnostic.evaluatedExpressionId)
+      .filter((expressionId): expressionId is string => Boolean(expressionId)),
+  );
+}
+
+function collectConsumedComponentPropExpressionIds(emissionSites: EmissionSite[]): Set<string> {
+  const consumed = new Set<string>();
+  for (const emissionSite of emissionSites) {
+    if (emissionSite.emissionKind !== "merged-element-class") {
+      continue;
+    }
+    for (const sourceExpressionId of emissionSite.sourceExpressionIds) {
+      if (sourceExpressionId !== emissionSite.classExpressionId) {
+        consumed.add(sourceExpressionId);
+      }
+    }
+  }
+  return consumed;
+}
+
+function shouldSkipConsumedComponentPropFallback(input: {
+  emissionSite: EmissionSite;
+  expression: CanonicalClassExpression;
+  consumedComponentPropExpressionIds: ReadonlySet<string>;
+}): boolean {
+  return (
+    input.emissionSite.emissionKind === "rendered-element-class" &&
+    !input.emissionSite.elementId &&
+    input.expression.classExpressionSiteKind === "component-prop-class" &&
+    input.consumedComponentPropExpressionIds.has(input.expression.id)
+  );
+}
+
+function shouldSkipConsumedComponentPropSymbolicFallback(
+  expression: CanonicalClassExpression,
+  consumedComponentPropExpressionIds: ReadonlySet<string>,
+): boolean {
+  if (!consumedComponentPropExpressionIds.has(expression.id)) {
+    return false;
+  }
+
+  return !isConcreteComponentPropSupply(expression);
+}
+
+function isConcreteComponentPropSupply(expression: CanonicalClassExpression): boolean {
+  return (
+    expression.externalContributions.length === 0 &&
+    expression.unsupported.length === 0 &&
+    expression.tokens.some((token) => token.tokenKind !== "css-module-export")
+  );
+}
+
 function buildClassReferenceFromEmissionSite(input: {
   emissionSite: EmissionSite;
   expression: CanonicalClassExpression;
@@ -153,12 +241,14 @@ function buildClassReferenceFromEmissionSite(input: {
   includeTraces: boolean;
   index: number;
 }): ClassReferenceAnalysis {
-  const classExpression = toEmissionSiteClassExpressionSummary(
-    input.emissionSite,
-    input.expression,
-  );
   const site = input.factGraph?.graph.indexes.nodesById.get(
     input.expression.classExpressionSiteNodeId,
+  );
+  const classExpression = withInferredTemplateCandidates(
+    toEmissionSiteClassExpressionSummary(input.emissionSite, input.expression),
+    input.expression.rawExpressionText,
+    [...input.indexes.definitionsByClassName.keys()],
+    shouldInferTemplateCandidatesForSite(site),
   );
   const sourceLocation = resolveReferenceSourceLocation(classExpression, input.emissionSite);
   const sourceSite = findClassExpressionSiteAtLocation(input.factGraph, sourceLocation);
@@ -226,6 +316,12 @@ function buildSymbolicClassReference(input: {
   const site = input.factGraph?.graph.indexes.nodesById.get(
     input.expression.classExpressionSiteNodeId,
   );
+  const classExpression = withInferredTemplateCandidates(
+    input.classExpression,
+    input.expression.rawExpressionText,
+    [...input.indexes.definitionsByClassName.keys()],
+    shouldInferTemplateCandidatesForSite(site),
+  );
   const filePath = normalizeProjectPath(input.expression.filePath);
   const sourceFileId =
     input.indexes.sourceFileIdByPath.get(filePath) ?? createPathId("source", filePath);
@@ -244,24 +340,101 @@ function buildSymbolicClassReference(input: {
     ...(site?.kind === "class-expression-site" && site.runtimeDomLibraryHint
       ? { runtimeLibraryHint: site.runtimeDomLibraryHint }
       : {}),
-    expressionKind: getReferenceExpressionKind(input.classExpression),
+    expressionKind: getReferenceExpressionKind(classExpression),
     rawExpressionText: input.expression.rawExpressionText,
-    definiteClassNames: [...input.classExpression.classes.definite],
-    possibleClassNames: [...input.classExpression.classes.possible],
-    unknownDynamic: input.classExpression.classes.unknownDynamic,
-    confidence: getReferenceConfidence(input.classExpression),
+    definiteClassNames: [...classExpression.classes.definite],
+    possibleClassNames: [...classExpression.classes.possible],
+    unknownDynamic: classExpression.classes.unknownDynamic,
+    confidence: getReferenceConfidence(classExpression),
     traces: input.includeTraces
       ? buildCanonicalClassReferenceTraces({
           expression: input.expression,
-          classExpression: input.classExpression,
+          classExpression,
           origin: input.origin,
         })
       : [],
-    sourceSummary: input.classExpression,
+    sourceSummary: classExpression,
   };
 
   pushClassReferenceIndexes(input.indexes, reference);
   return reference;
+}
+
+function withInferredTemplateCandidates(
+  classExpression: ClassExpressionSummary,
+  rawExpressionText: string,
+  knownClassNames: string[],
+  allowInference: boolean,
+): ClassExpressionSummary {
+  if (
+    !allowInference ||
+    !classExpression.classes.unknownDynamic ||
+    classExpression.classes.possible.length > 0 ||
+    knownClassNames.length === 0
+  ) {
+    return classExpression;
+  }
+
+  const inferred = inferTemplatePatternClassNames(rawExpressionText, knownClassNames);
+  if (inferred.length === 0) {
+    return classExpression;
+  }
+
+  return {
+    ...classExpression,
+    classes: {
+      ...classExpression.classes,
+      possible: inferred,
+    },
+  };
+}
+
+function shouldInferTemplateCandidatesForSite(site: unknown): boolean {
+  if (!site || typeof site !== "object" || !("classExpressionSiteKey" in site)) {
+    return true;
+  }
+  const classExpressionSiteKey = site.classExpressionSiteKey;
+  return typeof classExpressionSiteKey !== "string"
+    ? true
+    : !classExpressionSiteKey.includes("clone-element-class");
+}
+
+function inferTemplatePatternClassNames(
+  rawExpressionText: string,
+  knownClassNames: string[],
+): string[] {
+  const templateMatch = rawExpressionText.match(/`([^`]*)`/);
+  if (!templateMatch) {
+    return [];
+  }
+
+  const templateText = templateMatch[1];
+  if (!templateText.includes("${")) {
+    return [];
+  }
+
+  const tokens = templateText.split(/\s+/).filter(Boolean);
+  const inferred = new Set<string>();
+  for (const token of tokens) {
+    if (!token.includes("${")) {
+      if (knownClassNames.includes(token)) {
+        inferred.add(token);
+      }
+      continue;
+    }
+
+    const escaped = token
+      .replace(/[.*+?^${}()|[\]\\]/g, "\\$&")
+      .replace(/\\\$\\\{[^}]+\\\}/g, ".*");
+    const matcher = new RegExp(`^${escaped}$`);
+    for (const className of knownClassNames) {
+      if (matcher.test(className)) {
+        inferred.add(className);
+      }
+    }
+  }
+
+  return uniqueSorted([...inferred]);
 }
 
 export function buildStaticallySkippedClassReferences(input: {
@@ -275,15 +448,11 @@ export function buildStaticallySkippedClassReferences(input: {
     return [];
   }
 
-  const emittedSiteNodeIds = new Set(
-    input.renderModel.emissionSites.map((emissionSite) => emissionSite.classExpressionSiteNodeId),
-  );
   const candidateExpressions = input.symbolicEvaluation.evaluatedExpressions.classExpressions
     .filter(
       (expression) =>
         (expression.classExpressionSiteKind === "jsx-class" ||
           expression.classExpressionSiteKind === "component-prop-class") &&
-        !emittedSiteNodeIds.has(expression.classExpressionSiteNodeId) &&
         shouldProjectCanonicalClassExpression(expression),
     )
     .sort(compareCanonicalClassExpressions);
@@ -553,6 +722,21 @@ function shouldProjectCanonicalClassExpression(expression: CanonicalClassExpress
     expression.tokens.some((token) => token.tokenKind !== "css-module-export") ||
     expression.unsupported.some((reason) => reason.kind !== "unsupported-css-module-access")
   );
+}
+
+function shouldProjectSymbolicClassReference(expression: CanonicalClassExpression): boolean {
+  if (!shouldProjectCanonicalClassExpression(expression)) {
+    return false;
+  }
+
+  if (
+    expression.classExpressionSiteKind === "jsx-class" &&
+    (expression.renderSiteNodeId || expression.elementTemplateNodeId)
+  ) {
+    return false;
+  }
+
+  return true;
 }
 
 function toEmissionSiteClassExpressionSummary(

@@ -12,7 +12,6 @@ import type {
   RenderRegion,
   RenderStructureDiagnostic,
   RenderStructureInput,
-  RenderedComponent,
   RenderedComponentBoundary,
   RenderedElement,
 } from "../types.js";
@@ -21,6 +20,8 @@ import { buildDiagnostic } from "./diagnostics.js";
 
 export type ExpandContext = {
   componentNodeId: string;
+  placementComponentNodeId?: string;
+  forcePlacementComponentNodeId?: string;
   boundaryId: string;
   renderSite: RenderStructureInput["graph"]["nodes"]["renderSites"][number];
   childIndex: number;
@@ -120,6 +121,10 @@ export function expandRenderSite(state: ExpansionState, context: ExpandContext):
   }
 
   if (context.renderSite.renderSiteKind === "conditional") {
+    const resolvedCondition = resolveStaticConditionalBranch({
+      state,
+      context,
+    });
     const branchSpecs: Array<{ index: number; branch: "when-true" | "when-false" }> = [
       { index: 0, branch: "when-true" },
       { index: 1, branch: "when-false" },
@@ -143,16 +148,34 @@ export function expandRenderSite(state: ExpansionState, context: ExpandContext):
       if (!childRenderSite || childRenderSite.kind !== "render-site") {
         continue;
       }
-      const conditionId = state.addPlacementCondition({
-        key: `${context.boundaryId}:${context.renderSite.id}:${spec.branch}`,
-        kind: "conditional-branch",
-        sourceText: context.renderSite.renderSiteKind,
-        sourceLocation: normalizeAnchor(context.renderSite.location),
-        branch: spec.branch,
-        certainty: "possible",
-        confidence: "medium",
-        traces: [],
-      });
+      const branchSkippedReason =
+        resolvedCondition?.kind === "resolved"
+          ? resolvedCondition.reachableBranch === spec.branch
+            ? undefined
+            : resolvedCondition.reason
+          : undefined;
+      const conditionId = branchSkippedReason
+        ? state.addPlacementCondition({
+            key: `${context.boundaryId}:${context.renderSite.id}:${spec.branch}:skipped`,
+            kind: "statically-skipped-branch",
+            sourceText: context.renderSite.conditionSourceText ?? context.renderSite.renderSiteKind,
+            sourceLocation: normalizeAnchor(childRenderSite.location),
+            branch: spec.branch,
+            reason: branchSkippedReason,
+            certainty: "definite",
+            confidence: "high",
+            traces: [],
+          })
+        : state.addPlacementCondition({
+            key: `${context.boundaryId}:${context.renderSite.id}:${spec.branch}`,
+            kind: "conditional-branch",
+            sourceText: context.renderSite.conditionSourceText ?? context.renderSite.renderSiteKind,
+            sourceLocation: normalizeAnchor(context.renderSite.location),
+            branch: spec.branch,
+            certainty: "possible",
+            confidence: "medium",
+            traces: [],
+          });
       const pathSegments = [
         ...context.basePathSegments,
         { kind: "conditional-branch", branch: spec.branch, conditionId } as const,
@@ -185,13 +208,16 @@ export function expandRenderSite(state: ExpansionState, context: ExpandContext):
         childElementIds: [],
         childBoundaryIds: [],
       });
+      if (branchSkippedReason) {
+        continue;
+      }
       expandRenderSite(state, {
         ...context,
         renderSite: childRenderSite,
         childIndex: spec.index,
         basePathSegments: pathSegments,
         placementConditionIds: uniqueSorted([...context.placementConditionIds, conditionId]),
-        certainty: "possible",
+        certainty: branchSkippedReason ? "unknown" : "possible",
         renderExpressionDepth: context.renderExpressionDepth + 1,
       });
     }
@@ -287,11 +313,15 @@ export function expandRenderSite(state: ExpansionState, context: ExpandContext):
           : context.renderSite.emittingComponentNodeId
             ? { emittingComponentNodeId: context.renderSite.emittingComponentNodeId }
             : {}),
-        ...(template.placementComponentNodeId
-          ? { placementComponentNodeId: template.placementComponentNodeId }
-          : context.renderSite.placementComponentNodeId
-            ? { placementComponentNodeId: context.renderSite.placementComponentNodeId }
-            : {}),
+        ...(context.forcePlacementComponentNodeId
+          ? { placementComponentNodeId: context.forcePlacementComponentNodeId }
+          : template.placementComponentNodeId
+            ? { placementComponentNodeId: template.placementComponentNodeId }
+            : context.placementComponentNodeId
+              ? { placementComponentNodeId: context.placementComponentNodeId }
+              : context.renderSite.placementComponentNodeId
+                ? { placementComponentNodeId: context.renderSite.placementComponentNodeId }
+                : {}),
         renderPathId: pathId,
         placementConditionIds: effectivePlacementConditionIds,
         certainty: effectiveCertainty,
@@ -342,13 +372,30 @@ export function expandRenderSite(state: ExpansionState, context: ExpandContext):
     return;
   }
 
+  let shouldExpandComponentChildren = componentTemplates.length === 0;
+  const renderedPropNames = new Set<string>();
   for (const template of componentTemplates) {
-    projectComponentTemplate(state, context, template);
+    const result = projectComponentTemplate(state, context, template);
+    shouldExpandComponentChildren ||= result.rendersSuppliedChildren;
+    for (const propName of result.renderedPropNames) {
+      renderedPropNames.add(propName);
+    }
   }
 
   for (const [childIndex, childRenderSiteId] of childRenderSiteIds.entries()) {
     const childRenderSite = state.input.graph.indexes.nodesById.get(childRenderSiteId);
     if (!childRenderSite || childRenderSite.kind !== "render-site") {
+      continue;
+    }
+    if (
+      componentTemplates.length > 0 &&
+      isSuppliedComponentInputRenderSite(childRenderSite) &&
+      !shouldExpandSuppliedComponentInputRenderSite({
+        renderSite: childRenderSite,
+        rendersSuppliedChildren: shouldExpandComponentChildren,
+        renderedPropNames,
+      })
+    ) {
       continue;
     }
     expandRenderSite(state, {
@@ -362,11 +409,43 @@ export function expandRenderSite(state: ExpansionState, context: ExpandContext):
   }
 }
 
+function isSuppliedComponentInputRenderSite(
+  renderSite: RenderStructureInput["graph"]["nodes"]["renderSites"][number],
+): boolean {
+  return (
+    !renderSite.parentRenderRelation ||
+    renderSite.parentRenderRelation === "jsx-child" ||
+    renderSite.parentRenderRelation === "jsx-attribute-expression"
+  );
+}
+
+function shouldExpandSuppliedComponentInputRenderSite(input: {
+  renderSite: RenderStructureInput["graph"]["nodes"]["renderSites"][number];
+  rendersSuppliedChildren: boolean;
+  renderedPropNames: ReadonlySet<string>;
+}): boolean {
+  if (
+    !input.renderSite.parentRenderRelation ||
+    input.renderSite.parentRenderRelation === "jsx-child"
+  ) {
+    return input.rendersSuppliedChildren;
+  }
+
+  if (input.renderSite.parentRenderRelation === "jsx-attribute-expression") {
+    return Boolean(
+      input.renderSite.parentRenderAttributeName &&
+      input.renderedPropNames.has(input.renderSite.parentRenderAttributeName),
+    );
+  }
+
+  return true;
+}
+
 function projectComponentTemplate(
   state: ExpansionState,
   context: ExpandContext,
   template: RenderStructureInput["graph"]["nodes"]["elementTemplates"][number],
-): void {
+): { rendersSuppliedChildren: boolean; renderedPropNames: string[] } {
   const boundaryPathSegments: RenderPathSegment[] = [
     ...context.basePathSegments,
     { kind: "child-index", index: context.childIndex },
@@ -378,9 +457,13 @@ function projectComponentTemplate(
   ];
   const fromComponentNodeId = context.renderSite.emittingComponentNodeId ?? context.componentNodeId;
   const targetName = template.name.split(".").at(-1) ?? template.name;
-  const target = (state.renderEdgesByFromComponentNodeId.get(fromComponentNodeId) ?? [])
-    .map((edge) => state.componentById.get(edge.to))
-    .find((candidate) => candidate?.componentName === targetName);
+  const target =
+    (template.resolvedComponentNodeId
+      ? state.componentById.get(template.resolvedComponentNodeId)
+      : undefined) ??
+    (state.renderEdgesByFromComponentNodeId.get(fromComponentNodeId) ?? [])
+      .map((edge) => state.componentById.get(edge.to))
+      .find((candidate) => candidate?.componentName === targetName);
 
   const createBoundary = (
     kind: "expanded-component-reference" | "unresolved-component-reference",
@@ -486,7 +569,7 @@ function projectComponentTemplate(
       }),
     );
     pushEdge("unresolved", "unknown", targetName);
-    return;
+    return { rendersSuppliedChildren: false, renderedPropNames: [] };
   }
 
   const maxComponentExpansionDepth = state.input.options?.maxComponentExpansionDepth;
@@ -518,7 +601,7 @@ function projectComponentTemplate(
       }),
     );
     pushEdge("unresolved", "unknown", target.componentName);
-    return;
+    return { rendersSuppliedChildren: false, renderedPropNames: [] };
   }
 
   if (context.componentExpansionStack.includes(target.id)) {
@@ -543,7 +626,7 @@ function projectComponentTemplate(
       }),
     );
     pushEdge("unresolved", "unknown", target.componentName, { toComponent: target });
-    return;
+    return { rendersSuppliedChildren: false, renderedPropNames: [] };
   }
 
   const boundary = createBoundary(
@@ -562,6 +645,8 @@ function projectComponentTemplate(
     }
     expandRenderSite(state, {
       componentNodeId: target.id,
+      placementComponentNodeId: context.componentNodeId,
+      forcePlacementComponentNodeId: context.componentNodeId,
       boundaryId: boundary.id,
       renderSite: rootSite,
       childIndex: rootIndex,
@@ -576,6 +661,10 @@ function projectComponentTemplate(
     });
   }
   boundary.rootElementIds = uniqueSorted(rootElementIds);
+  return {
+    rendersSuppliedChildren: target.rendersChildrenProp === true,
+    renderedPropNames: [...(target.renderedPropNames ?? [])].sort(),
+  };
 }
 
 function createRenderedElementId(input: {
@@ -592,4 +681,362 @@ function createRenderedElementId(input: {
     tagName: input.tagName,
     index,
   });
+}
+
+function resolveStaticConditionalBranch(input: { state: ExpansionState; context: ExpandContext }):
+  | {
+      kind: "resolved";
+      reachableBranch: "when-true" | "when-false";
+      reason:
+        | "condition-resolved-true"
+        | "condition-resolved-false"
+        | "expression-resolved-nullish";
+    }
+  | undefined {
+  const expressionId = input.context.renderSite.conditionExpressionId;
+  const expression = expressionId
+    ? getExpressionSyntaxNodeById(input.state, expressionId)
+    : undefined;
+  const resolved = expression
+    ? evaluateStaticConditionValue({
+        state: input.state,
+        context: input.context,
+        expression,
+        depth: 0,
+        visitedExpressionIds: new Set(),
+      })
+    : evaluateConditionFromSourceText({
+        state: input.state,
+        context: input.context,
+        sourceText: input.context.renderSite.conditionSourceText,
+      });
+  if (resolved === undefined) {
+    return undefined;
+  }
+  if (resolved === "nullish") {
+    return {
+      kind: "resolved",
+      reachableBranch: "when-false",
+      reason: "expression-resolved-nullish",
+    };
+  }
+  return {
+    kind: "resolved",
+    reachableBranch: resolved ? "when-true" : "when-false",
+    reason: resolved ? "condition-resolved-true" : "condition-resolved-false",
+  };
+}
+
+function evaluateConditionFromSourceText(input: {
+  state: ExpansionState;
+  context: ExpandContext;
+  sourceText?: string;
+}): boolean | "nullish" | undefined {
+  const text = input.sourceText?.trim();
+  if (!text) {
+    return undefined;
+  }
+
+  if (text === "true") {
+    return true;
+  }
+  if (text === "false") {
+    return false;
+  }
+  if (text === "null" || text === "undefined") {
+    return "nullish";
+  }
+
+  if (/^-?\d+(\.\d+)?$/.test(text)) {
+    return Number(text) !== 0;
+  }
+
+  const identifierMatch = text.match(/^[A-Za-z_$][\w$]*$/);
+  if (identifierMatch) {
+    const expression = resolveLocalBindingExpressionForIdentifier({
+      state: input.state,
+      context: input.context,
+      identifierName: text,
+      targetLocation: input.context.renderSite.location,
+    });
+    if (!expression) {
+      return undefined;
+    }
+    const direct = evaluateStaticConditionValue({
+      state: input.state,
+      context: input.context,
+      expression,
+      depth: 0,
+      visitedExpressionIds: new Set(),
+    });
+    if (direct !== undefined) {
+      return direct;
+    }
+    if (expression.expressionKind === "unsupported") {
+      return evaluateUnsupportedComparisonExpression({
+        state: input.state,
+        context: input.context,
+        rawText: expression.rawText,
+      });
+    }
+  }
+
+  return evaluateUnsupportedComparisonExpression({
+    state: input.state,
+    context: input.context,
+    rawText: text,
+  });
+}
+
+function evaluateStaticConditionValue(input: {
+  state: ExpansionState;
+  context: ExpandContext;
+  expression: RenderStructureInput["graph"]["nodes"]["expressionSyntax"][number];
+  depth: number;
+  visitedExpressionIds: Set<string>;
+}): boolean | "nullish" | undefined {
+  if (input.depth > 20) {
+    return undefined;
+  }
+  if (input.visitedExpressionIds.has(input.expression.expressionId)) {
+    return undefined;
+  }
+  input.visitedExpressionIds.add(input.expression.expressionId);
+
+  if (input.expression.expressionKind === "boolean-literal") {
+    return input.expression.value;
+  }
+  if (input.expression.expressionKind === "nullish-literal") {
+    return "nullish";
+  }
+  if (input.expression.expressionKind === "numeric-literal") {
+    return Number(input.expression.value) !== 0;
+  }
+  if (input.expression.expressionKind === "string-literal") {
+    return input.expression.value.length > 0;
+  }
+  if (input.expression.expressionKind === "wrapper") {
+    const inner = getExpressionSyntaxNodeById(input.state, input.expression.innerExpressionId);
+    return inner
+      ? evaluateStaticConditionValue({
+          ...input,
+          expression: inner,
+          depth: input.depth + 1,
+        })
+      : undefined;
+  }
+  if (input.expression.expressionKind === "prefix-unary" && input.expression.operator === "!") {
+    const operand = getExpressionSyntaxNodeById(input.state, input.expression.operandExpressionId);
+    const operandValue =
+      operand &&
+      evaluateStaticConditionValue({
+        ...input,
+        expression: operand,
+        depth: input.depth + 1,
+      });
+    if (operandValue === undefined) {
+      return undefined;
+    }
+    if (operandValue === "nullish") {
+      return true;
+    }
+    return !operandValue;
+  }
+  if (input.expression.expressionKind === "binary") {
+    const left = getExpressionSyntaxNodeById(input.state, input.expression.leftExpressionId);
+    const right = getExpressionSyntaxNodeById(input.state, input.expression.rightExpressionId);
+    const leftValue =
+      left &&
+      evaluateStaticConditionValue({
+        ...input,
+        expression: left,
+        depth: input.depth + 1,
+      });
+    const rightValue =
+      right &&
+      evaluateStaticConditionValue({
+        ...input,
+        expression: right,
+        depth: input.depth + 1,
+      });
+    if (input.expression.operator === "&&") {
+      if (leftValue === undefined || rightValue === undefined) {
+        return undefined;
+      }
+      return leftValue === "nullish" ? false : Boolean(leftValue) && Boolean(rightValue);
+    }
+    if (input.expression.operator === "||") {
+      if (leftValue === undefined || rightValue === undefined) {
+        return undefined;
+      }
+      return leftValue === "nullish"
+        ? rightValue === "nullish"
+          ? false
+          : Boolean(rightValue)
+        : Boolean(leftValue) || (rightValue === "nullish" ? false : Boolean(rightValue));
+    }
+    if (input.expression.operator === "??") {
+      if (leftValue === undefined || rightValue === undefined) {
+        return undefined;
+      }
+      return leftValue === "nullish" ? rightValue : leftValue;
+    }
+    return undefined;
+  }
+  if (input.expression.expressionKind === "identifier") {
+    const resolvedExpression = resolveLocalBindingExpressionForIdentifier({
+      state: input.state,
+      context: input.context,
+      identifierName: input.expression.name,
+      targetLocation: input.expression.location,
+    });
+    if (!resolvedExpression) {
+      return undefined;
+    }
+    const direct = evaluateStaticConditionValue({
+      ...input,
+      expression: resolvedExpression,
+      depth: input.depth + 1,
+    });
+    if (direct !== undefined) {
+      return direct;
+    }
+    if (resolvedExpression.expressionKind === "unsupported") {
+      return evaluateUnsupportedComparisonExpression({
+        state: input.state,
+        context: input.context,
+        rawText: resolvedExpression.rawText,
+      });
+    }
+  }
+
+  return undefined;
+}
+
+function resolveLocalBindingExpressionForIdentifier(input: {
+  state: ExpansionState;
+  context: ExpandContext;
+  identifierName: string;
+  targetLocation: RenderStructureInput["graph"]["nodes"]["expressionSyntax"][number]["location"];
+}): RenderStructureInput["graph"]["nodes"]["expressionSyntax"][number] | undefined {
+  const bindingNodeIds =
+    input.state.input.graph.indexes.localValueBindingNodeIdsByOwnerNodeId.get(
+      input.context.componentNodeId,
+    ) ?? [];
+  const bindings = bindingNodeIds
+    .map((bindingNodeId) => input.state.input.graph.indexes.nodesById.get(bindingNodeId))
+    .filter((node): node is RenderStructureInput["graph"]["nodes"]["localValueBindings"][number] =>
+      Boolean(node && node.kind === "local-value-binding"),
+    )
+    .filter((binding) => binding.localName === input.identifierName)
+    .filter(
+      (binding) =>
+        binding.location.filePath === input.targetLocation.filePath &&
+        (binding.location.startLine < input.targetLocation.startLine ||
+          (binding.location.startLine === input.targetLocation.startLine &&
+            binding.location.startColumn <= input.targetLocation.startColumn)),
+    )
+    .sort((left, right) =>
+      right.location.startLine !== left.location.startLine
+        ? right.location.startLine - left.location.startLine
+        : right.location.startColumn - left.location.startColumn,
+    );
+
+  for (const binding of bindings) {
+    const expressionId =
+      binding.expressionId ?? binding.initializerExpressionId ?? binding.objectExpressionId;
+    if (!expressionId) {
+      continue;
+    }
+    const expression = getExpressionSyntaxNodeById(input.state, expressionId);
+    if (expression) {
+      return expression;
+    }
+  }
+  return undefined;
+}
+
+function evaluateUnsupportedComparisonExpression(input: {
+  state: ExpansionState;
+  context: ExpandContext;
+  rawText: string;
+}): boolean | undefined {
+  const match = input.rawText.match(
+    /^\s*([A-Za-z_$][\w$]*|-?\d+(?:\.\d+)?)\s*(>=|<=|>|<|===|!==)\s*([A-Za-z_$][\w$]*|-?\d+(?:\.\d+)?)\s*$/,
+  );
+  if (!match) {
+    return undefined;
+  }
+
+  const left = resolveComparisonOperand({
+    state: input.state,
+    context: input.context,
+    text: match[1],
+  });
+  const right = resolveComparisonOperand({
+    state: input.state,
+    context: input.context,
+    text: match[3],
+  });
+  if (left === undefined || right === undefined) {
+    return undefined;
+  }
+
+  switch (match[2]) {
+    case ">":
+      return left > right;
+    case ">=":
+      return left >= right;
+    case "<":
+      return left < right;
+    case "<=":
+      return left <= right;
+    case "===":
+      return left === right;
+    case "!==":
+      return left !== right;
+    default:
+      return undefined;
+  }
+}
+
+function resolveComparisonOperand(input: {
+  state: ExpansionState;
+  context: ExpandContext;
+  text: string;
+}): number | undefined {
+  const numeric = Number(input.text);
+  if (!Number.isNaN(numeric)) {
+    return numeric;
+  }
+
+  const expression = resolveLocalBindingExpressionForIdentifier({
+    state: input.state,
+    context: input.context,
+    identifierName: input.text,
+    targetLocation: input.context.renderSite.location,
+  });
+  if (!expression) {
+    return undefined;
+  }
+  if (expression.expressionKind === "numeric-literal") {
+    const value = Number(expression.value);
+    return Number.isNaN(value) ? undefined : value;
+  }
+
+  return undefined;
+}
+
+function getExpressionSyntaxNodeById(
+  state: ExpansionState,
+  expressionId: string,
+): RenderStructureInput["graph"]["nodes"]["expressionSyntax"][number] | undefined {
+  const nodeId = state.input.graph.indexes.expressionSyntaxNodeIdByExpressionId.get(expressionId);
+  const node = nodeId ? state.input.graph.indexes.nodesById.get(nodeId) : undefined;
+  if (node && node.kind === "expression-syntax") {
+    return node;
+  }
+  return state.input.graph.nodes.expressionSyntax.find(
+    (expression) => expression.expressionId === expressionId,
+  );
 }

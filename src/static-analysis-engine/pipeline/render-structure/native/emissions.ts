@@ -22,6 +22,9 @@ export function buildNativeEmissionSites(input: {
   const diagnostics: RenderStructureDiagnostic[] = [];
   const emissionIdCounts = new Map<string, number>();
   const elementsById = new Map(input.elements.map((element) => [element.id, element] as const));
+  const boundaryById = new Map(
+    input.componentBoundaries.map((boundary) => [boundary.id, boundary] as const),
+  );
   const renderPathById = new Map(input.renderPaths.map((path) => [path.id, path] as const));
   const expressionIdBySiteNodeId =
     input.renderInput.symbolicEvaluation.evaluatedExpressions.indexes.classExpressionIdBySiteNodeId;
@@ -39,6 +42,8 @@ export function buildNativeEmissionSites(input: {
     expressionIdBySiteNodeId,
     expressionById,
   });
+  const componentBoundaryByReferenceRenderSiteNodeId =
+    buildComponentBoundaryByReferenceRenderSiteNodeId(input.componentBoundaries);
 
   for (const classSite of classSites) {
     const expressionId = expressionIdBySiteNodeId.get(classSite.id);
@@ -66,18 +71,62 @@ export function buildNativeEmissionSites(input: {
       continue;
     }
 
-    const element = resolveEmittedElement({
+    const candidateElements = resolveEmittedElements({
       expression,
       classSite,
       elementIdsByTemplateNodeId,
       elementIdsByRenderSiteNodeId,
       elementsById,
     });
-    const boundaryId =
-      element?.parentBoundaryId ??
-      resolveBoundaryIdForClassSite(classSite, input.rootBoundaryIdByComponentNodeId);
+    const fallbackBoundaryId = shouldUseBoundaryFallbackForClassSite(classSite)
+      ? resolveBoundaryIdForClassSite(classSite, input.rootBoundaryIdByComponentNodeId)
+      : undefined;
+    const unresolvedComponentTarget =
+      classSite.classExpressionSiteKind === "component-prop-class" && classSite.renderSiteNodeId
+        ? componentBoundaryByReferenceRenderSiteNodeId.get(classSite.renderSiteNodeId)
+        : undefined;
+    const fallbackTargetBoundaryId =
+      fallbackBoundaryId &&
+      classSite.classExpressionSiteKind === "component-prop-class" &&
+      unresolvedComponentTarget?.boundaryKind === "expanded-component-reference"
+        ? undefined
+        : fallbackBoundaryId;
+    const unresolvedComponentLocation = unresolvedComponentTarget?.referenceLocation
+      ? normalizeAnchor(unresolvedComponentTarget.referenceLocation)
+      : undefined;
+    const targets: Array<{
+      element?: RenderedElement;
+      boundaryId: string;
+      emissionKind: EmissionSite["emissionKind"];
+      emittedElementLocation?: RenderedElement["sourceLocation"];
+    }> =
+      candidateElements.length > 0
+        ? candidateElements.map((element) => ({
+            element,
+            boundaryId: element.parentBoundaryId,
+            emissionKind: "rendered-element-class" as const,
+          }))
+        : unresolvedComponentTarget?.boundaryKind === "unresolved-component-reference" &&
+            unresolvedComponentLocation
+          ? [
+              {
+                element: undefined,
+                boundaryId: unresolvedComponentTarget.id,
+                emissionKind: "unresolved-component-class-prop" as const,
+                emittedElementLocation: unresolvedComponentLocation,
+              },
+            ]
+          : fallbackTargetBoundaryId
+            ? [
+                {
+                  element: undefined,
+                  boundaryId: fallbackTargetBoundaryId,
+                  emissionKind: "rendered-element-class" as const,
+                },
+              ]
+            : [];
 
-    if (!boundaryId) {
+    if (targets.length === 0) {
       diagnostics.push(
         buildDiagnostic({
           code: "unmodeled-class-expression-site",
@@ -90,114 +139,117 @@ export function buildNativeEmissionSites(input: {
       continue;
     }
 
-    const basePath = element
-      ? renderPathById.get(element.renderPathId)
-      : findBoundaryRenderPath(boundaryId, input.renderPaths);
-    if (!basePath) {
-      diagnostics.push(
-        buildDiagnostic({
-          code: "dangling-render-model-reference",
-          message: "class expression site resolved to a missing render path",
-          classSite,
-          evaluatedExpressionId: expression.id,
-          boundaryId,
-          ...(element ? { elementId: element.id } : {}),
-        }),
+    for (const target of targets) {
+      const element = target.element;
+      const boundaryId = target.boundaryId;
+      const basePath = element
+        ? renderPathById.get(element.renderPathId)
+        : findBoundaryRenderPath(boundaryId, input.renderPaths);
+      if (!basePath) {
+        diagnostics.push(
+          buildDiagnostic({
+            code: "dangling-render-model-reference",
+            message: "class expression site resolved to a missing render path",
+            classSite,
+            evaluatedExpressionId: expression.id,
+            boundaryId,
+            ...(element ? { elementId: element.id } : {}),
+          }),
+        );
+        continue;
+      }
+
+      const siteKey = `${classSite.id}:${element?.id ?? boundaryId}`;
+      const id = createEmissionSiteId({
+        classExpressionId: expression.id,
+        key: siteKey,
+        counts: emissionIdCounts,
+      });
+      const emissionPathId = renderPathId({ terminalKind: "emission-site", terminalId: id });
+      const emittedByComponentNodeId =
+        expression.emittingComponentNodeId ?? classSite.emittingComponentNodeId;
+      const placementComponentNodeId =
+        element?.placementComponentNodeId ??
+        expression.placementComponentNodeId ??
+        classSite.placementComponentNodeId;
+      const unsupported = [...expression.unsupported].sort((left, right) =>
+        left.id.localeCompare(right.id),
       );
-      continue;
-    }
+      const confidence =
+        unsupported.length > 0 || expression.certainty.kind !== "exact" ? "medium" : "high";
 
-    const siteKey = `${classSite.id}:${element?.id ?? boundaryId}`;
-    const id = createEmissionSiteId({
-      classExpressionId: expression.id,
-      key: siteKey,
-      counts: emissionIdCounts,
-    });
-    const emissionPathId = renderPathId({ terminalKind: "emission-site", terminalId: id });
-    const emittedByComponentNodeId =
-      expression.emittingComponentNodeId ?? classSite.emittingComponentNodeId;
-    const placementComponentNodeId =
-      expression.placementComponentNodeId ?? classSite.placementComponentNodeId;
-    const unsupported = [...expression.unsupported].sort((left, right) =>
-      left.id.localeCompare(right.id),
-    );
-    const confidence =
-      unsupported.length > 0 || expression.certainty.kind !== "exact" ? "medium" : "high";
+      const emissionSite: EmissionSite = {
+        id,
+        emissionKind: target.emissionKind,
+        ...(element ? { elementId: element.id } : {}),
+        boundaryId,
+        classExpressionId: expression.id,
+        classExpressionSiteNodeId: expression.classExpressionSiteNodeId,
+        sourceExpressionIds: [expression.id],
+        sourceLocation: normalizeAnchor(expression.location),
+        ...(target.emittedElementLocation
+          ? { emittedElementLocation: normalizeAnchor(target.emittedElementLocation) }
+          : element
+            ? { emittedElementLocation: normalizeAnchor(element.sourceLocation) }
+            : {}),
+        ...(emittedByComponentNodeId ? { emittingComponentNodeId: emittedByComponentNodeId } : {}),
+        ...(emittedByComponentNodeId
+          ? { suppliedByComponentNodeId: emittedByComponentNodeId }
+          : {}),
+        ...(placementComponentNodeId ? { placementComponentNodeId } : {}),
+        tokenProvenance: buildTokenProvenanceFromExpressionTokens({
+          expression,
+          emittedByComponentNodeId,
+        }),
+        tokens: [...expression.tokens].sort(compareTokens),
+        emissionVariants: [...expression.emissionVariants].sort((left, right) =>
+          left.id.localeCompare(right.id),
+        ),
+        externalContributions: [...expression.externalContributions].sort((left, right) =>
+          left.id.localeCompare(right.id),
+        ),
+        cssModuleContributions: [...expression.cssModuleContributions].sort((left, right) =>
+          left.id.localeCompare(right.id),
+        ),
+        unsupported,
+        confidence,
+        renderPathId: emissionPathId,
+        placementConditionIds: element?.placementConditionIds ?? [],
+        traces: [...expression.traces],
+      };
 
-    const emissionSite: EmissionSite = {
-      id,
-      emissionKind: "rendered-element-class",
-      ...(element ? { elementId: element.id } : {}),
-      boundaryId,
-      classExpressionId: expression.id,
-      classExpressionSiteNodeId: expression.classExpressionSiteNodeId,
-      sourceExpressionIds: [expression.id],
-      sourceLocation: normalizeAnchor(expression.location),
-      ...(element ? { emittedElementLocation: normalizeAnchor(element.sourceLocation) } : {}),
-      ...(emittedByComponentNodeId ? { emittingComponentNodeId: emittedByComponentNodeId } : {}),
-      ...(placementComponentNodeId ? { placementComponentNodeId } : {}),
-      tokenProvenance: buildTokenProvenanceFromExpressionTokens({
+      const instantiatedSite = instantiateExternalContributionEmissionSite({
+        emissionSite,
         expression,
-        emittedByComponentNodeId,
-      }),
-      tokens: [...expression.tokens].sort(compareTokens),
-      emissionVariants: [...expression.emissionVariants].sort((left, right) =>
-        left.id.localeCompare(right.id),
-      ),
-      externalContributions: [...expression.externalContributions].sort((left, right) =>
-        left.id.localeCompare(right.id),
-      ),
-      cssModuleContributions: [...expression.cssModuleContributions].sort((left, right) =>
-        left.id.localeCompare(right.id),
-      ),
-      unsupported,
-      confidence,
-      renderPathId: emissionPathId,
-      placementConditionIds: element?.placementConditionIds ?? [],
-      traces: [...expression.traces],
-    };
-
-    emissionSites.push(emissionSite);
-    const instantiatedSite = instantiateExternalContributionEmissionSite({
-      emissionSite,
-      expression,
-      element,
-      classSite,
-      componentPropSupplies: componentPropSuppliesByBoundaryId.get(boundaryId) ?? [],
-      counts: emissionIdCounts,
-    });
-    if (instantiatedSite) {
-      emissionSites.push(instantiatedSite);
+        element,
+        classSite,
+        boundaryById,
+        componentPropSupplies: componentPropSuppliesByBoundaryId.get(boundaryId) ?? [],
+        componentPropSuppliesByBoundaryId,
+        counts: emissionIdCounts,
+      });
+      const finalEmissionSite = instantiatedSite
+        ? {
+            ...instantiatedSite,
+            id: emissionSite.id,
+            renderPathId: emissionSite.renderPathId,
+          }
+        : emissionSite;
+      emissionSites.push(finalEmissionSite);
+      if (element) {
+        element.emissionSiteIds = [...new Set([...element.emissionSiteIds, id])].sort();
+      }
       input.renderPaths.push({
-        id: instantiatedSite.renderPathId,
+        id: emissionPathId,
         rootComponentNodeId: basePath.rootComponentNodeId,
         terminalKind: "emission-site",
-        terminalId: instantiatedSite.id,
+        terminalId: id,
         segments: [...basePath.segments],
-        placementConditionIds: instantiatedSite.placementConditionIds,
+        placementConditionIds: finalEmissionSite.placementConditionIds,
         certainty: basePath.certainty,
-        traces: [...instantiatedSite.traces],
+        traces: [...finalEmissionSite.traces],
       });
     }
-    if (element) {
-      element.emissionSiteIds = [
-        ...new Set([
-          ...element.emissionSiteIds,
-          id,
-          ...(instantiatedSite ? [instantiatedSite.id] : []),
-        ]),
-      ].sort();
-    }
-    input.renderPaths.push({
-      id: emissionPathId,
-      rootComponentNodeId: basePath.rootComponentNodeId,
-      terminalKind: "emission-site",
-      terminalId: id,
-      segments: [...basePath.segments],
-      placementConditionIds: emissionSite.placementConditionIds,
-      certainty: basePath.certainty,
-      traces: [...expression.traces],
-    });
   }
 
   for (const [boundaryId, supplies] of componentPropSuppliesByBoundaryId.entries()) {
@@ -228,6 +280,18 @@ type ComponentPropSupply = {
   consumed: boolean;
 };
 
+type ExternalSupplyToken = {
+  token: string;
+  presence: "always" | "conditional" | "possible";
+  sourceAnchor?: NonNullable<
+    RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number]["tokens"][number]["sourceAnchor"]
+  >;
+  confidence: RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number]["tokens"][number]["confidence"];
+  sourceExpressionId: string;
+  sourceClassExpressionSiteNodeId: string;
+  suppliedByComponentNodeId?: string;
+};
+
 function createEmissionSiteId(input: {
   classExpressionId: string;
   key: string;
@@ -243,31 +307,75 @@ function createEmissionSiteId(input: {
   });
 }
 
-function resolveEmittedElement(input: {
+function resolveEmittedElements(input: {
   expression: RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number];
   classSite: RenderStructureInput["graph"]["nodes"]["classExpressionSites"][number];
   elementIdsByTemplateNodeId: Map<string, string[]>;
   elementIdsByRenderSiteNodeId: Map<string, string[]>;
   elementsById: Map<string, RenderedElement>;
-}): RenderedElement | undefined {
+}): RenderedElement[] {
+  const expectedPlacementComponentNodeId =
+    input.expression.placementComponentNodeId ?? input.classSite.placementComponentNodeId;
+  const expectedEmittingComponentNodeId =
+    input.expression.emittingComponentNodeId ?? input.classSite.emittingComponentNodeId;
+  const chooseCandidates = (candidateIds: string[]): RenderedElement[] => {
+    const candidates = candidateIds
+      .map((id) => input.elementsById.get(id))
+      .filter((element): element is RenderedElement => Boolean(element));
+    if (candidates.length === 0) {
+      return [];
+    }
+    return [...candidates].sort((left, right) => {
+      const leftPlacementScore =
+        expectedPlacementComponentNodeId &&
+        left.placementComponentNodeId === expectedPlacementComponentNodeId
+          ? 1
+          : 0;
+      const rightPlacementScore =
+        expectedPlacementComponentNodeId &&
+        right.placementComponentNodeId === expectedPlacementComponentNodeId
+          ? 1
+          : 0;
+      if (leftPlacementScore !== rightPlacementScore) {
+        return rightPlacementScore - leftPlacementScore;
+      }
+      const leftEmittingScore =
+        expectedEmittingComponentNodeId &&
+        left.emittingComponentNodeId === expectedEmittingComponentNodeId
+          ? 1
+          : 0;
+      const rightEmittingScore =
+        expectedEmittingComponentNodeId &&
+        right.emittingComponentNodeId === expectedEmittingComponentNodeId
+          ? 1
+          : 0;
+      if (leftEmittingScore !== rightEmittingScore) {
+        return rightEmittingScore - leftEmittingScore;
+      }
+      return left.id.localeCompare(right.id);
+    });
+  };
+
   const byTemplate =
     input.expression.elementTemplateNodeId ?? input.classSite.elementTemplateNodeId;
   if (byTemplate) {
-    const id = input.elementIdsByTemplateNodeId.get(byTemplate)?.[0];
-    if (id) {
-      return input.elementsById.get(id);
+    const candidates = input.elementIdsByTemplateNodeId.get(byTemplate) ?? [];
+    const elements = chooseCandidates(candidates);
+    if (elements.length > 0) {
+      return elements;
     }
   }
 
   const byRenderSite = input.expression.renderSiteNodeId ?? input.classSite.renderSiteNodeId;
   if (byRenderSite) {
-    const id = input.elementIdsByRenderSiteNodeId.get(byRenderSite)?.[0];
-    if (id) {
-      return input.elementsById.get(id);
+    const candidates = input.elementIdsByRenderSiteNodeId.get(byRenderSite) ?? [];
+    const elements = chooseCandidates(candidates);
+    if (elements.length > 0) {
+      return elements;
     }
   }
 
-  return undefined;
+  return [];
 }
 
 function resolveBoundaryIdForClassSite(
@@ -277,6 +385,15 @@ function resolveBoundaryIdForClassSite(
   return classSite.emittingComponentNodeId
     ? rootBoundaryIdByComponentNodeId.get(classSite.emittingComponentNodeId)
     : undefined;
+}
+
+function shouldUseBoundaryFallbackForClassSite(
+  classSite: RenderStructureInput["graph"]["nodes"]["classExpressionSites"][number],
+): boolean {
+  return (
+    classSite.classExpressionSiteKind !== "jsx-class" ||
+    (!classSite.renderSiteNodeId && !classSite.elementTemplateNodeId)
+  );
 }
 
 function buildComponentPropSuppliesByBoundaryId(input: {
@@ -340,12 +457,26 @@ function buildComponentPropSuppliesByBoundaryId(input: {
   return result;
 }
 
+function buildComponentBoundaryByReferenceRenderSiteNodeId(
+  componentBoundaries: RenderedComponentBoundary[],
+): Map<string, RenderedComponentBoundary> {
+  const result = new Map<string, RenderedComponentBoundary>();
+  for (const boundary of componentBoundaries) {
+    if (boundary.referenceRenderSiteNodeId) {
+      result.set(boundary.referenceRenderSiteNodeId, boundary);
+    }
+  }
+  return result;
+}
+
 function instantiateExternalContributionEmissionSite(input: {
   emissionSite: EmissionSite;
   expression: RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number];
   classSite: RenderStructureInput["graph"]["nodes"]["classExpressionSites"][number];
   element?: RenderedElement;
+  boundaryById: Map<string, RenderedComponentBoundary>;
   componentPropSupplies: ComponentPropSupply[];
+  componentPropSuppliesByBoundaryId: Map<string, ComponentPropSupply[]>;
   counts: Map<string, number>;
 }): EmissionSite | undefined {
   if (
@@ -385,8 +516,14 @@ function instantiateExternalContributionEmissionSite(input: {
   }
 
   const known = new Set(input.expression.tokens.map((token) => token.token));
-  const instantiatedTokens = [...supply.expression.tokens]
-    .filter((token) => token.tokenKind !== "css-module-export")
+  const supplyTokens = collectExternalSupplyTokens({
+    supply,
+    boundaryId: input.emissionSite.boundaryId,
+    boundaryById: input.boundaryById,
+    componentPropSuppliesByBoundaryId: input.componentPropSuppliesByBoundaryId,
+    seenExpressionIds: new Set(),
+  });
+  const instantiatedTokens = supplyTokens
     .filter((token) => {
       if (known.has(token.token)) {
         return false;
@@ -400,8 +537,13 @@ function instantiateExternalContributionEmissionSite(input: {
       tokenKind: "external-class" as const,
       presence: token.presence,
       conditionId: fallbackConditionId,
-      ...(token.sourceAnchor ? { sourceAnchor: token.sourceAnchor } : {}),
+      ...(token.sourceAnchor ? { sourceAnchor: normalizeAnchor(token.sourceAnchor) } : {}),
       confidence: token.confidence,
+      sourceExpressionId: token.sourceExpressionId,
+      sourceClassExpressionSiteNodeId: token.sourceClassExpressionSiteNodeId,
+      ...(token.suppliedByComponentNodeId
+        ? { suppliedByComponentNodeId: token.suppliedByComponentNodeId }
+        : {}),
       ...(input.expression.externalContributions[0]
         ? { contributionId: input.expression.externalContributions[0].id }
         : {}),
@@ -423,11 +565,11 @@ function instantiateExternalContributionEmissionSite(input: {
     token: token.token,
     tokenKind: token.tokenKind,
     presence: token.presence,
-    sourceExpressionId: supply.expression.id,
-    sourceClassExpressionSiteNodeId: supply.expression.classExpressionSiteNodeId,
+    sourceExpressionId: token.sourceExpressionId,
+    sourceClassExpressionSiteNodeId: token.sourceClassExpressionSiteNodeId,
     ...(token.sourceAnchor ? { sourceLocation: normalizeAnchor(token.sourceAnchor) } : {}),
-    ...(supply.suppliedByComponentNodeId
-      ? { suppliedByComponentNodeId: supply.suppliedByComponentNodeId }
+    ...(token.suppliedByComponentNodeId
+      ? { suppliedByComponentNodeId: token.suppliedByComponentNodeId }
       : {}),
     ...(input.emissionSite.emittingComponentNodeId
       ? { emittedByComponentNodeId: input.emissionSite.emittingComponentNodeId }
@@ -438,12 +580,16 @@ function instantiateExternalContributionEmissionSite(input: {
 
   return {
     id,
-    emissionKind: "instantiated-external-class",
+    emissionKind: "merged-element-class",
     ...(input.element ? { elementId: input.element.id } : {}),
     boundaryId: input.emissionSite.boundaryId,
     classExpressionId: input.expression.id,
     classExpressionSiteNodeId: input.expression.classExpressionSiteNodeId,
-    sourceExpressionIds: [input.expression.id, supply.expression.id].sort(),
+    sourceExpressionIds: [
+      input.expression.id,
+      supply.expression.id,
+      ...supplyTokens.map((token) => token.sourceExpressionId),
+    ].sort(),
     sourceLocation: normalizeAnchor(input.expression.location),
     ...(input.element
       ? { emittedElementLocation: normalizeAnchor(input.element.sourceLocation) }
@@ -460,19 +606,89 @@ function instantiateExternalContributionEmissionSite(input: {
     ...(input.emissionSite.placementComponentNodeId
       ? { placementComponentNodeId: input.emissionSite.placementComponentNodeId }
       : {}),
-    tokenProvenance,
-    tokens: instantiatedTokens,
-    emissionVariants: [],
+    tokenProvenance: [...input.emissionSite.tokenProvenance, ...tokenProvenance].sort(
+      compareTokenProvenance,
+    ),
+    tokens: [...input.emissionSite.tokens, ...instantiatedTokens].sort(compareTokens),
+    emissionVariants: [...input.emissionSite.emissionVariants].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
     externalContributions: [...input.expression.externalContributions].sort((left, right) =>
       left.id.localeCompare(right.id),
     ),
-    cssModuleContributions: [],
-    unsupported: [],
+    cssModuleContributions: [...input.emissionSite.cssModuleContributions].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
+    unsupported: [...input.emissionSite.unsupported].sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
     confidence: "medium",
     renderPathId: renderPathId({ terminalKind: "emission-site", terminalId: id }),
     placementConditionIds: input.element?.placementConditionIds ?? [],
     traces: [...input.expression.traces],
   };
+}
+
+function collectExternalSupplyTokens(input: {
+  supply: ComponentPropSupply;
+  boundaryId: string;
+  boundaryById: Map<string, RenderedComponentBoundary>;
+  componentPropSuppliesByBoundaryId: Map<string, ComponentPropSupply[]>;
+  seenExpressionIds: Set<string>;
+}): ExternalSupplyToken[] {
+  if (input.seenExpressionIds.has(input.supply.expression.id)) {
+    return [];
+  }
+
+  const seenExpressionIds = new Set(input.seenExpressionIds);
+  seenExpressionIds.add(input.supply.expression.id);
+  const directTokens: ExternalSupplyToken[] = input.supply.expression.tokens
+    .filter((token) => token.tokenKind !== "css-module-export")
+    .map((token) => ({
+      token: token.token,
+      presence: token.presence,
+      ...(token.sourceAnchor ? { sourceAnchor: normalizeAnchor(token.sourceAnchor) } : {}),
+      confidence: token.confidence,
+      sourceExpressionId: input.supply.expression.id,
+      sourceClassExpressionSiteNodeId: input.supply.expression.classExpressionSiteNodeId,
+      ...(input.supply.suppliedByComponentNodeId
+        ? { suppliedByComponentNodeId: input.supply.suppliedByComponentNodeId }
+        : {}),
+    }));
+
+  const parentBoundaryId = input.boundaryById.get(input.boundaryId)?.parentBoundaryId;
+  if (!parentBoundaryId || input.supply.expression.externalContributions.length === 0) {
+    return directTokens;
+  }
+
+  const upstreamSupplies = input.componentPropSuppliesByBoundaryId.get(parentBoundaryId) ?? [];
+  const upstreamTokens: ExternalSupplyToken[] = [];
+  for (const contribution of input.supply.expression.externalContributions) {
+    const propName = contribution.propertyName ?? contribution.localName;
+    if (!propName) {
+      continue;
+    }
+
+    const upstreamSupply = upstreamSupplies.find(
+      (candidate) => candidate.componentPropName === propName,
+    );
+    if (!upstreamSupply) {
+      continue;
+    }
+
+    upstreamSupply.consumed = true;
+    upstreamTokens.push(
+      ...collectExternalSupplyTokens({
+        supply: upstreamSupply,
+        boundaryId: parentBoundaryId,
+        boundaryById: input.boundaryById,
+        componentPropSuppliesByBoundaryId: input.componentPropSuppliesByBoundaryId,
+        seenExpressionIds,
+      }),
+    );
+  }
+
+  return [...directTokens, ...upstreamTokens];
 }
 
 function findBoundaryRenderPath(
@@ -512,6 +728,19 @@ function compareTokens(
     left.tokenKind.localeCompare(right.tokenKind) ||
     left.presence.localeCompare(right.presence) ||
     left.id.localeCompare(right.id)
+  );
+}
+
+function compareTokenProvenance(
+  left: EmissionTokenProvenance,
+  right: EmissionTokenProvenance,
+): number {
+  return (
+    left.token.localeCompare(right.token) ||
+    left.tokenKind.localeCompare(right.tokenKind) ||
+    left.presence.localeCompare(right.presence) ||
+    left.sourceExpressionId.localeCompare(right.sourceExpressionId) ||
+    left.sourceClassExpressionSiteNodeId.localeCompare(right.sourceClassExpressionSiteNodeId)
   );
 }
 

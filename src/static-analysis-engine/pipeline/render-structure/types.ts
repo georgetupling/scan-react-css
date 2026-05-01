@@ -1,8 +1,6 @@
 import type { AnalysisConfidence, AnalysisSeverity, AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
 import type { FactGraph, FactNodeId } from "../fact-graph/index.js";
-import type { ModuleFacts } from "../module-facts/index.js";
-import type { ProjectBindingResolution } from "../symbol-resolution/index.js";
 import type {
   ClassEmissionVariant,
   ConditionId,
@@ -33,14 +31,6 @@ export type RenderStructureInput = {
   graph: FactGraph;
   symbolicEvaluation: SymbolicEvaluationResult;
   options?: RenderStructureOptions;
-  legacy?: {
-    parsedFiles: Array<{
-      filePath: string;
-      parsedSourceFile: import("typescript").SourceFile;
-    }>;
-    moduleFacts: ModuleFacts;
-    symbolResolution: ProjectBindingResolution;
-  };
 };
 
 export type RenderStructureResult = {

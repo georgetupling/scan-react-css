@@ -404,11 +404,6 @@ async function buildRenderStructureFixture(input) {
       options: {
         includeTraces: true,
       },
-      legacy: {
-        parsedFiles: frontends.source.files.map((file) => file.legacy.parsedFile),
-        moduleFacts,
-        symbolResolution,
-      },
     });
   } finally {
     await project.cleanup();

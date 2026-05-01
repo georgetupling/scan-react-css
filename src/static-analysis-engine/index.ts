@@ -103,7 +103,6 @@ export type {
   AnalysisTrace,
   AnalysisTraceCategory,
 } from "./types/analysis.js";
-export { deriveAnalysisConfidence } from "./types/analysis.js";
 export type {
   AnalysisProgressCallback,
   AnalysisProgressEvent,

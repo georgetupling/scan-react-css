@@ -1,3 +1,5 @@
+import ts from "typescript";
+
 import { graphToReactRenderSyntaxInputs } from "../../fact-graph/index.js";
 import { buildLegacyRenderArtifacts } from "../../render-model/buildLegacyRenderArtifacts.js";
 import { conditionId, tokenAlternativeId } from "../../symbolic-evaluation/ids.js";
@@ -18,6 +20,8 @@ import type {
   RenderSubtree,
 } from "../../render-model/render-ir/index.js";
 import type { RenderModelClassExpressionSummaryRecord } from "../../render-model/render-ir/class-expressions/classExpressionSummaries.js";
+import type { ModuleFacts } from "../../module-facts/index.js";
+import type { ProjectBindingResolution } from "../../symbol-resolution/index.js";
 import type {
   RenderCertainty,
   EmissionSite,
@@ -30,11 +34,11 @@ import type {
   RenderPathSegment,
   RenderRegion,
   RenderStructureDiagnostic,
-  RenderStructureInput,
   RenderedComponent,
   RenderedComponentBoundary,
   RenderedElement,
 } from "../types.js";
+import type { RenderStructureInput } from "../types.js";
 import type { ClassExpressionSummary } from "../../symbolic-evaluation/class-values/types.js";
 import type {
   CanonicalClassExpression,
@@ -85,7 +89,18 @@ type SymbolicExpressionLookup = {
   expressionNodeIdBySiteNodeId: Map<string, string>;
 };
 
-export function projectLegacyRenderModel(input: RenderStructureInput): {
+type LegacyProjectionInput = RenderStructureInput & {
+  legacy?: {
+    parsedFiles: Array<{
+      filePath: string;
+      parsedSourceFile: ts.SourceFile;
+    }>;
+    moduleFacts: ModuleFacts;
+    symbolResolution: ProjectBindingResolution;
+  };
+};
+
+export function projectLegacyRenderModel(input: LegacyProjectionInput): {
   components: RenderedComponent[];
   componentBoundaries: RenderedComponentBoundary[];
   elements: RenderedElement[];

@@ -20,6 +20,8 @@ export type ReactComponentDeclarationFact = {
   declarationKind: "function" | "variable" | "class";
   evidence: string;
   location: SourceAnchor;
+  rendersChildrenProp?: boolean;
+  renderedPropNames?: string[];
 };
 
 export type ReactRenderSiteFact = {
@@ -36,13 +38,18 @@ export type ReactRenderSiteFact = {
   emittingComponentKey?: string;
   placementComponentKey?: string;
   parentSiteKey?: string;
+  parentRenderRelation?: "jsx-child" | "jsx-attribute-expression" | "nested-render-expression";
+  parentRenderAttributeName?: string;
   elementTemplateKey?: string;
   repeatedRegion?: {
     repeatKind: "array-map" | "array-from";
     sourceText: string;
     sourceLocation: SourceAnchor;
+    callbackParameterNames?: string[];
     certainty: "possible" | "unknown";
   };
+  conditionExpressionId?: string;
+  conditionSourceText?: string;
 };
 
 export type ReactElementTemplateFact = {
@@ -93,6 +100,8 @@ export type ReactLocalValueBindingFact = {
   ownerKind: "component" | "helper";
   ownerKey: string;
   filePath: string;
+  scopeKey: string;
+  scopeLocation: SourceAnchor;
   localName: string;
   location: SourceAnchor;
   bindingKind: "const-identifier" | "destructured-property";
@@ -113,6 +122,7 @@ export type ReactHelperDefinitionFact = {
   parameters: ReactHelperParameterBindingFact[];
   restParameterName?: string;
   returnExpressionId?: string;
+  returnExpressionIds?: string[];
   unsupportedReason?: ReactUnsupportedBindingReason;
 };
 

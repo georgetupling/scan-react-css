@@ -136,13 +136,18 @@ test("render structure expands intrinsic elements in native mode", async () => {
   );
 
   const classSiteCount = fixture.graph.nodes.classExpressionSites.length;
-  const mappedOrDiagnosedSiteCount =
-    result.renderModel.emissionSites.length +
-    result.renderModel.diagnostics.filter(
-      (diagnostic) =>
-        diagnostic.code === "missing-symbolic-class-expression" ||
-        diagnostic.code === "unmodeled-class-expression-site",
-    ).length;
+  const mappedOrDiagnosedSiteIds = new Set([
+    ...result.renderModel.emissionSites.map((site) => site.classExpressionSiteNodeId),
+    ...result.renderModel.diagnostics
+      .filter(
+        (diagnostic) =>
+          diagnostic.code === "missing-symbolic-class-expression" ||
+          diagnostic.code === "unmodeled-class-expression-site",
+      )
+      .map((diagnostic) => diagnostic.classExpressionSiteNodeId)
+      .filter(Boolean),
+  ]);
+  const mappedOrDiagnosedSiteCount = mappedOrDiagnosedSiteIds.size;
   assert.equal(mappedOrDiagnosedSiteCount, classSiteCount);
   assert.ok(
     result.renderModel.emissionSites.every((site) =>
@@ -188,11 +193,6 @@ test("render structure projects the current render model into the stage 5 model"
     symbolicEvaluation,
     options: {
       includeTraces: true,
-    },
-    legacy: {
-      parsedFiles: fixture.parsedFiles,
-      moduleFacts: fixture.moduleFacts,
-      symbolResolution: fixture.symbolResolution,
     },
   });
 
@@ -244,7 +244,7 @@ test("render structure projects the current render model into the stage 5 model"
   );
 });
 
-test("render structure builds emission sites from legacy render classes and stage 4 facts", async () => {
+test("render structure builds emission sites from stage 4 facts", async () => {
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
     graph: fixture.graph,
@@ -255,11 +255,6 @@ test("render structure builds emission sites from legacy render classes and stag
     symbolicEvaluation,
     options: {
       includeTraces: true,
-    },
-    legacy: {
-      parsedFiles: fixture.parsedFiles,
-      moduleFacts: fixture.moduleFacts,
-      symbolResolution: fixture.symbolResolution,
     },
   });
   const expressionsById = new Map(
@@ -345,11 +340,6 @@ test("render structure instantiates parent-supplied external contributions durin
     options: {
       includeTraces: true,
     },
-    legacy: {
-      parsedFiles: fixture.parsedFiles,
-      moduleFacts: fixture.moduleFacts,
-      symbolResolution: fixture.symbolResolution,
-    },
   });
 
   const appComponentNodeId = componentNodeIdByName(fixture.graph, "App");
@@ -372,7 +362,7 @@ test("render structure instantiates parent-supplied external contributions durin
   assert.equal(staticChildEmission.suppliedByComponentNodeId, childComponentNodeId);
 });
 
-test("render structure legacy projection is deterministic across repeated runs", async () => {
+test("render structure projection is deterministic across repeated runs", async () => {
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
     graph: fixture.graph,
@@ -381,11 +371,6 @@ test("render structure legacy projection is deterministic across repeated runs",
   const input = {
     graph: fixture.graph,
     symbolicEvaluation,
-    legacy: {
-      parsedFiles: fixture.parsedFiles,
-      moduleFacts: fixture.moduleFacts,
-      symbolResolution: fixture.symbolResolution,
-    },
   };
   const first = buildRenderStructure(input);
   const second = buildRenderStructure(input);
@@ -439,7 +424,6 @@ async function buildProjectionFixture() {
 
     return {
       graph: factGraph.graph,
-      parsedFiles: frontends.source.files.map((file) => file.legacy.parsedFile),
       moduleFacts,
       symbolResolution,
     };
@@ -489,7 +473,6 @@ async function buildForwardedContributionFixture() {
 
     return {
       graph: factGraph.graph,
-      parsedFiles: frontends.source.files.map((file) => file.legacy.parsedFile),
       moduleFacts,
       symbolResolution,
     };

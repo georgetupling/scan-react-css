@@ -1,5 +1,4 @@
 import type { AnalysisDecision, AnalysisTrace, AnalysisCertainty } from "../../types/analysis.js";
-import { deriveAnalysisConfidence } from "../../types/analysis.js";
 import type { ParsedSelectorQuery, SelectorQueryResult } from "./types.js";
 
 export function buildSelectorQueryResult(input: {
@@ -33,4 +32,18 @@ export function buildSelectorQueryResult(input: {
     decision,
     ...(input.reachability ? { reachability: input.reachability } : {}),
   };
+}
+
+function deriveAnalysisConfidence(
+  decision: Pick<AnalysisDecision, "status" | "certainty">,
+): SelectorQueryResult["confidence"] {
+  if (decision.status !== "resolved" || decision.certainty === "unknown") {
+    return "low";
+  }
+
+  if (decision.certainty === "possible") {
+    return "medium";
+  }
+
+  return "high";
 }

@@ -242,6 +242,7 @@ export function buildNativeRenderStructure(
       }
       expandRenderSite(expansionState, {
         componentNodeId: componentNode.id,
+        placementComponentNodeId: componentNode.id,
         boundaryId: boundary.id,
         renderSite: rootRenderSite,
         childIndex: rootIndex,

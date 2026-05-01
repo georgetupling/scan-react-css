@@ -1,6 +1,5 @@
 import { sortRenderStructureDiagnostics } from "./diagnostics.js";
 import { buildRenderModelIndexes } from "./indexes.js";
-import { projectLegacyRenderModel } from "./adapters/legacyRenderModelProjection.js";
 import { buildNativeRenderStructure } from "./native/buildNativeRenderStructure.js";
 import type {
   EmissionSite,
@@ -16,9 +15,7 @@ import type {
 } from "./types.js";
 
 export function buildRenderStructure(input: RenderStructureInput): RenderStructureResult {
-  const projected = input.legacy
-    ? projectLegacyRenderModel(input)
-    : buildNativeRenderStructure(input);
+  const projected = buildNativeRenderStructure(input);
   const components: RenderedComponent[] = projected?.components ?? [];
   const componentBoundaries: RenderedComponentBoundary[] = projected?.componentBoundaries ?? [];
   const elements: RenderedElement[] = projected?.elements ?? [];

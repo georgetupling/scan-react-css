@@ -41,17 +41,3 @@ export type AnalysisDecision = {
   reasons: string[];
   traces: AnalysisTrace[];
 };
-
-export function deriveAnalysisConfidence(
-  decision: Pick<AnalysisDecision, "status" | "certainty">,
-): AnalysisConfidence {
-  if (decision.status !== "resolved" || decision.certainty === "unknown") {
-    return "low";
-  }
-
-  if (decision.certainty === "possible") {
-    return "medium";
-  }
-
-  return "high";
-}

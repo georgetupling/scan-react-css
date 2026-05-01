@@ -104,6 +104,7 @@ function getArrayMapMetadata(
     repeatKind: "array-map",
     sourceText: call.expression.getText(sourceFile),
     sourceLocation: toSourceAnchor(call.expression, sourceFile, filePath),
+    callbackParameterNames: collectIdentifierParameterNames(mapper),
     certainty: "possible",
   };
 }
@@ -130,6 +131,17 @@ function getArrayFromMetadata(
     repeatKind: "array-from",
     sourceText: call.expression.getText(sourceFile),
     sourceLocation: toSourceAnchor(call.expression, sourceFile, filePath),
+    callbackParameterNames: collectIdentifierParameterNames(mapper),
     certainty: "possible",
   };
+}
+
+function collectIdentifierParameterNames(
+  mapper: ts.ArrowFunction | ts.FunctionExpression,
+): string[] {
+  return mapper.parameters
+    .map((parameter) => parameter.name)
+    .filter((name): name is ts.Identifier => ts.isIdentifier(name))
+    .map((name) => name.text)
+    .sort((left, right) => left.localeCompare(right));
 }

@@ -530,6 +530,31 @@ test("analysis evidence preserves class expression context across helper-forward
     "popover",
     "popover__trigger",
   ]);
+
+  const analysis = result.analysisEvidence.projectEvidence;
+  const appComponentId = "component:src/App.tsx:App";
+  const appSuppliedClasses = [
+    "site-header__notifications-menu",
+    "site-header__menu-trigger",
+    "site-header__menu-trigger--round",
+  ];
+  for (const className of appSuppliedClasses) {
+    const references = getClassReferencesByClassName(analysis, className);
+    assert.ok(references.length > 0, `expected references for ${className}`);
+    assert.ok(
+      references.some(
+        (reference) => reference.classNameComponentIds?.[className] === appComponentId,
+      ),
+      `expected ${className} to preserve App as class supplier`,
+    );
+    assert.ok(
+      references.some(
+        (reference) =>
+          reference.location.filePath === "src/App.tsx" && reference.location.startLine === 3,
+      ),
+      `expected ${className} to preserve App source location`,
+    );
+  }
 });
 
 test("analysis evidence preserves finite switch helper classes in filtered class arrays", () => {
@@ -570,6 +595,116 @@ test("analysis evidence preserves finite switch helper classes in filtered class
     "browse-filter-chip--require",
     "browse-filter-chip--exclude",
   ]);
+});
+
+test("analysis evidence preserves local callback alias class variants", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/HomepageDiscoveryRail.tsx",
+        sourceText: [
+          "function HomepageDiscoveryCard({ className }) {",
+          "  return <article className={className} />;",
+          "}",
+          "export function HomepageDiscoveryRail({ activeIndex = 0 }) {",
+          "  const discovery = { slots: [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }] };",
+          "  return discovery.slots.map((slot, index) => {",
+          "    const isActive = index === activeIndex;",
+          "    const cardPositionClass = isActive",
+          "      ? 'home-page__discovery-card--active'",
+          "      : index < activeIndex",
+          "        ? 'home-page__discovery-card--previous'",
+          "        : index === activeIndex + 1",
+          "          ? 'home-page__discovery-card--next'",
+          "          : 'home-page__discovery-card--hidden';",
+          "    return <HomepageDiscoveryCard key={slot.id} className={cardPositionClass} />;",
+          "  });",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/HomepageDiscoveryRail.css",
+        cssText: [
+          ".home-page__discovery-card--active { display: block; }",
+          ".home-page__discovery-card--previous { display: block; }",
+          ".home-page__discovery-card--next { display: block; }",
+          ".home-page__discovery-card--hidden { display: none; }",
+          "",
+        ].join("\n"),
+      },
+    ],
+  });
+
+  assertIndexedClassReferences(result.analysisEvidence.projectEvidence, [
+    "home-page__discovery-card--active",
+    "home-page__discovery-card--previous",
+    "home-page__discovery-card--next",
+    "home-page__discovery-card--hidden",
+  ]);
+});
+
+test("analysis evidence prefers callback-local shadowed class bindings over outer bindings", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/ShadowedClasses.tsx",
+        sourceText: [
+          "export function ShadowedClasses({ items = [1] }) {",
+          '  const className = "outer";',
+          "  return items.map(() => {",
+          '    const className = "inner";',
+          "    return <div className={className} />;",
+          "  });",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/ShadowedClasses.css",
+        cssText: [".outer { color: red; }", ".inner { color: blue; }", ""].join("\n"),
+      },
+    ],
+  });
+
+  assertIndexedClassReferences(result.analysisEvidence.projectEvidence, ["inner"]);
+  assertNoIndexedClassReferences(result.analysisEvidence.projectEvidence, ["outer"]);
+});
+
+test("analysis evidence does not index class references from unconsumed shadowed children", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/FieldList.tsx",
+        sourceText: [
+          'import { Children } from "react";',
+          "export function FieldList({ children }) {",
+          "  return <div>{Children.map([1], (children) => children)}</div>;",
+          "}",
+          "export function App() {",
+          "  return (",
+          "    <FieldList>",
+          '      <span className="field-list__slot" />',
+          "    </FieldList>",
+          "  );",
+          "}",
+          "",
+        ].join("\n"),
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/FieldList.css",
+        cssText: ".field-list__slot { display: block; }\n",
+      },
+    ],
+  });
+
+  assertNoIndexedClassReferences(result.analysisEvidence.projectEvidence, ["field-list__slot"]);
 });
 
 test("analysis evidence indexes React child transform references by class name", () => {
@@ -770,4 +905,11 @@ function assertNoIndexedClassReferences(analysis, classNames) {
       `expected classReferenceIdsByClassName not to contain ${className}`,
     );
   }
+}
+
+function getClassReferencesByClassName(analysis, className) {
+  const referenceIds = analysis.indexes.classReferenceIdsByClassName.get(className) ?? [];
+  return referenceIds
+    .map((referenceId) => analysis.indexes.classReferencesById.get(referenceId))
+    .filter(Boolean);
 }

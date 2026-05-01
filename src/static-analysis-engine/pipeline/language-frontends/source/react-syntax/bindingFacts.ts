@@ -251,7 +251,29 @@ function collectLocalBindingFactsFromBody(input: {
     return;
   }
 
-  for (const statement of input.body.statements) {
+  const scope = createLocalBindingScope({
+    ownerKey: input.ownerKey,
+    filePath: input.filePath,
+    sourceFile: input.sourceFile,
+    node: input.body,
+  });
+  collectLocalBindingFactsFromStatements({
+    ...input,
+    statements: input.body.statements,
+    scope,
+  });
+}
+
+function collectLocalBindingFactsFromStatements(input: {
+  ownerKind: "component" | "helper";
+  ownerKey: string;
+  filePath: string;
+  sourceFile: ts.SourceFile;
+  statements: readonly ts.Statement[];
+  scope: LocalBindingScope;
+  collected: CollectedReactBindingFacts;
+}): void {
+  for (const statement of input.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name && statement.body) {
       collectHelperDefinitionFromFunctionLike({
         helperName: statement.name.text,
@@ -267,12 +289,17 @@ function collectLocalBindingFactsFromBody(input: {
     }
 
     if (!ts.isVariableStatement(statement) || !isConstDeclarationList(statement.declarationList)) {
+      collectLocalBindingFactsFromNestedCallbacks({
+        ...input,
+        node: statement,
+      });
       continue;
     }
 
     for (const declaration of statement.declarationList.declarations) {
       collectLocalBindingFactFromDeclaration({
         declaration,
+        scope: input.scope,
         ownerKind: input.ownerKind,
         ownerKey: input.ownerKey,
         filePath: input.filePath,
@@ -280,11 +307,16 @@ function collectLocalBindingFactsFromBody(input: {
         collected: input.collected,
       });
     }
+    collectLocalBindingFactsFromNestedCallbacks({
+      ...input,
+      node: statement,
+    });
   }
 }
 
 function collectLocalBindingFactFromDeclaration(input: {
   declaration: ts.VariableDeclaration;
+  scope: LocalBindingScope;
   ownerKind: "component" | "helper";
   ownerKey: string;
   filePath: string;
@@ -323,11 +355,13 @@ function collectLocalBindingFactFromDeclaration(input: {
       bindingKey: createSiteKey(
         "local-value-binding",
         location,
-        `${input.ownerKey}:${input.declaration.name.text}`,
+        `${input.scope.scopeKey}:${input.declaration.name.text}`,
       ),
       ownerKind: input.ownerKind,
       ownerKey: input.ownerKey,
       filePath: input.filePath,
+      scopeKey: input.scope.scopeKey,
+      scopeLocation: input.scope.scopeLocation,
       localName: input.declaration.name.text,
       location,
       bindingKind: "const-identifier",
@@ -373,11 +407,13 @@ function collectLocalBindingFactFromDeclaration(input: {
       bindingKey: createSiteKey(
         "local-value-binding",
         location,
-        `${input.ownerKey}:${element.name.text}`,
+        `${input.scope.scopeKey}:${element.name.text}`,
       ),
       ownerKind: input.ownerKind,
       ownerKey: input.ownerKey,
       filePath: input.filePath,
+      scopeKey: input.scope.scopeKey,
+      scopeLocation: input.scope.scopeLocation,
       localName: element.name.text,
       location,
       bindingKind: "destructured-property",
@@ -409,16 +445,21 @@ function collectHelperDefinitionFromFunctionLike(input: {
     `${input.ownerKind}:${input.ownerKey}:${input.helperName}`,
   );
   const returnExpression = getSimpleReturnExpression(input.functionLikeNode.body);
-  const returnExpressionSyntax = returnExpression
-    ? collectExpressionSyntaxForNode({
-        node: returnExpression,
-        filePath: input.filePath,
-        sourceFile: input.sourceFile,
-      })
-    : undefined;
-  if (returnExpressionSyntax) {
-    input.collected.expressionSyntax.push(...returnExpressionSyntax.expressions);
+  const returnExpressions = collectBoundedReturnExpressions(input.functionLikeNode.body);
+  const returnExpressionSyntaxes = returnExpressions.map((node) =>
+    collectExpressionSyntaxForNode({
+      node,
+      filePath: input.filePath,
+      sourceFile: input.sourceFile,
+    }),
+  );
+  for (const syntax of returnExpressionSyntaxes) {
+    input.collected.expressionSyntax.push(...syntax.expressions);
   }
+  const singleReturnExpressionSyntax =
+    returnExpression && returnExpressionSyntaxes.length > 0
+      ? returnExpressionSyntaxes.find((syntax) => syntax.rootExpressionId)
+      : undefined;
 
   input.collected.helperDefinitions.push({
     helperKey,
@@ -439,10 +480,24 @@ function collectHelperDefinitionFromFunctionLike(input: {
     ...(getRestParameterName(input.functionLikeNode.parameters)
       ? { restParameterName: getRestParameterName(input.functionLikeNode.parameters) }
       : {}),
-    ...(returnExpressionSyntax
-      ? { returnExpressionId: returnExpressionSyntax.rootExpressionId }
+    ...(() => {
+      const collectedReturnExpressionIds = returnExpressionSyntaxes
+        .map((syntax) => syntax.rootExpressionId)
+        .filter((id): id is string => Boolean(id));
+      if (collectedReturnExpressionIds.length === 0) {
+        return {};
+      }
+      return {
+        returnExpressionId:
+          singleReturnExpressionSyntax?.rootExpressionId ?? collectedReturnExpressionIds[0],
+        ...(collectedReturnExpressionIds.length > 1
+          ? { returnExpressionIds: collectedReturnExpressionIds }
+          : {}),
+      };
+    })(),
+    ...(!singleReturnExpressionSyntax && returnExpressionSyntaxes.length === 0
+      ? { unsupportedReason: "unsupported-helper-return" }
       : {}),
-    ...(!returnExpressionSyntax ? { unsupportedReason: "unsupported-helper-return" } : {}),
   });
 
   collectLocalBindingFactsFromBody({
@@ -502,6 +557,59 @@ function collectHelperParameterBinding(input: {
   };
 }
 
+type LocalBindingScope = {
+  scopeKey: string;
+  scopeLocation: ReturnType<typeof toSourceAnchor>;
+};
+
+function createLocalBindingScope(input: {
+  ownerKey: string;
+  filePath: string;
+  sourceFile: ts.SourceFile;
+  node: ts.Node;
+}): LocalBindingScope {
+  const scopeLocation = toSourceAnchor(input.node, input.sourceFile, input.filePath);
+  return {
+    scopeKey: createSiteKey("local-scope", scopeLocation, input.ownerKey),
+    scopeLocation,
+  };
+}
+
+function collectLocalBindingFactsFromNestedCallbacks(input: {
+  ownerKind: "component" | "helper";
+  ownerKey: string;
+  filePath: string;
+  sourceFile: ts.SourceFile;
+  node: ts.Node;
+  scope: LocalBindingScope;
+  collected: CollectedReactBindingFacts;
+}): void {
+  const visit = (node: ts.Node): void => {
+    if ((ts.isArrowFunction(node) || ts.isFunctionExpression(node)) && ts.isBlock(node.body)) {
+      const callbackScope = createLocalBindingScope({
+        ownerKey: input.ownerKey,
+        filePath: input.filePath,
+        sourceFile: input.sourceFile,
+        node: node.body,
+      });
+      collectLocalBindingFactsFromStatements({
+        ownerKind: input.ownerKind,
+        ownerKey: input.ownerKey,
+        filePath: input.filePath,
+        sourceFile: input.sourceFile,
+        statements: node.body.statements,
+        scope: callbackScope,
+        collected: input.collected,
+      });
+      return;
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  ts.forEachChild(input.node, visit);
+}
+
 function collectDestructuredBindingProperties(input: {
   pattern: ts.ObjectBindingPattern;
   filePath: string;
@@ -511,7 +619,11 @@ function collectDestructuredBindingProperties(input: {
   const properties: ReactDestructuredBindingPropertyFact[] = [];
 
   for (const element of input.pattern.elements) {
-    if (element.dotDotDotToken || !ts.isIdentifier(element.name)) {
+    if (element.dotDotDotToken) {
+      continue;
+    }
+
+    if (!ts.isIdentifier(element.name)) {
       return undefined;
     }
 
@@ -572,6 +684,55 @@ function getSimpleReturnExpression(body: ts.ConciseBody | undefined): ts.Express
   }
 
   return undefined;
+}
+
+function collectBoundedReturnExpressions(body: ts.ConciseBody | undefined): ts.Expression[] {
+  if (!body) {
+    return [];
+  }
+
+  if (!ts.isBlock(body)) {
+    return [body];
+  }
+
+  const expressions: ts.Expression[] = [];
+  const visitStatement = (statement: ts.Statement): void => {
+    if (ts.isReturnStatement(statement)) {
+      if (statement.expression) {
+        expressions.push(statement.expression);
+      }
+      return;
+    }
+
+    if (ts.isBlock(statement)) {
+      for (const child of statement.statements) {
+        visitStatement(child);
+      }
+      return;
+    }
+
+    if (ts.isIfStatement(statement)) {
+      visitStatement(statement.thenStatement);
+      if (statement.elseStatement) {
+        visitStatement(statement.elseStatement);
+      }
+      return;
+    }
+
+    if (ts.isSwitchStatement(statement)) {
+      for (const clause of statement.caseBlock.clauses) {
+        for (const child of clause.statements) {
+          visitStatement(child);
+        }
+      }
+    }
+  };
+
+  for (const statement of body.statements) {
+    visitStatement(statement);
+  }
+
+  return expressions;
 }
 
 function getRestParameterName(parameters: readonly ts.ParameterDeclaration[]): string | undefined {

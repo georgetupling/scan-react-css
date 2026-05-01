@@ -160,6 +160,8 @@ export type ComponentNode = FactNodeBase & {
   exported: boolean;
   declarationKind: "function" | "variable" | "class";
   location: SourceAnchor;
+  rendersChildrenProp?: boolean;
+  renderedPropNames?: string[];
 };
 
 export type RenderSiteNode = FactNodeBase & {
@@ -177,12 +179,17 @@ export type RenderSiteNode = FactNodeBase & {
   emittingComponentNodeId?: FactNodeId;
   placementComponentNodeId?: FactNodeId;
   parentRenderSiteNodeId?: FactNodeId;
+  parentRenderRelation?: "jsx-child" | "jsx-attribute-expression" | "nested-render-expression";
+  parentRenderAttributeName?: string;
   repeatedRegion?: {
     repeatKind: "array-map" | "array-from";
     sourceText: string;
     sourceLocation: SourceAnchor;
+    callbackParameterNames?: string[];
     certainty: "possible" | "unknown";
   };
+  conditionExpressionId?: string;
+  conditionSourceText?: string;
 };
 
 export type ElementTemplateNode = FactNodeBase & {
@@ -195,6 +202,7 @@ export type ElementTemplateNode = FactNodeBase & {
   renderSiteNodeId: FactNodeId;
   emittingComponentNodeId?: FactNodeId;
   placementComponentNodeId?: FactNodeId;
+  resolvedComponentNodeId?: FactNodeId;
 };
 
 export type ClassExpressionSiteNode = FactNodeBase & {
@@ -244,6 +252,7 @@ export type HelperDefinitionNode = FactNodeBase &
     kind: "helper-definition";
     ownerNodeId: FactNodeId;
     returnExpressionNodeId?: FactNodeId;
+    returnExpressionNodeIds?: FactNodeId[];
   };
 
 export type StyleSheetNode = FactNodeBase & {

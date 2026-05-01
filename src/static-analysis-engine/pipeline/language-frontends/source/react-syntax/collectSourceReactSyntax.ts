@@ -7,6 +7,7 @@ import { tryCreateElementTemplate } from "./elementTemplates.js";
 import { tryCreateRenderSite } from "./renderSites.js";
 import {
   dedupeExpressionSyntaxFacts,
+  collectExpressionSyntaxForNode,
   type SourceExpressionSyntaxFact,
 } from "../expression-syntax/index.js";
 import {
@@ -19,7 +20,7 @@ import {
   dedupeClassExpressionSites,
   tryCreateCloneElementClassExpressionSite,
   tryCreateCssModuleClassExpressionSite,
-  tryCreateJsxClassExpressionSite,
+  createJsxClassExpressionSites,
 } from "./classExpressionSites.js";
 import {
   compareClassExpressionSites,
@@ -86,6 +87,7 @@ export function collectSourceReactSyntax(input: {
     }),
   ]);
   const renderStack: ReactRenderSiteFact[] = [];
+  const renderNodeStack: ts.Node[] = [];
   const componentStack: string[] = [];
 
   function visit(node: ts.Node): void {
@@ -105,11 +107,13 @@ export function collectSourceReactSyntax(input: {
         };
         renderSites.push(componentRootSite);
         renderStack.push(componentRootSite);
+        renderNodeStack.push(node);
       }
     }
 
     const currentComponentKey = componentStack.at(-1);
     const currentParentSiteKey = renderStack.at(-1)?.siteKey;
+    const currentParentRenderNode = renderNodeStack.at(-1);
     const renderSite = tryCreateRenderSite({
       node,
       filePath: input.filePath,
@@ -119,8 +123,34 @@ export function collectSourceReactSyntax(input: {
     });
     let template: ReactElementTemplateFact | undefined;
     if (renderSite) {
+      if (currentParentSiteKey && currentParentRenderNode) {
+        renderSite.parentRenderRelation = classifyParentRenderRelation({
+          node,
+          parentRenderNode: currentParentRenderNode,
+        });
+        if (renderSite.parentRenderRelation === "jsx-attribute-expression") {
+          const parentRenderAttributeName = getContainingJsxAttributeName({
+            node,
+            parentRenderNode: currentParentRenderNode,
+          });
+          if (parentRenderAttributeName) {
+            renderSite.parentRenderAttributeName = parentRenderAttributeName;
+          }
+        }
+      }
       renderSites.push(renderSite);
       renderStack.push(renderSite);
+      renderNodeStack.push(node);
+      if (renderSite.kind === "conditional" && ts.isConditionalExpression(node)) {
+        const conditionSyntax = collectExpressionSyntaxForNode({
+          node: node.condition,
+          filePath: input.filePath,
+          sourceFile: input.sourceFile,
+        });
+        expressionSyntax.push(...conditionSyntax.expressions);
+        renderSite.conditionExpressionId = conditionSyntax.rootExpressionId;
+        renderSite.conditionSourceText = node.condition.getText(input.sourceFile);
+      }
 
       template = tryCreateElementTemplate({
         node,
@@ -133,7 +163,7 @@ export function collectSourceReactSyntax(input: {
       }
     }
 
-    const classSite = tryCreateJsxClassExpressionSite({
+    const jsxClassSites = createJsxClassExpressionSites({
       node,
       filePath: input.filePath,
       sourceFile: input.sourceFile,
@@ -141,7 +171,7 @@ export function collectSourceReactSyntax(input: {
       ...(template ? { template } : {}),
       ...(currentComponentKey ? { emittingComponentKey: currentComponentKey } : {}),
     });
-    if (classSite) {
+    for (const classSite of jsxClassSites) {
       classExpressionSites.push(classSite.site);
       expressionSyntax.push(...classSite.expressionSyntax);
     }
@@ -173,9 +203,11 @@ export function collectSourceReactSyntax(input: {
 
     if (renderSite) {
       renderStack.pop();
+      renderNodeStack.pop();
     }
     if (componentRootSite) {
       renderStack.pop();
+      renderNodeStack.pop();
     }
     if (componentKey) {
       componentStack.pop();
@@ -199,4 +231,58 @@ export function collectSourceReactSyntax(input: {
       ...bindingFacts.expressionSyntax,
     ]),
   };
+}
+
+function classifyParentRenderRelation(input: {
+  node: ts.Node;
+  parentRenderNode: ts.Node;
+}): NonNullable<ReactRenderSiteFact["parentRenderRelation"]> {
+  if (isNestedInJsxAttribute(input.node, input.parentRenderNode)) {
+    return "jsx-attribute-expression";
+  }
+  if (isNestedInJsxChildren(input.node, input.parentRenderNode)) {
+    return "jsx-child";
+  }
+  return "nested-render-expression";
+}
+
+function isNestedInJsxAttribute(node: ts.Node, parentRenderNode: ts.Node): boolean {
+  let current: ts.Node | undefined = node.parent;
+  while (current && current !== parentRenderNode) {
+    if (ts.isJsxAttribute(current) || ts.isJsxSpreadAttribute(current)) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+function getContainingJsxAttributeName(input: {
+  node: ts.Node;
+  parentRenderNode: ts.Node;
+}): string | undefined {
+  let current: ts.Node | undefined = input.node.parent;
+  while (current && current !== input.parentRenderNode) {
+    if (ts.isJsxAttribute(current)) {
+      return ts.isIdentifier(current.name) ? current.name.text : undefined;
+    }
+    current = current.parent;
+  }
+  return undefined;
+}
+
+function isNestedInJsxChildren(node: ts.Node, parentRenderNode: ts.Node): boolean {
+  if (!ts.isJsxElement(parentRenderNode) && !ts.isJsxFragment(parentRenderNode)) {
+    return false;
+  }
+
+  let directChild: ts.Node = node;
+  while (directChild.parent && directChild.parent !== parentRenderNode) {
+    directChild = directChild.parent;
+  }
+
+  return (
+    directChild.parent === parentRenderNode &&
+    parentRenderNode.children.some((child) => child === directChild)
+  );
 }
