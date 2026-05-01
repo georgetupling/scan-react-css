@@ -8,7 +8,6 @@ import {
   buildLanguageFrontends,
   buildReachabilitySummary,
   buildModuleFacts,
-  buildProjectBindingResolution,
   buildRenderStructure,
   buildSelectorReachability,
   evaluateSymbolicExpressions,
@@ -426,18 +425,8 @@ async function buildRenderStructureFixture(input) {
     });
     const frontends = buildLanguageFrontends({ snapshot });
     const factGraph = buildFactGraph({ snapshot, frontends });
-    const moduleFacts = buildModuleFacts({
-      source: frontends.source,
-      stylesheetFilePaths: [cssFilePath],
-    });
-    const symbolResolution = buildProjectBindingResolution({
-      source: frontends.source,
-      moduleFacts,
-      includeTraces: true,
-    });
     const symbolicEvaluation = evaluateSymbolicExpressions({
       graph: factGraph.graph,
-      cssModuleBindingResolution: symbolResolution,
     });
 
     return buildRenderStructure({
@@ -474,14 +463,8 @@ async function buildSelectorProjectionFixture(input) {
       source: frontends.source,
       stylesheetFilePaths: [cssFilePath],
     });
-    const symbolResolution = buildProjectBindingResolution({
-      source: frontends.source,
-      moduleFacts,
-      includeTraces: true,
-    });
     const symbolicEvaluation = evaluateSymbolicExpressions({
       graph: factGraph.graph,
-      cssModuleBindingResolution: symbolResolution,
     });
     const renderStructure = buildRenderStructure({
       graph: factGraph.graph,

@@ -10,11 +10,6 @@ import {
 import { getCssModuleMemberAccess } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/css-module-syntax/analyzeCssModuleMemberAccess.js";
 import { buildCssModuleAliases } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/css-module-syntax/analyzeCssModuleAliases.js";
 import { getCssModuleDestructuring } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/css-module-syntax/analyzeCssModuleDestructuring.js";
-import { collectExportedExpressionBindings } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/symbol-syntax/collectExportedExpressionBindings.js";
-import { collectLocalAliasResolutions } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/symbol-syntax/collectLocalAliasResolutions.js";
-import { collectSymbolReferences } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/symbol-syntax/collectSymbolReferences.js";
-import { collectSourceSymbols } from "../../dist/static-analysis-engine/pipeline/language-frontends/source/symbol-syntax/collectSourceSymbols.js";
-import { buildModuleFacts } from "../../dist/static-analysis-engine/pipeline/module-facts/buildModuleFacts.js";
 import { buildProjectSnapshot } from "../../dist/static-analysis-engine/pipeline/workspace-discovery/buildProjectSnapshot.js";
 import { TestProjectBuilder } from "../support/TestProjectBuilder.js";
 
@@ -376,112 +371,6 @@ test("language frontends collect module syntax import, export, and declaration f
       ["Theme", "Theme"],
       ["token", "token"],
       ["Tone", "Tone"],
-    ],
-  );
-});
-
-test("language frontends expose source symbol syntax collectors", () => {
-  const source = buildSourceFrontendFactsFromSourceFiles([
-    {
-      filePath: "src/symbols.tsx",
-      absolutePath: "src/symbols.tsx",
-      sourceText: `
-        const token = "token";
-        export const exportedToken = token;
-        function helper(input: string) {
-          const local = input;
-          return local;
-        }
-        export function Button() {
-          const Alias = exportedToken;
-          return <button className={Alias} />;
-        }
-        const ButtonAlias = Button;
-        export default exportedToken;
-      `,
-    },
-  ]);
-  const file = source.files[0];
-  const parsedSourceFile = file.legacy.parsedFile.parsedSourceFile;
-  const moduleFacts = buildModuleFacts({ source });
-  const { symbols, scopes } = collectSourceSymbols({
-    filePath: file.filePath,
-    parsedSourceFile,
-    moduleId: "module:src/symbols.tsx",
-    moduleFacts,
-  });
-  const symbolsByLocalName = new Map(
-    [...symbols.values()].map((symbol) => [symbol.localName, symbol]),
-  );
-  const references = collectSymbolReferences({
-    filePath: file.filePath,
-    parsedSourceFile,
-    symbols,
-    scopes,
-  });
-  const aliases = collectLocalAliasResolutions({
-    filePath: file.filePath,
-    parsedSourceFile,
-    symbols,
-    references,
-  });
-  const exportedExpressions = collectExportedExpressionBindings(parsedSourceFile);
-
-  assert.equal(symbolsByLocalName.get("Button")?.kind, "component");
-  assert.equal(symbolsByLocalName.get("helper")?.kind, "function");
-  assert.deepEqual(symbolsByLocalName.get("exportedToken")?.exportedNames, [
-    "default",
-    "exportedToken",
-  ]);
-  assert.ok(
-    references.some(
-      (reference) =>
-        reference.localName === "Alias" &&
-        reference.resolvedSymbolId === symbolsByLocalName.get("Alias")?.id,
-    ),
-  );
-  assert.deepEqual(
-    aliases.map((alias) => ({
-      kind: alias.kind,
-      aliasKind: alias.aliasKind,
-      source: symbolLocalName(symbols, alias.sourceSymbolId),
-      target: symbolLocalName(symbols, alias.targetSymbolId),
-    })),
-    [
-      {
-        kind: "resolved-alias",
-        aliasKind: "identifier",
-        source: "exportedToken",
-        target: "token",
-      },
-      {
-        kind: "resolved-alias",
-        aliasKind: "identifier",
-        source: "local",
-        target: "input",
-      },
-      {
-        kind: "resolved-alias",
-        aliasKind: "identifier",
-        source: "Alias",
-        target: "exportedToken",
-      },
-      {
-        kind: "resolved-alias",
-        aliasKind: "identifier",
-        source: "ButtonAlias",
-        target: "Button",
-      },
-    ],
-  );
-  assert.deepEqual(
-    [...exportedExpressions.entries()].map(([exportedName, expression]) => [
-      exportedName,
-      expression.getText(parsedSourceFile),
-    ]),
-    [
-      ["exportedToken", "token"],
-      ["default", "token"],
     ],
   );
 });
@@ -894,10 +783,6 @@ function buildSingleSourceFrontendFile(filePath, sourceText) {
       sourceText,
     },
   ]).filesByPath.get(filePath);
-}
-
-function symbolLocalName(symbols, symbolId) {
-  return symbols.get(symbolId)?.localName;
 }
 
 function sourceAnchor(filePath) {

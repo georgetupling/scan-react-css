@@ -440,42 +440,6 @@ test("scanProject does not bind shadowed callback props identifiers to component
   }
 });
 
-test("scanProject resolves imported default literal bindings through symbol-aware render lookup", async () => {
-  const project = await new TestProjectBuilder()
-    .withSourceFile("src/tokens.ts", 'export default "button-primary";\n')
-    .withSourceFile(
-      "src/App.tsx",
-      [
-        'import token from "./tokens";',
-        "export function App() {",
-        "  return <button className={token}>Save</button>;",
-        "}",
-        "",
-      ].join("\n"),
-    )
-    .build();
-
-  try {
-    const result = await scanProject({
-      rootDir: project.rootDir,
-      sourceFilePaths: ["src/App.tsx", "src/tokens.ts"],
-      cssFilePaths: [],
-    });
-
-    assert.equal(
-      result.findings.some(
-        (finding) =>
-          finding.ruleId === "missing-css-class" &&
-          finding.location?.filePath === "src/tokens.ts" &&
-          finding.data?.className === "button-primary",
-      ),
-      true,
-    );
-  } finally {
-    await project.cleanup();
-  }
-});
-
 test("scanProject does not bind shadowed namespace identifiers to imported namespace expressions", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile("src/tokens.ts", 'export const primary = "from-namespace";\n')

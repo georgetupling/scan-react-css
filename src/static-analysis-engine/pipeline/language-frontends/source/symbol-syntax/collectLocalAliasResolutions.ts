@@ -1,11 +1,7 @@
 import ts from "typescript";
 
 import type { EngineSymbolId } from "../../../../types/core.js";
-import type {
-  EngineSymbol,
-  LocalAliasResolution,
-  SymbolReference,
-} from "../../../symbol-resolution/types.js";
+import type { EngineSymbol, LocalAliasResolution, SymbolReference } from "./types.js";
 import { toSourceAnchor } from "./shared.js";
 
 export function collectLocalAliasResolutions(input: {

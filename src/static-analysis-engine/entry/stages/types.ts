@@ -12,7 +12,6 @@ import type {
   ProjectSelectorProjectionResult,
   SelectorReachabilityResult,
 } from "../../pipeline/selector-reachability/index.js";
-import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/index.js";
 import type { SymbolicEvaluationResult } from "../../pipeline/symbolic-evaluation/index.js";
 import type { RenderStructureResult } from "../../pipeline/render-structure/index.js";
 
@@ -28,8 +27,6 @@ export type ParsedProjectFile = {
   filePath: string;
   parsedSourceFile: ts.SourceFile;
 };
-
-export type SymbolResolutionStageResult = ProjectBindingResolution;
 
 export type ModuleFactsStageResult = {
   moduleFacts: ModuleFacts;

@@ -20,10 +20,7 @@ import type { FactGraphResult } from "../fact-graph/types.js";
 import type { SymbolicEvaluationResult } from "../symbolic-evaluation/types.js";
 import type { AnalysisConfidence, AnalysisTrace } from "../../types/analysis.js";
 import type { SourceAnchor } from "../../types/core.js";
-import type {
-  ProjectBindingResolution,
-  ResolvedCssModuleBindingDiagnostic,
-} from "../symbol-resolution/types.js";
+import type { ResolvedCssModuleBindingDiagnosticReason } from "../language-frontends/source/css-module-syntax/types.js";
 import type {
   CssAtRuleContextFact,
   CssClassContextFact,
@@ -277,7 +274,7 @@ export type CssModuleReferenceDiagnosticAnalysis = {
   sourceFileId: ProjectEvidenceId;
   stylesheetId: ProjectEvidenceId;
   localName: string;
-  reason: ResolvedCssModuleBindingDiagnostic["reason"];
+  reason: ResolvedCssModuleBindingDiagnosticReason;
   location: SourceAnchor;
   rawExpressionText: string;
   traces: AnalysisTrace[];
@@ -407,7 +404,6 @@ export type ProjectEvidenceBuildInput = {
   factGraph?: FactGraphResult;
   cssFiles: import("../css-analysis/types.js").ExperimentalCssFileAnalysis[];
   stylesheets?: ProjectEvidenceStylesheetInput[];
-  symbolResolution: ProjectBindingResolution;
   cssModuleLocalsConvention?: CssModuleLocalsConvention;
   externalCssSummary: ExternalCssSummary;
   reachabilitySummary: import("../reachability/types.js").ReachabilitySummary;

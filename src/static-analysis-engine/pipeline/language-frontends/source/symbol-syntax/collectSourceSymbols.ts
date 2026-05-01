@@ -8,13 +8,7 @@ import {
   getTopLevelBindingFacts,
 } from "../../../module-facts/index.js";
 import type { ModuleFacts, ResolvedTopLevelBindingFact } from "../../../module-facts/types.js";
-import type {
-  EngineSymbol,
-  ScopeId,
-  ScopeKind,
-  SourceScope,
-  SymbolKind,
-} from "../../../symbol-resolution/types.js";
+import type { EngineSymbol, ScopeId, ScopeKind, SourceScope, SymbolKind } from "./types.js";
 import {
   collectSourceDeclarationIndex,
   type SourceValueDeclaration,

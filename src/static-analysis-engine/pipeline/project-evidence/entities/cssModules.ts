@@ -9,10 +9,10 @@ import type {
   ProjectEvidenceBuildInput,
   ProjectEvidenceBuilderIndexes,
 } from "../analysisTypes.js";
-import {
-  getCssModuleBindingsForFile,
-  getSymbolResolutionFilePaths,
-} from "../../symbol-resolution/index.js";
+import { buildCssModuleAliases } from "../../language-frontends/source/css-module-syntax/analyzeCssModuleAliases.js";
+import { getCssModuleDestructuring } from "../../language-frontends/source/css-module-syntax/analyzeCssModuleDestructuring.js";
+import { getCssModuleMemberAccess } from "../../language-frontends/source/css-module-syntax/analyzeCssModuleMemberAccess.js";
+import { getAllResolvedModuleFacts } from "../../module-facts/index.js";
 import {
   compareById,
   createCssModuleAliasId,
@@ -22,7 +22,6 @@ import {
   createCssModuleImportLookupKey,
   createCssModuleMemberReferenceId,
   mergeTraces,
-  normalizeAnchor,
   normalizeProjectPath,
   uniqueSorted,
 } from "../internal/shared.js";
@@ -31,45 +30,44 @@ export function buildCssModuleImports(
   input: ProjectEvidenceBuildInput,
   indexes: ProjectEvidenceBuilderIndexes,
 ): CssModuleImportAnalysis[] {
-  return getSymbolResolutionFilePaths({
-    symbolResolution: input.symbolResolution,
-  })
-    .flatMap(
-      (filePath) =>
-        getCssModuleBindingsForFile({
-          symbolResolution: input.symbolResolution,
-          filePath,
-        }).imports,
-    )
-    .map((cssModuleImport) => {
-      const sourceFilePath = normalizeProjectPath(cssModuleImport.sourceFilePath);
-      const stylesheetFilePath = normalizeProjectPath(cssModuleImport.stylesheetFilePath);
-      const sourceFileId = indexes.sourceFileIdByPath.get(sourceFilePath);
-      const stylesheetId = indexes.stylesheetIdByPath.get(stylesheetFilePath);
+  const imports: CssModuleImportAnalysis[] = [];
 
-      if (!sourceFileId || !stylesheetId) {
-        return undefined;
+  for (const moduleFact of getAllResolvedModuleFacts({ moduleFacts: input.moduleFacts })) {
+    for (const importFact of moduleFact.imports) {
+      if (importFact.cssSemantics !== "module") {
+        continue;
+      }
+      const stylesheetFilePath = importFact.resolution.resolvedFilePath;
+      if (!stylesheetFilePath) {
+        continue;
       }
 
-      return {
-        id: createCssModuleImportId({
-          sourceFilePath,
-          stylesheetFilePath,
-          localName: cssModuleImport.localName,
-        }),
-        sourceFileId,
-        stylesheetId,
-        sourceFilePath,
-        stylesheetFilePath,
-        specifier: cssModuleImport.specifier,
-        localName: cssModuleImport.localName,
-        importKind: cssModuleImport.importKind,
-      };
-    })
-    .filter((cssModuleImport): cssModuleImport is CssModuleImportAnalysis =>
-      Boolean(cssModuleImport),
-    )
-    .sort(compareById);
+      const sourceFileId = indexes.sourceFileIdByPath.get(moduleFact.filePath.replace(/\\/g, "/"));
+      const stylesheetId = indexes.stylesheetIdByPath.get(stylesheetFilePath.replace(/\\/g, "/"));
+      if (!sourceFileId || !stylesheetId) {
+        continue;
+      }
+
+      for (const binding of importFact.importedBindings) {
+        imports.push({
+          id: createCssModuleImportId({
+            sourceFilePath: moduleFact.filePath,
+            stylesheetFilePath,
+            localName: binding.localName,
+          }),
+          sourceFileId,
+          stylesheetId,
+          sourceFilePath: moduleFact.filePath.replace(/\\/g, "/"),
+          stylesheetFilePath: stylesheetFilePath.replace(/\\/g, "/"),
+          specifier: importFact.specifier,
+          localName: binding.localName,
+          importKind: binding.bindingKind,
+        });
+      }
+    }
+  }
+
+  return imports.sort(compareById);
 }
 
 export function buildCssModuleMemberReferences(input: {
@@ -83,158 +81,323 @@ export function buildCssModuleMemberReferences(input: {
   memberReferences: CssModuleMemberReferenceAnalysis[];
   diagnostics: CssModuleReferenceDiagnosticAnalysis[];
 } {
-  const importsBySourceStylesheetAndLocalName = new Map<string, CssModuleImportAnalysis>();
-  for (const cssModuleImport of input.imports) {
-    importsBySourceStylesheetAndLocalName.set(
+  const importBySourceLocalName = new Map<string, CssModuleImportAnalysis[]>();
+  const importByLookupKey = new Map<string, CssModuleImportAnalysis>();
+  for (const cssImport of input.imports) {
+    const key = `${normalizeProjectPath(cssImport.sourceFilePath)}:${cssImport.localName}`;
+    const values = importBySourceLocalName.get(key) ?? [];
+    values.push(cssImport);
+    importBySourceLocalName.set(key, values);
+    importByLookupKey.set(
       createCssModuleImportLookupKey({
-        sourceFilePath: cssModuleImport.sourceFilePath,
-        stylesheetFilePath: cssModuleImport.stylesheetFilePath,
-        localName: cssModuleImport.localName,
+        sourceFilePath: cssImport.sourceFilePath,
+        stylesheetFilePath: cssImport.stylesheetFilePath,
+        localName: cssImport.localName,
       }),
-      cssModuleImport,
+      cssImport,
     );
   }
 
-  const cssModuleBindingsByFilePath = new Map(
-    getSymbolResolutionFilePaths({
-      symbolResolution: input.projectInput.symbolResolution,
-    }).map((filePath) => [
-      filePath,
-      getCssModuleBindingsForFile({
-        symbolResolution: input.projectInput.symbolResolution,
-        filePath,
-      }),
-    ]),
-  );
+  const aliases: CssModuleAliasAnalysis[] = [];
+  const destructuredBindings: CssModuleDestructuredBindingAnalysis[] = [];
+  const memberReferences: CssModuleMemberReferenceAnalysis[] = [];
+  const diagnostics: CssModuleReferenceDiagnosticAnalysis[] = [];
 
-  return {
-    aliases: [...cssModuleBindingsByFilePath.values()]
-      .flatMap((bindings) => bindings.namespaceBindings)
-      .filter((binding) => binding.sourceKind === "alias")
-      .map((alias) => {
-        const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
-          createCssModuleImportLookupKey({
-            sourceFilePath: alias.sourceFilePath,
-            stylesheetFilePath: alias.stylesheetFilePath,
-            localName: alias.originLocalName,
-          }),
-        );
-        if (!cssModuleImport) {
-          return undefined;
-        }
-
-        return {
-          id: createCssModuleAliasId(alias.location, cssModuleImport.id, alias.localName),
-          importId: cssModuleImport.id,
-          sourceFileId: cssModuleImport.sourceFileId,
-          stylesheetId: cssModuleImport.stylesheetId,
-          localName: alias.originLocalName,
-          aliasName: alias.localName,
-          location: normalizeAnchor(alias.location),
-          rawExpressionText: alias.rawExpressionText,
-          traces: input.includeTraces ? [...alias.traces] : [],
+  const sourceFiles = input.projectInput.factGraph?.frontends.source.files ?? [];
+  for (const sourceFile of sourceFiles) {
+    const directNamespaceBindingsByLocalName = new Map<
+      string,
+      {
+        sourceFilePath: string;
+        stylesheetFilePath: string;
+        specifier: string;
+        localName: string;
+        originLocalName: string;
+        importKind: "default" | "namespace" | "named";
+        sourceKind: "direct-import" | "alias";
+        location: {
+          filePath: string;
+          startLine: number;
+          startColumn: number;
+          endLine?: number;
+          endColumn?: number;
         };
-      })
-      .filter((alias): alias is CssModuleAliasAnalysis => Boolean(alias))
-      .sort(compareById),
-    destructuredBindings: [...cssModuleBindingsByFilePath.values()]
-      .flatMap((bindings) => bindings.memberBindings)
-      .map((binding) => {
-        const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
-          createCssModuleImportLookupKey({
+        rawExpressionText: string;
+        traces: ReturnType<typeof mergeTraces>;
+      }
+    >();
+
+    for (const cssImport of input.imports) {
+      if (
+        normalizeProjectPath(cssImport.sourceFilePath) !== normalizeProjectPath(sourceFile.filePath)
+      ) {
+        continue;
+      }
+      directNamespaceBindingsByLocalName.set(cssImport.localName, {
+        sourceFilePath: cssImport.sourceFilePath,
+        stylesheetFilePath: cssImport.stylesheetFilePath,
+        specifier: cssImport.specifier,
+        localName: cssImport.localName,
+        originLocalName: cssImport.localName,
+        importKind: cssImport.importKind,
+        sourceKind: "direct-import",
+        location: {
+          filePath: cssImport.sourceFilePath,
+          startLine: 1,
+          startColumn: 1,
+        },
+        rawExpressionText: cssImport.localName,
+        traces: [],
+      });
+    }
+
+    const aliasResult = buildCssModuleAliases({
+      parsedSourceFile: sourceFile.legacy.parsedFile.parsedSourceFile,
+      sourceFilePath: sourceFile.filePath,
+      directNamespaceBindingsByLocalName,
+      includeTraces: input.includeTraces,
+    });
+
+    const namespaceBindings = new Map(directNamespaceBindingsByLocalName);
+    for (const aliasBinding of aliasResult.aliases) {
+      namespaceBindings.set(aliasBinding.localName, aliasBinding);
+      const importLookupKey = createCssModuleImportLookupKey({
+        sourceFilePath: aliasBinding.sourceFilePath,
+        stylesheetFilePath: aliasBinding.stylesheetFilePath,
+        localName: aliasBinding.originLocalName,
+      });
+      const cssImport = importByLookupKey.get(importLookupKey);
+      if (!cssImport) {
+        continue;
+      }
+      aliases.push({
+        id: createCssModuleAliasId(aliasBinding.location, cssImport.id, aliasBinding.localName),
+        importId: cssImport.id,
+        sourceFileId: cssImport.sourceFileId,
+        stylesheetId: cssImport.stylesheetId,
+        localName: aliasBinding.originLocalName,
+        aliasName: aliasBinding.localName,
+        location: aliasBinding.location,
+        rawExpressionText: aliasBinding.rawExpressionText,
+        traces: input.includeTraces ? mergeTraces(aliasBinding.traces) : [],
+      });
+    }
+
+    for (const aliasDiagnostic of aliasResult.diagnostics) {
+      const importLookupKey = createCssModuleImportLookupKey({
+        sourceFilePath: aliasDiagnostic.sourceFilePath,
+        stylesheetFilePath: aliasDiagnostic.stylesheetFilePath,
+        localName: aliasDiagnostic.originLocalName,
+      });
+      const cssImport = importByLookupKey.get(importLookupKey);
+      if (!cssImport) {
+        continue;
+      }
+      diagnostics.push({
+        id: createCssModuleDiagnosticId(aliasDiagnostic.location, cssImport.id),
+        importId: cssImport.id,
+        sourceFileId: cssImport.sourceFileId,
+        stylesheetId: cssImport.stylesheetId,
+        localName: aliasDiagnostic.localName,
+        reason: aliasDiagnostic.reason,
+        location: aliasDiagnostic.location,
+        rawExpressionText: aliasDiagnostic.rawExpressionText,
+        traces: input.includeTraces ? mergeTraces(aliasDiagnostic.traces) : [],
+      });
+    }
+
+    const visit = (node: import("typescript").Node): void => {
+      const destructuringResult = getCssModuleDestructuring({
+        node,
+        parsedSourceFile: sourceFile.legacy.parsedFile.parsedSourceFile,
+        sourceFilePath: sourceFile.filePath,
+        namespaceBindings,
+        includeTraces: input.includeTraces,
+      });
+      if (destructuringResult) {
+        for (const binding of destructuringResult.bindings) {
+          const importLookupKey = createCssModuleImportLookupKey({
             sourceFilePath: binding.sourceFilePath,
             stylesheetFilePath: binding.stylesheetFilePath,
             localName: binding.originLocalName,
-          }),
-        );
-        if (!cssModuleImport) {
-          return undefined;
+          });
+          const cssImport = importByLookupKey.get(importLookupKey);
+          if (!cssImport) {
+            continue;
+          }
+          destructuredBindings.push({
+            id: createCssModuleDestructuredBindingId(
+              binding.location,
+              cssImport.id,
+              binding.memberName,
+              binding.localName,
+            ),
+            importId: cssImport.id,
+            sourceFileId: cssImport.sourceFileId,
+            stylesheetId: cssImport.stylesheetId,
+            localName: binding.originLocalName,
+            memberName: binding.memberName,
+            bindingName: binding.localName,
+            location: binding.location,
+            rawExpressionText: binding.rawExpressionText,
+            traces: input.includeTraces ? mergeTraces(binding.traces) : [],
+          });
         }
-
-        return {
-          id: createCssModuleDestructuredBindingId(
-            binding.location,
-            cssModuleImport.id,
-            binding.memberName,
-            binding.localName,
-          ),
-          importId: cssModuleImport.id,
-          sourceFileId: cssModuleImport.sourceFileId,
-          stylesheetId: cssModuleImport.stylesheetId,
-          localName: binding.originLocalName,
-          memberName: binding.memberName,
-          bindingName: binding.localName,
-          location: normalizeAnchor(binding.location),
-          rawExpressionText: binding.rawExpressionText,
-          traces: input.includeTraces ? [...binding.traces] : [],
-        };
-      })
-      .filter((binding): binding is CssModuleDestructuredBindingAnalysis => Boolean(binding))
-      .sort(compareById),
-    memberReferences: [...cssModuleBindingsByFilePath.values()]
-      .flatMap((bindings) => bindings.memberReferences)
-      .map((reference) => {
-        const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
-          createCssModuleImportLookupKey({
-            sourceFilePath: reference.sourceFilePath,
-            stylesheetFilePath: reference.stylesheetFilePath,
-            localName: reference.originLocalName,
-          }),
-        );
-        if (!cssModuleImport) {
-          return undefined;
+        for (const reference of destructuringResult.references) {
+          const importsForBinding =
+            importBySourceLocalName.get(
+              `${normalizeProjectPath(sourceFile.filePath)}:${reference.originLocalName}`,
+            ) ?? [];
+          for (const cssImport of importsForBinding) {
+            memberReferences.push({
+              id: createCssModuleMemberReferenceId(
+                reference.location,
+                cssImport.id,
+                reference.memberName,
+              ),
+              importId: cssImport.id,
+              sourceFileId: cssImport.sourceFileId,
+              stylesheetId: cssImport.stylesheetId,
+              localName: reference.originLocalName,
+              memberName: reference.memberName,
+              accessKind: "destructured-binding",
+              location: reference.location,
+              rawExpressionText: reference.rawExpressionText,
+              traces: input.includeTraces ? mergeTraces(reference.traces) : [],
+            });
+          }
         }
-
-        return {
-          id: createCssModuleMemberReferenceId(
-            reference.location,
-            cssModuleImport.id,
-            reference.memberName,
-          ),
-          importId: cssModuleImport.id,
-          sourceFileId: cssModuleImport.sourceFileId,
-          stylesheetId: cssModuleImport.stylesheetId,
-          localName: reference.originLocalName,
-          memberName: reference.memberName,
-          accessKind: reference.accessKind,
-          location: normalizeAnchor(reference.location),
-          rawExpressionText: reference.rawExpressionText,
-          traces: input.includeTraces ? [...reference.traces] : [],
-        };
-      })
-      .filter((reference): reference is CssModuleMemberReferenceAnalysis => Boolean(reference))
-      .sort(compareById),
-    diagnostics: [...cssModuleBindingsByFilePath.values()]
-      .flatMap((bindings) => bindings.diagnostics)
-      .map((diagnostic) => {
-        const cssModuleImport = importsBySourceStylesheetAndLocalName.get(
-          createCssModuleImportLookupKey({
+        for (const diagnostic of destructuringResult.diagnostics) {
+          const importLookupKey = createCssModuleImportLookupKey({
             sourceFilePath: diagnostic.sourceFilePath,
             stylesheetFilePath: diagnostic.stylesheetFilePath,
             localName: diagnostic.originLocalName,
-          }),
-        );
-        if (!cssModuleImport) {
-          return undefined;
+          });
+          const cssImport = importByLookupKey.get(importLookupKey);
+          if (!cssImport) {
+            continue;
+          }
+          diagnostics.push({
+            id: createCssModuleDiagnosticId(diagnostic.location, cssImport.id),
+            importId: cssImport.id,
+            sourceFileId: cssImport.sourceFileId,
+            stylesheetId: cssImport.stylesheetId,
+            localName: diagnostic.localName,
+            reason: diagnostic.reason,
+            location: diagnostic.location,
+            rawExpressionText: diagnostic.rawExpressionText,
+            traces: input.includeTraces ? mergeTraces(diagnostic.traces) : [],
+          });
         }
+      }
 
-        return {
-          id: createCssModuleDiagnosticId(diagnostic.location, cssModuleImport.id),
-          importId: cssModuleImport.id,
-          sourceFileId: cssModuleImport.sourceFileId,
-          stylesheetId: cssModuleImport.stylesheetId,
-          localName: diagnostic.originLocalName,
-          reason: diagnostic.reason,
-          location: normalizeAnchor(diagnostic.location),
-          rawExpressionText: diagnostic.rawExpressionText,
-          traces: input.includeTraces ? [...diagnostic.traces] : [],
-        };
-      })
-      .filter((diagnostic): diagnostic is CssModuleReferenceDiagnosticAnalysis =>
-        Boolean(diagnostic),
-      )
-      .sort(compareById),
+      const memberAccessResult = getCssModuleMemberAccess({
+        node,
+        parsedSourceFile: sourceFile.legacy.parsedFile.parsedSourceFile,
+        sourceFilePath: sourceFile.filePath,
+        namespaceBindings,
+        includeTraces: input.includeTraces,
+      });
+      if (memberAccessResult?.kind === "reference") {
+        const importsForBinding =
+          importBySourceLocalName.get(
+            `${normalizeProjectPath(sourceFile.filePath)}:${memberAccessResult.reference.originLocalName}`,
+          ) ?? [];
+        for (const cssImport of importsForBinding) {
+          memberReferences.push({
+            id: createCssModuleMemberReferenceId(
+              memberAccessResult.reference.location,
+              cssImport.id,
+              memberAccessResult.reference.memberName,
+            ),
+            importId: cssImport.id,
+            sourceFileId: cssImport.sourceFileId,
+            stylesheetId: cssImport.stylesheetId,
+            localName: memberAccessResult.reference.originLocalName,
+            memberName: memberAccessResult.reference.memberName,
+            accessKind: memberAccessResult.reference.accessKind,
+            location: memberAccessResult.reference.location,
+            rawExpressionText: memberAccessResult.reference.rawExpressionText,
+            traces: input.includeTraces ? mergeTraces(memberAccessResult.reference.traces) : [],
+          });
+        }
+      } else if (memberAccessResult?.kind === "diagnostic") {
+        const importLookupKey = createCssModuleImportLookupKey({
+          sourceFilePath: memberAccessResult.diagnostic.sourceFilePath,
+          stylesheetFilePath: memberAccessResult.diagnostic.stylesheetFilePath,
+          localName: memberAccessResult.diagnostic.originLocalName,
+        });
+        const cssImport = importByLookupKey.get(importLookupKey);
+        if (cssImport) {
+          diagnostics.push({
+            id: createCssModuleDiagnosticId(memberAccessResult.diagnostic.location, cssImport.id),
+            importId: cssImport.id,
+            sourceFileId: cssImport.sourceFileId,
+            stylesheetId: cssImport.stylesheetId,
+            localName: memberAccessResult.diagnostic.localName,
+            reason: memberAccessResult.diagnostic.reason,
+            location: memberAccessResult.diagnostic.location,
+            rawExpressionText: memberAccessResult.diagnostic.rawExpressionText,
+            traces: input.includeTraces ? mergeTraces(memberAccessResult.diagnostic.traces) : [],
+          });
+        }
+      }
+
+      node.forEachChild(visit);
+    };
+
+    visit(sourceFile.legacy.parsedFile.parsedSourceFile);
+  }
+
+  for (const classSite of input.projectInput.factGraph?.graph.nodes.classExpressionSites ?? []) {
+    if (classSite.classExpressionSiteKind !== "css-module-member") {
+      continue;
+    }
+    const expressionNode = input.projectInput.factGraph?.graph.indexes.nodesById.get(
+      classSite.expressionNodeId,
+    );
+    if (!expressionNode || expressionNode.kind !== "expression-syntax") {
+      continue;
+    }
+
+    const resolved = resolveCssModuleExpressionReference({
+      expressionNode,
+      factGraph: input.projectInput.factGraph?.graph,
+    });
+    if (!resolved) {
+      continue;
+    }
+
+    const importsForBinding =
+      importBySourceLocalName.get(
+        `${normalizeProjectPath(classSite.filePath)}:${resolved.localName}`,
+      ) ?? [];
+    for (const cssImport of importsForBinding) {
+      memberReferences.push({
+        id: createCssModuleMemberReferenceId(classSite.location, cssImport.id, resolved.memberName),
+        importId: cssImport.id,
+        sourceFileId: cssImport.sourceFileId,
+        stylesheetId: cssImport.stylesheetId,
+        localName: resolved.localName,
+        memberName: resolved.memberName,
+        accessKind: resolved.accessKind,
+        location: classSite.location,
+        rawExpressionText: classSite.rawExpressionText,
+        traces: [],
+      });
+    }
+  }
+
+  return {
+    aliases: dedupeById(aliases).sort(compareById),
+    destructuredBindings: dedupeById(destructuredBindings).sort(compareById),
+    memberReferences: dedupeById(memberReferences).sort(compareById),
+    diagnostics: dedupeById(diagnostics).sort(compareById),
   };
+}
+
+function dedupeById<T extends { id: string }>(items: T[]): T[] {
+  return [...new Map(items.map((item) => [item.id, item])).values()];
 }
 
 export function buildCssModuleMemberMatches(input: {
@@ -312,4 +475,73 @@ export function toCamelCaseClassName(className: string): string {
   return className.replace(/[-_]+([a-zA-Z0-9])/g, (_match, character: string) =>
     character.toUpperCase(),
   );
+}
+
+function resolveCssModuleExpressionReference(input: {
+  expressionNode: {
+    expressionKind: string;
+    objectExpressionId?: string;
+    propertyName?: string;
+    argumentExpressionId?: string;
+  };
+  factGraph?: NonNullable<ProjectEvidenceBuildInput["factGraph"]>["graph"];
+}):
+  | { localName: string; memberName: string; accessKind: "property" | "string-literal-element" }
+  | undefined {
+  const expressionNode = input.expressionNode;
+  const nodesById = input.factGraph?.indexes.nodesById;
+  if (!nodesById) {
+    return undefined;
+  }
+
+  if (expressionNode.expressionKind === "member-access" && expressionNode.propertyName) {
+    const objectNodeId = expressionNode.objectExpressionId
+      ? input.factGraph?.indexes.expressionSyntaxNodeIdByExpressionId.get(
+          expressionNode.objectExpressionId,
+        )
+      : undefined;
+    const objectNode = objectNodeId ? nodesById.get(objectNodeId) : undefined;
+    if (
+      !objectNode ||
+      objectNode.kind !== "expression-syntax" ||
+      objectNode.expressionKind !== "identifier"
+    ) {
+      return undefined;
+    }
+    return {
+      localName: objectNode.name,
+      memberName: expressionNode.propertyName,
+      accessKind: "property",
+    };
+  }
+
+  if (expressionNode.expressionKind === "element-access" && expressionNode.argumentExpressionId) {
+    const objectNodeId = expressionNode.objectExpressionId
+      ? input.factGraph?.indexes.expressionSyntaxNodeIdByExpressionId.get(
+          expressionNode.objectExpressionId,
+        )
+      : undefined;
+    const objectNode = objectNodeId ? nodesById.get(objectNodeId) : undefined;
+    const argumentNodeId = input.factGraph?.indexes.expressionSyntaxNodeIdByExpressionId.get(
+      expressionNode.argumentExpressionId,
+    );
+    const argumentNode = argumentNodeId ? nodesById.get(argumentNodeId) : undefined;
+    if (
+      !objectNode ||
+      objectNode.kind !== "expression-syntax" ||
+      objectNode.expressionKind !== "identifier" ||
+      !argumentNode ||
+      argumentNode.kind !== "expression-syntax" ||
+      argumentNode.expressionKind !== "string-literal"
+    ) {
+      return undefined;
+    }
+    return {
+      localName: objectNode.name,
+      memberName: argumentNode.value,
+      accessKind: "string-literal-element",
+    };
+  }
+
+  return undefined;
 }

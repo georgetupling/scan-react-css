@@ -1,10 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import {
-  buildModuleFacts,
-  buildProjectBindingResolution,
-} from "../../dist/static-analysis-engine.js";
+import { buildModuleFacts } from "../../dist/static-analysis-engine.js";
 import { buildFactGraph } from "../../dist/static-analysis-engine/pipeline/fact-graph/buildFactGraph.js";
 import { buildLanguageFrontends } from "../../dist/static-analysis-engine/pipeline/language-frontends/buildLanguageFrontends.js";
 import { buildRenderStructure } from "../../dist/static-analysis-engine/pipeline/render-structure/buildRenderStructure.js";
@@ -78,7 +75,6 @@ test("render structure expands intrinsic elements in native mode", async () => {
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
     graph: fixture.graph,
-    cssModuleBindingResolution: fixture.symbolResolution,
   });
   const result = buildRenderStructure({
     graph: fixture.graph,
@@ -186,7 +182,6 @@ test("render structure projects the current render model into the stage 5 model"
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
     graph: fixture.graph,
-    cssModuleBindingResolution: fixture.symbolResolution,
   });
   const result = buildRenderStructure({
     graph: fixture.graph,
@@ -248,7 +243,6 @@ test("render structure builds emission sites from stage 4 facts", async () => {
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
     graph: fixture.graph,
-    cssModuleBindingResolution: fixture.symbolResolution,
   });
   const result = buildRenderStructure({
     graph: fixture.graph,
@@ -332,7 +326,6 @@ test("render structure instantiates parent-supplied external contributions durin
   const fixture = await buildForwardedContributionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
     graph: fixture.graph,
-    cssModuleBindingResolution: fixture.symbolResolution,
   });
   const result = buildRenderStructure({
     graph: fixture.graph,
@@ -366,7 +359,6 @@ test("render structure projection is deterministic across repeated runs", async 
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
     graph: fixture.graph,
-    cssModuleBindingResolution: fixture.symbolResolution,
   });
   const input = {
     graph: fixture.graph,
@@ -416,16 +408,9 @@ async function buildProjectionFixture() {
       source: frontends.source,
       stylesheetFilePaths: ["src/app.css"],
     });
-    const symbolResolution = buildProjectBindingResolution({
-      source: frontends.source,
-      moduleFacts,
-      includeTraces: true,
-    });
-
     return {
       graph: factGraph.graph,
       moduleFacts,
-      symbolResolution,
     };
   } finally {
     await project.cleanup();
@@ -465,16 +450,9 @@ async function buildForwardedContributionFixture() {
       source: frontends.source,
       stylesheetFilePaths: ["src/app.css"],
     });
-    const symbolResolution = buildProjectBindingResolution({
-      source: frontends.source,
-      moduleFacts,
-      includeTraces: true,
-    });
-
     return {
       graph: factGraph.graph,
       moduleFacts,
-      symbolResolution,
     };
   } finally {
     await project.cleanup();

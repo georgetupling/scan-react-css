@@ -1,5 +1,3 @@
-import ts from "typescript";
-
 import {
   collectStringCandidates,
   combineStrings,
@@ -16,11 +14,6 @@ import {
   buildConditions,
 } from "./canonicalClassExpressionBuilder.js";
 import type { ExpressionSyntaxNode } from "../../fact-graph/index.js";
-import {
-  getImportedBindingsForFile,
-  getImportedExpressionBindingsBySymbolIdForFile,
-} from "../../symbol-resolution/api/getValueResolution.js";
-import { toSourceAnchor } from "../../../libraries/react-components/reactComponentAstUtils.js";
 import { conditionId, externalContributionId } from "../ids.js";
 import type { ExternalClassContribution } from "../types.js";
 import type { SymbolicExpressionEvaluator, SymbolicExpressionEvaluatorInput } from "../types.js";
@@ -288,49 +281,8 @@ function resolveImportedIdentifierLiteral(input: {
   input: SymbolicExpressionEvaluatorInput;
   expression: Extract<ExpressionSyntaxNode, { expressionKind: "identifier" }>;
 }): { value: string; sourceAnchor: ExpressionSyntaxNode["location"] } | undefined {
-  const symbolResolution = input.input.cssModuleBindingResolution;
-  if (!symbolResolution) {
-    return undefined;
-  }
-
-  const importedBinding = getImportedBindingsForFile({
-    symbolResolution,
-    filePath: input.expression.filePath,
-  }).find((binding) => binding.localName === input.expression.name);
-  if (!importedBinding) {
-    return undefined;
-  }
-
-  const importedExpressionBindings = getImportedExpressionBindingsBySymbolIdForFile({
-    symbolResolution,
-    filePath: input.expression.filePath,
-  });
-  const localImportedSymbolId = [...symbolResolution.symbols.values()].find(
-    (symbol) =>
-      symbol.kind === "imported-binding" &&
-      symbol.localName === input.expression.name &&
-      symbol.declaration.filePath === input.expression.filePath,
-  )?.id;
-  const expression =
-    (importedBinding.targetSymbolId
-      ? importedExpressionBindings.get(importedBinding.targetSymbolId)
-      : undefined) ??
-    (localImportedSymbolId ? importedExpressionBindings.get(localImportedSymbolId) : undefined);
-  if (
-    !expression ||
-    (!ts.isStringLiteral(expression) && !ts.isNoSubstitutionTemplateLiteral(expression))
-  ) {
-    return undefined;
-  }
-
-  return {
-    value: expression.text,
-    sourceAnchor: toSourceAnchor(
-      expression,
-      expression.getSourceFile(),
-      importedBinding.targetFilePath,
-    ),
-  };
+  void input;
+  return undefined;
 }
 
 function summarizeLocalBindingValue(input: {

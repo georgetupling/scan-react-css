@@ -6,7 +6,6 @@ import type {
   FactGraph,
   FactNodeId,
 } from "../fact-graph/index.js";
-import type { ProjectBindingResolution } from "../symbol-resolution/index.js";
 
 export type EvaluatedExpressionId = string;
 export type ConditionId = string;
@@ -22,7 +21,6 @@ export type SymbolicEvaluationOptions = {
 export type SymbolicEvaluationInput = {
   graph: FactGraph;
   options?: SymbolicEvaluationOptions;
-  cssModuleBindingResolution?: ProjectBindingResolution;
   evaluatorRegistry?: SymbolicEvaluatorRegistry;
 };
 
@@ -230,7 +228,6 @@ export type SymbolicExpressionEvaluatorInput = {
   classExpressionSite: ClassExpressionSiteNode;
   expressionSyntax?: ExpressionSyntaxNode;
   options: SymbolicEvaluationOptions;
-  cssModuleBindingResolution?: ProjectBindingResolution;
 };
 
 export type SymbolicExpressionEvaluatorResult = {

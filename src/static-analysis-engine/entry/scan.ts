@@ -34,7 +34,6 @@ import { runProjectEvidenceStage } from "./stages/projectEvidenceStage.js";
 import { runReachabilityStage } from "./stages/reachabilityStage.js";
 import { runRenderStructureStage } from "./stages/renderStructureStage.js";
 import { runSelectorReachabilityStage } from "./stages/selectorReachabilityStage.js";
-import { runSymbolResolutionStage } from "./stages/symbolResolutionStage.js";
 import { runSymbolicEvaluationStage } from "./stages/symbolicEvaluationStage.js";
 
 export function analyzeSourceText(input: {
@@ -179,17 +178,6 @@ export function analyzeProjectSourceTexts(input: {
       resourceEdges: mergedResourceEdges,
     }),
   );
-  const symbolResolutionStage = runAnalysisStage(
-    progress,
-    "symbol-resolution",
-    "Resolving symbols",
-    () =>
-      runSymbolResolutionStage({
-        source: sourceFrontendFacts,
-        moduleFacts: moduleFactsStage.moduleFacts,
-        includeTraces,
-      }),
-  );
   const symbolicEvaluationStage = runAnalysisStage(
     progress,
     "symbolic-evaluation",
@@ -197,7 +185,6 @@ export function analyzeProjectSourceTexts(input: {
     () =>
       runSymbolicEvaluationStage({
         graph: factGraphStage.graph,
-        symbolResolution: symbolResolutionStage,
         includeTraces,
       }),
   );
@@ -269,7 +256,6 @@ export function analyzeProjectSourceTexts(input: {
           factGraph: factGraphStage,
           cssFiles: cssAnalysisStage.cssFiles,
           stylesheets: input.stylesheets ?? cssFrontendStylesheets,
-          symbolResolution: symbolResolutionStage,
           cssModuleLocalsConvention: input.cssModules?.localsConvention,
           externalCssSummary: externalCssStage.externalCssSummary,
           reachabilitySummary: reachabilityStage.reachabilitySummary,

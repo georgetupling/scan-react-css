@@ -17,13 +17,7 @@ import type {
 export function evaluateSymbolicExpressions(
   input: SymbolicEvaluationInput,
 ): SymbolicEvaluationResult {
-  const evaluatorRegistry =
-    input.evaluatorRegistry ??
-    createDefaultSymbolicEvaluatorRegistry({
-      ...(input.cssModuleBindingResolution
-        ? { cssModuleBindingResolution: input.cssModuleBindingResolution }
-        : {}),
-    });
+  const evaluatorRegistry = input.evaluatorRegistry ?? createDefaultSymbolicEvaluatorRegistry();
   const classExpressions: CanonicalClassExpression[] = [];
   const conditions: ConditionFact[] = [];
   const diagnostics: SymbolicEvaluationDiagnostic[] = [];
@@ -45,9 +39,6 @@ export function evaluateSymbolicExpressions(
       expressionSyntax,
       options: input.options ?? {},
       ...(expressionSyntax ? { expressionSyntax } : {}),
-      ...(input.cssModuleBindingResolution
-        ? { cssModuleBindingResolution: input.cssModuleBindingResolution }
-        : {}),
     });
 
     if (result.expression) {

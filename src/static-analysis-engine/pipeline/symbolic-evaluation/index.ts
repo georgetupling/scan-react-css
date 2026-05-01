@@ -21,7 +21,6 @@ export { buildEvaluatedExpressionIndexes } from "./indexes.js";
 export {
   createDefaultSymbolicEvaluatorRegistry,
   createSymbolicEvaluatorRegistry,
-  cssModuleClassExpressionEvaluator,
   fallbackClassExpressionEvaluator,
   normalizedClassExpressionEvaluator,
   runtimeDomClassExpressionEvaluator,
