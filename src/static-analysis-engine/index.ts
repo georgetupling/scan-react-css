@@ -73,6 +73,12 @@ export {
   styleOwnerCandidateId,
   stylesheetOwnershipEvidenceId,
 } from "./pipeline/ownership-inference/index.js";
+export {
+  buildProjectEvidence,
+  buildProjectEvidenceEntities,
+  projectEvidenceDiagnosticId,
+  stylesheetReachabilityEvidenceId,
+} from "./pipeline/project-evidence/index.js";
 export { buildReachabilitySummary } from "./pipeline/reachability/index.js";
 export {
   buildProjectAnalysis,
@@ -337,3 +343,15 @@ export type {
   StylesheetOwnershipBroadness,
   StylesheetOwnershipEvidence,
 } from "./pipeline/ownership-inference/index.js";
+export type {
+  ProjectEvidenceAssemblyInput,
+  ProjectEvidenceAssemblyMeta,
+  ProjectEvidenceAssemblyResult,
+  ProjectEvidenceDiagnostic,
+  ProjectEvidenceDiagnosticCode,
+  ProjectEvidenceDiagnosticId,
+  ProjectEvidenceDiagnosticTargetKind,
+  ProjectEvidenceEntities,
+  ProjectEvidenceIndexes,
+  ProjectEvidenceRelations,
+} from "./pipeline/project-evidence/index.js";

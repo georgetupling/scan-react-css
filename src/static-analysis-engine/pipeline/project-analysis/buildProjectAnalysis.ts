@@ -1,29 +1,12 @@
 import type { ProjectAnalysis, ProjectAnalysisBuildInput } from "./types.js";
-import {
-  buildSourceFiles,
-  buildComponents,
-  buildRenderSubtrees,
-  buildStylesheets,
-  buildClassDefinitions,
-  buildClassContexts,
-  buildUnsupportedClassReferences,
-} from "./entities/core.js";
-import {
-  buildClassReferences,
-  buildStaticallySkippedClassReferences,
-} from "./entities/classReferences.js";
-import { buildSelectorQueries, buildSelectorBranches } from "./entities/selectors.js";
-import {
-  buildCssModuleImports,
-  buildCssModuleMemberReferences,
-  buildCssModuleMemberMatches,
-} from "./entities/cssModules.js";
+import { buildCssModuleMemberMatches } from "./entities/cssModules.js";
 import {
   createEmptyIndexes,
   indexEntities,
   indexRelations,
   indexClassOwnership,
 } from "./internal/indexes.js";
+import { buildProjectEvidence, buildProjectEvidenceEntities } from "../project-evidence/index.js";
 import { buildStylesheetReachability } from "./relations/stylesheetReachability.js";
 import { buildReferenceMatches } from "./relations/referenceMatches.js";
 import {
@@ -36,47 +19,33 @@ import { buildModuleImports, buildComponentRenders } from "./relations/moduleAnd
 export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectAnalysis {
   const includeTraces = input.includeTraces ?? true;
   const indexes = createEmptyIndexes();
-  const sourceFiles = buildSourceFiles(input, indexes);
   const renderGraph = input.renderModel.renderGraph;
-  const components = buildComponents(renderGraph.nodes, indexes, input);
-  const renderSubtrees = buildRenderSubtrees(input.renderModel, indexes);
-  const stylesheets = buildStylesheets(input, indexes);
-  const classDefinitions = buildClassDefinitions(input, stylesheets, indexes);
-  const classContexts = buildClassContexts(input, stylesheets, indexes);
-  const classReferences = buildClassReferences({
-    renderModel: input.renderModel,
-    symbolicEvaluation: input.symbolicEvaluation,
-    factGraph: input.factGraph,
-    indexes,
-    includeTraces,
+  const projectEvidence = buildProjectEvidence({
+    entities: buildProjectEvidenceEntities({
+      projectInput: input,
+      indexes,
+      includeTraces,
+    }),
   });
-  const staticallySkippedClassReferences = buildStaticallySkippedClassReferences({
-    renderModel: input.renderModel,
-    symbolicEvaluation: input.symbolicEvaluation,
-    factGraph: input.factGraph,
-    indexes,
-    includeTraces,
-  });
-  const unsupportedClassReferences = buildUnsupportedClassReferences(input, indexes, includeTraces);
-  const selectorQueries = buildSelectorQueries(
-    input.selectorQueryResults,
-    stylesheets,
-    indexes,
-    includeTraces,
-  );
-  const selectorBranches = buildSelectorBranches(selectorQueries);
-  const cssModuleImports = buildCssModuleImports(input, indexes);
   const {
-    aliases: cssModuleAliases,
-    destructuredBindings: cssModuleDestructuredBindings,
-    memberReferences: cssModuleMemberReferences,
-    diagnostics: cssModuleReferenceDiagnostics,
-  } = buildCssModuleMemberReferences({
-    projectInput: input,
-    imports: cssModuleImports,
-    indexes,
-    includeTraces,
-  });
+    sourceFiles,
+    stylesheets,
+    classReferences,
+    staticallySkippedClassReferences,
+    classDefinitions,
+    classContexts,
+    selectorQueries,
+    selectorBranches,
+    components,
+    renderSubtrees,
+    unsupportedClassReferences,
+    cssModuleImports,
+    cssModuleAliases,
+    cssModuleDestructuredBindings,
+    cssModuleMemberReferences,
+    cssModuleReferenceDiagnostics,
+  } = projectEvidence.entities;
+
   indexEntities({
     sourceFiles,
     stylesheets,
