@@ -8,7 +8,6 @@ import type { LanguageFrontendsResult } from "../../pipeline/language-frontends/
 import type { FactGraphResult } from "../../pipeline/fact-graph/index.js";
 import type { OwnershipInferenceResult } from "../../pipeline/ownership-inference/index.js";
 import type { ProjectEvidenceAssemblyResult } from "../../pipeline/project-evidence/index.js";
-import type { SelectorQueryResult } from "../../pipeline/selector-analysis/index.js";
 import type {
   ProjectSelectorProjectionResult,
   SelectorReachabilityResult,
@@ -51,10 +50,6 @@ export type ReachabilityStageResult = {
 export type SelectorReachabilityStageResult = {
   selectorReachability: SelectorReachabilityResult;
   projectSelectorProjection: ProjectSelectorProjectionResult;
-};
-
-export type SelectorAnalysisStageResult = {
-  selectorQueryResults: SelectorQueryResult[];
 };
 
 export type ProjectEvidenceStageResult = {

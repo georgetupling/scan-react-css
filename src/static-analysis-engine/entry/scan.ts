@@ -40,6 +40,7 @@ import { runSymbolicEvaluationStage } from "./stages/symbolicEvaluationStage.js"
 export function analyzeSourceText(input: {
   filePath: string;
   sourceText: string;
+  /** @deprecated Direct selector queries are compatibility-only and do not shape project evidence. */
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
   source?: SourceFrontendFacts;
@@ -83,6 +84,7 @@ export function analyzeProjectSourceTexts(input: {
     sourceText: string;
   }>;
   projectRoot?: string;
+  /** @deprecated Direct selector queries are compatibility-only and do not shape project evidence. */
   selectorQueries?: string[];
   selectorCssSources?: SelectorSourceInput[];
   source?: SourceFrontendFacts;

@@ -58,10 +58,6 @@ export { toAbstractClassSet } from "./pipeline/symbolic-evaluation/class-values/
 export { toClassExpressionSummary } from "./pipeline/symbolic-evaluation/index.js";
 export { buildExternalCssSummary } from "./pipeline/external-css/index.js";
 export {
-  analyzeSelectorQueries,
-  extractSelectorQueriesFromCssText,
-} from "./pipeline/selector-analysis/index.js";
-export {
   buildProjectSelectorProjection,
   buildSelectorReachability,
   selectorBranchSourceKey,
@@ -283,12 +279,6 @@ export type {
   StylesheetReachabilityRelation,
   UnsupportedClassReferenceAnalysis,
 } from "./pipeline/project-evidence/index.js";
-export type {
-  ExtractedSelectorQuery,
-  SelectorConstraint,
-  SelectorQueryResult,
-  SemanticOutcome,
-} from "./pipeline/selector-analysis/index.js";
 export type {
   ProjectSelectorBranchProjection,
   ProjectSelectorProjectionResult,

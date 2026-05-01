@@ -31,6 +31,26 @@ test("static analysis result exposes staged analysis evidence", () => {
   );
 });
 
+test("analysis evidence derives selector evidence from provided CSS selector sources", () => {
+  const result = analyzeProjectSourceTexts({
+    sourceFiles: [
+      {
+        filePath: "src/App.tsx",
+        sourceText: 'export function App() { return <main className="root" />; }\n',
+      },
+    ],
+    selectorCssSources: [
+      {
+        filePath: "src/App.css",
+        cssText: ".root { color: red; }\n.missing { color: blue; }\n",
+      },
+    ],
+  });
+
+  assert.equal(result.analysisEvidence.projectEvidence.entities.selectorQueries.length, 2);
+  assert.equal(result.analysisEvidence.projectEvidence.entities.selectorBranches.length, 2);
+});
+
 test("analysis evidence exposes reference match semantics for reachable and unreachable definitions", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
