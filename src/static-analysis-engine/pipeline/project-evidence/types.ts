@@ -114,8 +114,12 @@ export type ProjectEvidenceIndexes = {
   classReferencesById: Map<ProjectEvidenceId, ClassReferenceAnalysis>;
   classReferenceIdsByClassName: Map<string, ProjectEvidenceId[]>;
   classReferenceIdsBySourceFileId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
+  classReferenceMatchesById: Map<ProjectEvidenceId, ClassReferenceMatchRelation>;
   classReferenceMatchIdsByDefinitionId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
   classReferenceMatchIdsByReferenceId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
+  classReferenceMatchIdsByReferenceAndClassName: Map<string, ProjectEvidenceId[]>;
+  providerClassSatisfactionsById: Map<ProjectEvidenceId, ProviderClassSatisfactionRelation>;
+  providerClassSatisfactionIdsByReferenceAndClassName: Map<string, ProjectEvidenceId[]>;
   stylesheetReachabilityIdsByStylesheetId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
   selectorBranchIdsByStylesheetId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
   diagnosticById: Map<ProjectEvidenceDiagnosticId, ProjectEvidenceDiagnostic>;

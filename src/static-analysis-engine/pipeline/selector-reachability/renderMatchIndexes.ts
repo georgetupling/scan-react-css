@@ -6,16 +6,22 @@ export type SelectorRenderMatchIndexes = {
   emissionSitesById: Map<string, EmissionSite>;
   emissionSiteIdsByElementId: Map<string, string[]>;
   elementIdsByClassName: Map<string, string[]>;
+  unknownClassElementIds: string[];
 };
 
 export function buildSelectorRenderMatchIndexes(
   renderModel: RenderModel,
 ): SelectorRenderMatchIndexes {
   const elementIdsByClassName = new Map<string, string[]>();
+  const unknownClassElementIds = new Set<string>();
 
   for (const emissionSite of renderModel.emissionSites) {
     if (!emissionSite.elementId) {
       continue;
+    }
+
+    if (emissionSite.confidence === "low" || emissionSite.unsupported.length > 0) {
+      unknownClassElementIds.add(emissionSite.elementId);
     }
 
     for (const token of emissionSite.tokens) {
@@ -35,6 +41,9 @@ export function buildSelectorRenderMatchIndexes(
     emissionSitesById: renderModel.indexes.emissionSiteById,
     emissionSiteIdsByElementId: renderModel.indexes.emissionSiteIdsByElementId,
     elementIdsByClassName,
+    unknownClassElementIds: [...unknownClassElementIds].sort((left, right) =>
+      left.localeCompare(right),
+    ),
   };
 }
 

@@ -15,6 +15,7 @@ export function buildElementMatchesForClassNames(input: {
   renderIndexes: SelectorRenderMatchIndexes;
 }): SelectorElementMatch[] {
   const matches: SelectorElementMatch[] = [];
+  const requiredClassNames = uniqueSorted(input.classNames);
   for (const elementId of input.elementIds) {
     const match = matchElementClassRequirement({
       indexes: input.renderIndexes,
@@ -33,7 +34,7 @@ export function buildElementMatchesForClassNames(input: {
       selectorBranchNodeId: input.branch.id,
       elementId,
       requirement: {
-        requiredClassNames: uniqueSorted(input.classNames),
+        requiredClassNames,
         unsupportedParts: [],
       },
       matchedClassNames: match.matchedClassNames,
@@ -91,31 +92,75 @@ export function getCandidateElementIds(input: {
   }
 
   const [firstClassName, ...restClassNames] = classNames;
-  const unknownElementIds = getUnknownClassElementIds(input.renderIndexes);
-  let candidates = new Set([
-    ...(input.elementIdsByClassName.get(firstClassName) ?? []),
-    ...unknownElementIds,
-  ]);
+  const unknownElementIds = input.renderIndexes.unknownClassElementIds;
+  let candidates = sortedUnion(
+    input.elementIdsByClassName.get(firstClassName) ?? [],
+    unknownElementIds,
+  );
   for (const className of restClassNames) {
-    const elementIds = new Set([
-      ...(input.elementIdsByClassName.get(className) ?? []),
-      ...unknownElementIds,
-    ]);
-    candidates = new Set([...candidates].filter((elementId) => elementIds.has(elementId)));
+    const elementIds = sortedUnion(
+      input.elementIdsByClassName.get(className) ?? [],
+      unknownElementIds,
+    );
+    candidates = intersectSorted(candidates, elementIds);
+    if (candidates.length === 0) {
+      return [];
+    }
   }
 
-  return [...candidates].sort((left, right) => left.localeCompare(right));
+  return candidates;
 }
 
-function getUnknownClassElementIds(renderIndexes: SelectorRenderMatchIndexes): string[] {
-  const elementIds = new Set<string>();
-  for (const site of renderIndexes.renderModel.emissionSites) {
-    if (!site.elementId) {
+function intersectSorted(left: string[], right: string[]): string[] {
+  const result: string[] = [];
+  let leftIndex = 0;
+  let rightIndex = 0;
+  while (leftIndex < left.length && rightIndex < right.length) {
+    const comparison = left[leftIndex].localeCompare(right[rightIndex]);
+    if (comparison === 0) {
+      result.push(left[leftIndex]);
+      leftIndex += 1;
+      rightIndex += 1;
       continue;
     }
-    if (site.confidence === "low" || site.unsupported.length > 0) {
-      elementIds.add(site.elementId);
+    if (comparison < 0) {
+      leftIndex += 1;
+      continue;
     }
+    rightIndex += 1;
   }
-  return [...elementIds].sort((left, right) => left.localeCompare(right));
+  return result;
+}
+
+function sortedUnion(left: string[], right: string[]): string[] {
+  const result: string[] = [];
+  let leftIndex = 0;
+  let rightIndex = 0;
+  while (leftIndex < left.length && rightIndex < right.length) {
+    const leftValue = left[leftIndex];
+    const rightValue = right[rightIndex];
+    const comparison = leftValue.localeCompare(rightValue);
+    if (comparison === 0) {
+      result.push(leftValue);
+      leftIndex += 1;
+      rightIndex += 1;
+      continue;
+    }
+    if (comparison < 0) {
+      result.push(leftValue);
+      leftIndex += 1;
+      continue;
+    }
+    result.push(rightValue);
+    rightIndex += 1;
+  }
+  while (leftIndex < left.length) {
+    result.push(left[leftIndex]);
+    leftIndex += 1;
+  }
+  while (rightIndex < right.length) {
+    result.push(right[rightIndex]);
+    rightIndex += 1;
+  }
+  return result;
 }

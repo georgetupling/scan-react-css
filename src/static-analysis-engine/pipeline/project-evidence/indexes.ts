@@ -45,8 +45,26 @@ export function buildIndexes(input: {
   );
   const classReferenceIdsByClassName = new Map<string, ProjectEvidenceId[]>();
   const classReferenceIdsBySourceFileId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
+  const classReferenceMatchesById = new Map<
+    ProjectEvidenceId,
+    (typeof input.relations.referenceMatches)[number]
+  >(input.relations.referenceMatches.map((match) => [match.id, match]));
   const classReferenceMatchIdsByDefinitionId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
   const classReferenceMatchIdsByReferenceId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
+  const classReferenceMatchIdsByReferenceAndClassName = new Map<string, ProjectEvidenceId[]>();
+  const providerClassSatisfactionsById = new Map<
+    ProjectEvidenceId,
+    (typeof input.relations.providerClassSatisfactions)[number]
+  >(
+    input.relations.providerClassSatisfactions.map((satisfaction) => [
+      satisfaction.id,
+      satisfaction,
+    ]),
+  );
+  const providerClassSatisfactionIdsByReferenceAndClassName = new Map<
+    string,
+    ProjectEvidenceId[]
+  >();
   const stylesheetReachabilityIdsByStylesheetId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
   const selectorBranchIdsByStylesheetId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
   const diagnosticById = new Map<ProjectEvidenceDiagnosticId, ProjectEvidenceDiagnostic>();
@@ -74,6 +92,19 @@ export function buildIndexes(input: {
   for (const match of input.relations.referenceMatches) {
     pushMapValue(classReferenceMatchIdsByDefinitionId, match.definitionId, match.id);
     pushMapValue(classReferenceMatchIdsByReferenceId, match.referenceId, match.id);
+    pushMapValue(
+      classReferenceMatchIdsByReferenceAndClassName,
+      createReferenceClassKey(match.referenceId, match.className),
+      match.id,
+    );
+  }
+
+  for (const satisfaction of input.relations.providerClassSatisfactions) {
+    pushMapValue(
+      providerClassSatisfactionIdsByReferenceAndClassName,
+      createReferenceClassKey(satisfaction.referenceId, satisfaction.className),
+      satisfaction.id,
+    );
   }
 
   for (const relation of input.relations.stylesheetReachability) {
@@ -105,6 +136,8 @@ export function buildIndexes(input: {
     classReferenceIdsBySourceFileId,
     classReferenceMatchIdsByDefinitionId,
     classReferenceMatchIdsByReferenceId,
+    classReferenceMatchIdsByReferenceAndClassName,
+    providerClassSatisfactionIdsByReferenceAndClassName,
     stylesheetReachabilityIdsByStylesheetId,
     selectorBranchIdsByStylesheetId,
     diagnosticsByTargetId,
@@ -123,13 +156,21 @@ export function buildIndexes(input: {
     classReferencesById,
     classReferenceIdsByClassName,
     classReferenceIdsBySourceFileId,
+    classReferenceMatchesById,
     classReferenceMatchIdsByDefinitionId,
     classReferenceMatchIdsByReferenceId,
+    classReferenceMatchIdsByReferenceAndClassName,
+    providerClassSatisfactionsById,
+    providerClassSatisfactionIdsByReferenceAndClassName,
     stylesheetReachabilityIdsByStylesheetId,
     selectorBranchIdsByStylesheetId,
     diagnosticById,
     diagnosticsByTargetId,
   };
+}
+
+function createReferenceClassKey(referenceId: string, className: string): string {
+  return `${referenceId}::${className}`;
 }
 
 function referenceClassNames(reference: ClassReferenceAnalysis): string[] {

@@ -98,10 +98,11 @@ function collectStylesheetReachabilityEvidence(input: ProjectEvidenceBuildInput)
       continue;
     }
     const stylesheetPath = normalizeProjectPath(edge.resolvedFilePath);
-    directlyImportedByStylesheetPath.set(stylesheetPath, [
-      ...(directlyImportedByStylesheetPath.get(stylesheetPath) ?? []),
+    pushMapValue(
+      directlyImportedByStylesheetPath,
+      stylesheetPath,
       normalizeProjectPath(edge.importerFilePath),
-    ]);
+    );
   }
 
   const stylesheetImportersByStylesheetPath = new Map<string, string[]>();
@@ -109,10 +110,7 @@ function collectStylesheetReachabilityEvidence(input: ProjectEvidenceBuildInput)
     if (edge.kind === "stylesheet-import" && edge.resolvedFilePath) {
       const importedPath = normalizeProjectPath(edge.resolvedFilePath);
       const importerPath = normalizeProjectPath(edge.importerFilePath);
-      stylesheetImportersByStylesheetPath.set(importedPath, [
-        ...(stylesheetImportersByStylesheetPath.get(importedPath) ?? []),
-        importerPath,
-      ]);
+      pushMapValue(stylesheetImportersByStylesheetPath, importedPath, importerPath);
       continue;
     }
     if (
@@ -122,10 +120,7 @@ function collectStylesheetReachabilityEvidence(input: ProjectEvidenceBuildInput)
     ) {
       const importedPath = normalizeProjectPath(edge.resolvedFilePath);
       const importerPath = normalizeProjectPath(edge.importerFilePath);
-      stylesheetImportersByStylesheetPath.set(importedPath, [
-        ...(stylesheetImportersByStylesheetPath.get(importedPath) ?? []),
-        importerPath,
-      ]);
+      pushMapValue(stylesheetImportersByStylesheetPath, importedPath, importerPath);
     }
   }
 
@@ -148,10 +143,7 @@ function collectStylesheetReachabilityEvidence(input: ProjectEvidenceBuildInput)
 
     const stylesheetPath = normalizeProjectPath(edge.resolvedFilePath);
     const sourceFilePath = normalizeProjectPath(edge.importerFilePath);
-    packageImportedByStylesheetPath.set(stylesheetPath, [
-      ...(packageImportedByStylesheetPath.get(stylesheetPath) ?? []),
-      sourceFilePath,
-    ]);
+    pushMapValue(packageImportedByStylesheetPath, stylesheetPath, sourceFilePath);
   }
   const importedSourcePathsBySourcePath = new Map<string, string[]>();
   for (const edge of graph.edges.imports) {
@@ -160,10 +152,7 @@ function collectStylesheetReachabilityEvidence(input: ProjectEvidenceBuildInput)
     }
     const importerPath = normalizeProjectPath(edge.importerFilePath);
     const importedPath = normalizeProjectPath(edge.resolvedFilePath);
-    importedSourcePathsBySourcePath.set(importerPath, [
-      ...(importedSourcePathsBySourcePath.get(importerPath) ?? []),
-      importedPath,
-    ]);
+    pushMapValue(importedSourcePathsBySourcePath, importerPath, importedPath);
   }
   const sourceContextsByStylesheetPath = buildTransitiveSourceContextsByStylesheetPath({
     directlyImportedByStylesheetPath,
@@ -248,20 +237,36 @@ function buildTransitiveSourceContextsByStylesheetPath(input: {
     sourcesByStylesheetPath.set(stylesheetPath, existing);
   }
 
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const [stylesheetPath, importerPaths] of input.stylesheetImportersByStylesheetPath) {
-      const existing = sourcesByStylesheetPath.get(stylesheetPath) ?? new Set<string>();
-      const beforeSize = existing.size;
-      for (const importerPath of importerPaths) {
-        for (const sourceFilePath of sourcesByStylesheetPath.get(importerPath) ?? []) {
-          existing.add(sourceFilePath);
-        }
+  const importedByImporterPath = new Map<string, string[]>();
+  for (const [stylesheetPath, importerPaths] of input.stylesheetImportersByStylesheetPath) {
+    for (const importerPath of importerPaths) {
+      pushMapValue(importedByImporterPath, importerPath, stylesheetPath);
+    }
+  }
+  const queue = [...sourcesByStylesheetPath.keys()];
+  const queued = new Set(queue);
+  while (queue.length > 0) {
+    const importerPath = queue.shift();
+    if (!importerPath) {
+      continue;
+    }
+    queued.delete(importerPath);
+    const importerSources = sourcesByStylesheetPath.get(importerPath);
+    if (!importerSources || importerSources.size === 0) {
+      continue;
+    }
+    for (const importedPath of importedByImporterPath.get(importerPath) ?? []) {
+      const targetSources = sourcesByStylesheetPath.get(importedPath) ?? new Set<string>();
+      const beforeSize = targetSources.size;
+      for (const sourceFilePath of importerSources) {
+        targetSources.add(sourceFilePath);
       }
-      if (existing.size !== beforeSize) {
-        sourcesByStylesheetPath.set(stylesheetPath, existing);
-        changed = true;
+      if (targetSources.size !== beforeSize) {
+        sourcesByStylesheetPath.set(importedPath, targetSources);
+        if (!queued.has(importedPath)) {
+          queue.push(importedPath);
+          queued.add(importedPath);
+        }
       }
     }
   }
@@ -323,7 +328,26 @@ function collectSelectorDerivedStylesheetContexts(input: ProjectEvidenceBuildInp
       .map((stylesheet) => [stylesheet.id, normalizeProjectPath(stylesheet.filePath as string)]),
   );
   const contextsByStylesheetPath = new Map<string, StylesheetReachabilityContextRecord[]>();
+  const contextKeysByStylesheetPath = new Map<string, Set<string>>();
   const hasSelectorBranchesByStylesheetPath = new Set<string>();
+  const componentByNodeId = new Map<
+    string,
+    {
+      filePath: string;
+      componentKey: string;
+      componentName: string;
+    }
+  >();
+  for (const component of input.renderModel.components) {
+    if (!component.componentNodeId) {
+      continue;
+    }
+    componentByNodeId.set(component.componentNodeId, {
+      filePath: component.filePath,
+      componentKey: component.componentKey,
+      componentName: component.componentName,
+    });
+  }
 
   for (const branch of selectorReachability.selectorBranches) {
     if (!branch.stylesheetNodeId) {
@@ -349,12 +373,18 @@ function collectSelectorDerivedStylesheetContexts(input: ProjectEvidenceBuildInp
       const context = projectContextFromSelectorMatch({
         match,
         input,
+        componentByNodeId,
       });
       if (!context) {
         continue;
       }
 
-      pushUniqueContext(contextsByStylesheetPath, stylesheetPath, context);
+      pushUniqueContext(
+        contextsByStylesheetPath,
+        contextKeysByStylesheetPath,
+        stylesheetPath,
+        context,
+      );
     }
   }
 
@@ -398,6 +428,14 @@ function collectSelectorDerivedStylesheetContexts(input: ProjectEvidenceBuildInp
 function projectContextFromSelectorMatch(input: {
   match: SelectorBranchMatch;
   input: ProjectEvidenceBuildInput;
+  componentByNodeId: Map<
+    string,
+    {
+      filePath: string;
+      componentKey: string;
+      componentName: string;
+    }
+  >;
 }): StylesheetReachabilityContextRecord | undefined {
   const element = input.input.selectorReachability?.indexes.renderElementById.get(
     input.match.subjectElementId,
@@ -419,11 +457,7 @@ function projectContextFromSelectorMatch(input: {
   }
 
   const componentNodeId = element.placementComponentNodeId ?? element.emittingComponentNodeId;
-  const component = componentNodeId
-    ? input.input.renderModel.components.find(
-        (candidate) => candidate.componentNodeId === componentNodeId,
-      )
-    : undefined;
+  const component = componentNodeId ? input.componentByNodeId.get(componentNodeId) : undefined;
 
   if (component) {
     return {
@@ -454,34 +488,31 @@ function projectContextFromSelectorMatch(input: {
 
 function pushUniqueContext(
   map: Map<string, StylesheetReachabilityContextRecord[]>,
+  keysByStylesheetPath: Map<string, Set<string>>,
   stylesheetPath: string,
   context: StylesheetReachabilityContextRecord,
 ): void {
   const existing = map.get(stylesheetPath) ?? [];
-  const key = JSON.stringify({
-    kind: context.context.kind,
-    filePath: context.context.filePath,
-    componentName: "componentName" in context.context ? context.context.componentName : undefined,
-    componentKey: "componentKey" in context.context ? context.context.componentKey : undefined,
-    availability: context.availability,
-  });
-  if (
-    !existing.some(
-      (candidate) =>
-        JSON.stringify({
-          kind: candidate.context.kind,
-          filePath: candidate.context.filePath,
-          componentName:
-            "componentName" in candidate.context ? candidate.context.componentName : undefined,
-          componentKey:
-            "componentKey" in candidate.context ? candidate.context.componentKey : undefined,
-          availability: candidate.availability,
-        }) === key,
-    )
-  ) {
+  const existingKeys = keysByStylesheetPath.get(stylesheetPath) ?? new Set<string>();
+  const key = [
+    `kind:${context.context.kind}`,
+    `f:${context.context.filePath}`,
+    `n:${"componentName" in context.context ? (context.context.componentName ?? "") : ""}`,
+    `k:${"componentKey" in context.context ? (context.context.componentKey ?? "") : ""}`,
+    `a:${context.availability}`,
+  ].join("|");
+  if (!existingKeys.has(key)) {
+    existingKeys.add(key);
     existing.push(context);
   }
   map.set(stylesheetPath, existing);
+  keysByStylesheetPath.set(stylesheetPath, existingKeys);
+}
+
+function pushMapValue<Key, Value>(map: Map<Key, Value[]>, key: Key, value: Value): void {
+  const values = map.get(key) ?? [];
+  values.push(value);
+  map.set(key, values);
 }
 
 export function getBestReachabilityForReference(input: {

@@ -23,11 +23,7 @@ export function buildIndexes(input: {
   const renderElementById = input.renderModel.indexes.elementById;
   const emissionSiteById = input.renderModel.indexes.emissionSiteById;
   const renderPathById = input.renderModel.indexes.renderPathById;
-  const unknownRegionById = new Map(
-    input.renderModel.renderRegions
-      .filter((region) => region.regionKind === "unknown-barrier")
-      .map((region) => [region.id, region]),
-  );
+  const unknownRegionById = new Map<string, (typeof input.renderModel.renderRegions)[number]>();
   const matchIdsBySelectorBranchNodeId = new Map<string, string[]>();
   const matchIdsByElementId = new Map<string, string[]>();
   const matchIdsByClassName = new Map<string, string[]>();
@@ -75,7 +71,11 @@ export function buildIndexes(input: {
     }
   }
 
-  for (const region of unknownRegionById.values()) {
+  for (const region of input.renderModel.renderRegions) {
+    if (region.regionKind !== "unknown-barrier") {
+      continue;
+    }
+    unknownRegionById.set(region.id, region);
     if (region.componentNodeId) {
       pushMapValue(unknownRegionIdsByComponentNodeId, region.componentNodeId, region.id);
     }
@@ -129,7 +129,7 @@ export function buildIndexes(input: {
     );
   }
 
-  [
+  const mapsRequiringDedupeAndSort = [
     matchIdsBySelectorBranchNodeId,
     matchIdsByElementId,
     matchIdsByClassName,
@@ -146,7 +146,8 @@ export function buildIndexes(input: {
     branchIdsByRequiredClassName,
     branchIdsByStylesheetNodeId,
     diagnosticIdsBySelectorBranchNodeId,
-  ].forEach(sortMapValues);
+  ];
+  mapsRequiringDedupeAndSort.forEach((map) => sortMapValues(map, true));
 
   return {
     branchReachabilityBySelectorBranchNodeId,
@@ -209,15 +210,23 @@ function pushMapValue<Key, Value>(map: Map<Key, Value[]>, key: Key, value: Value
   map.set(key, values);
 }
 
-function sortMapValues(map: Map<string, string[]>): void {
+function sortMapValues(map: Map<string, string[]>, dedupe = false): void {
   for (const [key, values] of map.entries()) {
-    map.set(
-      key,
-      [...new Set(values)].sort((left, right) => left.localeCompare(right)),
-    );
+    if (dedupe) {
+      map.set(key, [...new Set(values)].sort(compareStrings));
+      continue;
+    }
+    map.set(key, [...values].sort(compareStrings));
   }
 }
 
 function uniqueSorted(values: string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+  return [...new Set(values)].sort(compareStrings);
+}
+
+function compareStrings(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+  return left < right ? -1 : 1;
 }

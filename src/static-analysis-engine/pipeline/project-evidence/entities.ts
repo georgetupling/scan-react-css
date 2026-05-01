@@ -20,60 +20,85 @@ export function buildProjectEvidenceEntities(input: {
   projectInput: ProjectEvidenceBuildInput;
   indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
+  profileLogsEnabled?: boolean;
 }): ProjectEvidenceEntities {
-  const sourceFiles = buildSourceFiles(input.projectInput, input.indexes);
-  const renderGraph = input.projectInput.renderModel.renderGraph;
-  const components = buildComponents(renderGraph.nodes, input.indexes, input.projectInput);
-  const renderSubtrees = buildRenderSubtrees(input.projectInput.renderModel, input.indexes);
-  const stylesheets = buildStylesheets(input.projectInput, input.indexes);
-  const classDefinitions = buildClassDefinitions(input.projectInput, stylesheets, input.indexes);
-  const classContexts = buildClassContexts(input.projectInput, stylesheets, input.indexes);
-  const classReferences = buildClassReferences({
-    renderModel: input.projectInput.renderModel,
-    symbolicEvaluation: input.projectInput.symbolicEvaluation,
-    factGraph: input.projectInput.factGraph,
-    indexes: input.indexes,
-    includeTraces: input.includeTraces,
-  });
-  const staticallySkippedClassReferences = buildStaticallySkippedClassReferences({
-    renderModel: input.projectInput.renderModel,
-    symbolicEvaluation: input.projectInput.symbolicEvaluation,
-    factGraph: input.projectInput.factGraph,
-    indexes: input.indexes,
-    includeTraces: input.includeTraces,
-  });
-  const unsupportedClassReferences = buildUnsupportedClassReferences(
-    input.projectInput,
-    input.indexes,
-    input.includeTraces,
+  const sourceFiles = measure("entities.sourceFiles", () =>
+    buildSourceFiles(input.projectInput, input.indexes),
   );
-  const selectorQueries = buildSelectorQueries({
-    projectInput: input.projectInput,
-    indexes: input.indexes,
-    includeTraces: input.includeTraces,
-    stylesheetIdByFactGraphNodeId: buildStylesheetIdByFactGraphNodeId(
-      input.projectInput.factGraph,
-      input.indexes,
-    ),
-  });
-  const selectorBranches = buildSelectorBranches({
-    projectInput: input.projectInput,
-    selectorQueries,
-    indexes: input.indexes,
-    includeTraces: input.includeTraces,
-  });
-  const cssModuleImports = buildCssModuleImports(input.projectInput, input.indexes);
+  const renderGraph = input.projectInput.renderModel.renderGraph;
+  const components = measure("entities.components", () =>
+    buildComponents(renderGraph.nodes, input.indexes, input.projectInput),
+  );
+  const renderSubtrees = measure("entities.renderSubtrees", () =>
+    buildRenderSubtrees(input.projectInput.renderModel, input.indexes),
+  );
+  const stylesheets = measure("entities.stylesheets", () =>
+    buildStylesheets(input.projectInput, input.indexes),
+  );
+  const classDefinitions = measure("entities.classDefinitions", () =>
+    buildClassDefinitions(input.projectInput, stylesheets, input.indexes),
+  );
+  const classContexts = measure("entities.classContexts", () =>
+    buildClassContexts(input.projectInput, stylesheets, input.indexes),
+  );
+  const classReferences = measure("entities.classReferences", () =>
+    buildClassReferences({
+      renderModel: input.projectInput.renderModel,
+      symbolicEvaluation: input.projectInput.symbolicEvaluation,
+      factGraph: input.projectInput.factGraph,
+      indexes: input.indexes,
+      includeTraces: input.includeTraces,
+    }),
+  );
+  const staticallySkippedClassReferences = measure(
+    "entities.staticallySkippedClassReferences",
+    () =>
+      buildStaticallySkippedClassReferences({
+        renderModel: input.projectInput.renderModel,
+        symbolicEvaluation: input.projectInput.symbolicEvaluation,
+        factGraph: input.projectInput.factGraph,
+        indexes: input.indexes,
+        includeTraces: input.includeTraces,
+      }),
+  );
+  const unsupportedClassReferences = measure("entities.unsupportedClassReferences", () =>
+    buildUnsupportedClassReferences(input.projectInput, input.indexes, input.includeTraces),
+  );
+  const selectorQueries = measure("entities.selectorQueries", () =>
+    buildSelectorQueries({
+      projectInput: input.projectInput,
+      indexes: input.indexes,
+      includeTraces: input.includeTraces,
+      stylesheetIdByFactGraphNodeId: buildStylesheetIdByFactGraphNodeId(
+        input.projectInput.factGraph,
+        input.indexes,
+      ),
+    }),
+  );
+  const selectorBranches = measure("entities.selectorBranches", () =>
+    buildSelectorBranches({
+      projectInput: input.projectInput,
+      selectorQueries,
+      indexes: input.indexes,
+      includeTraces: input.includeTraces,
+    }),
+  );
+  const cssModuleImports = measure("entities.cssModuleImports", () =>
+    buildCssModuleImports(input.projectInput, input.indexes),
+  );
   const {
     aliases: cssModuleAliases,
     destructuredBindings: cssModuleDestructuredBindings,
     memberReferences: cssModuleMemberReferences,
     diagnostics: cssModuleReferenceDiagnostics,
-  } = buildCssModuleMemberReferences({
-    projectInput: input.projectInput,
-    imports: cssModuleImports,
-    indexes: input.indexes,
-    includeTraces: input.includeTraces,
-  });
+  } = measure("entities.cssModuleMemberReferences", () =>
+    buildCssModuleMemberReferences({
+      projectInput: input.projectInput,
+      imports: cssModuleImports,
+      indexes: input.indexes,
+      includeTraces: input.includeTraces,
+    }),
+  );
 
   return {
     sourceFiles,
@@ -93,6 +118,17 @@ export function buildProjectEvidenceEntities(input: {
     cssModuleMemberReferences,
     cssModuleReferenceDiagnostics,
   };
+
+  function measure<T>(label: string, run: () => T): T {
+    const start = performance.now();
+    const result = run();
+    if (input.profileLogsEnabled) {
+      console.error(
+        `[profile:project-evidence] ${label}: ${(performance.now() - start).toFixed(1)}ms`,
+      );
+    }
+    return result;
+  }
 }
 
 function buildStylesheetIdByFactGraphNodeId(

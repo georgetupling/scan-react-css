@@ -11,6 +11,7 @@ import {
   getCandidateElementIds,
 } from "./subjectMatches.js";
 import {
+  buildStructuralRelationIndexes,
   buildStructuralMatches,
   projectStructuralConstraintFromRequirement,
 } from "./structuralMatches.js";
@@ -24,49 +25,84 @@ import type {
 } from "./types.js";
 import { uniqueSorted } from "./utils.js";
 
+type SelectorReachabilityProfiler = {
+  enabled: boolean;
+  totals: Map<string, number>;
+  counts: Map<string, number>;
+  time<T>(label: string, run: () => T): T;
+  logSummary(): void;
+};
+
 export function buildSelectorReachability(
   input: RenderStructureResult,
 ): SelectorReachabilityResult {
-  const renderIndexes = buildSelectorRenderMatchIndexes(input.renderModel);
+  const profiler = createSelectorReachabilityProfiler(
+    process.env.SCAN_REACT_CSS_PROFILE_SELECTOR_REACHABILITY === "1",
+  );
+  const renderIndexes = profiler.time("selectorReachability.buildRenderMatchIndexes", () =>
+    buildSelectorRenderMatchIndexes(input.renderModel),
+  );
   const selectorBranches: SelectorBranchReachability[] = [];
   const elementMatches: SelectorElementMatch[] = [];
   const branchMatches: SelectorBranchMatch[] = [];
   const diagnostics: SelectorReachabilityDiagnostic[] = [];
+  const structuralRelationIndexes = profiler.time(
+    "selectorReachability.buildStructuralRelationIndexes",
+    () => buildStructuralRelationIndexes(input),
+  );
 
-  for (const branch of [...input.graph.nodes.selectorBranches].sort(compareSelectorBranches)) {
-    const parsedBranch = parseSelectorBranch(branch.selectorText);
-    const requirement = projectSelectorBranchRequirement(parsedBranch, { includeTraces: true });
-    const structuralConstraint = projectStructuralConstraintFromRequirement(requirement);
-    const branchDiagnostics = buildDiagnostics({
-      branch,
-      parsedBranch,
-      requirement,
-    });
+  const sortedBranches = profiler.time("selectorReachability.sortSelectorBranches", () =>
+    [...input.graph.nodes.selectorBranches].sort(compareSelectorBranches),
+  );
+  for (const branch of sortedBranches) {
+    const parsedBranch = profiler.time("selectorReachability.parseSelectorBranch", () =>
+      parseSelectorBranch(branch.selectorText),
+    );
+    const requirement = profiler.time("selectorReachability.projectRequirement", () =>
+      projectSelectorBranchRequirement(parsedBranch, { includeTraces: true }),
+    );
+    const structuralConstraint = profiler.time(
+      "selectorReachability.projectStructuralConstraint",
+      () => projectStructuralConstraintFromRequirement(requirement),
+    );
+    const branchDiagnostics = profiler.time("selectorReachability.buildDiagnostics", () =>
+      buildDiagnostics({
+        branch,
+        parsedBranch,
+        requirement,
+      }),
+    );
     diagnostics.push(...branchDiagnostics);
 
     const branchElementMatches: SelectorElementMatch[] = [];
     if (branch.subjectClassNames.length > 0 && branchDiagnostics.length === 0) {
-      branchElementMatches.push(
-        ...buildElementMatchesForClassNames({
-          branch,
-          classNames: branch.subjectClassNames,
-          elementIds: getCandidateElementIds({
+      const subjectElementMatches = profiler.time(
+        "selectorReachability.buildElementMatchesForClassNames",
+        () =>
+          buildElementMatchesForClassNames({
+            branch,
             classNames: branch.subjectClassNames,
-            elementIdsByClassName: renderIndexes.elementIdsByClassName,
+            elementIds: getCandidateElementIds({
+              classNames: branch.subjectClassNames,
+              elementIdsByClassName: renderIndexes.elementIdsByClassName,
+              renderIndexes,
+            }),
             renderIndexes,
           }),
-          renderIndexes,
-        }),
       );
+      branchElementMatches.push(...subjectElementMatches);
     }
 
     const structuralMatches = structuralConstraint
-      ? buildStructuralMatches({
-          branch,
-          constraint: structuralConstraint,
-          renderStructure: input,
-          renderIndexes,
-        })
+      ? profiler.time("selectorReachability.buildStructuralMatches", () =>
+          buildStructuralMatches({
+            branch,
+            constraint: structuralConstraint,
+            renderStructure: input,
+            renderIndexes,
+            structuralRelationIndexes,
+          }),
+        )
       : undefined;
     if (structuralMatches) {
       branchElementMatches.push(...structuralMatches.elementMatches);
@@ -74,11 +110,13 @@ export function buildSelectorReachability(
 
     const candidateBranchMatches =
       structuralMatches?.branchMatches ??
-      buildSubjectBranchMatches({
-        branch,
-        renderStructure: input,
-        elementMatches: branchElementMatches,
-      });
+      profiler.time("selectorReachability.buildSubjectBranchMatches", () =>
+        buildSubjectBranchMatches({
+          branch,
+          renderStructure: input,
+          elementMatches: branchElementMatches,
+        }),
+      );
 
     elementMatches.push(...branchElementMatches);
     branchMatches.push(...candidateBranchMatches);
@@ -115,15 +153,20 @@ export function buildSelectorReachability(
     });
   }
 
-  const indexes = buildIndexes({
-    renderModel: input.renderModel,
-    selectorBranches,
-    elementMatches,
-    branchMatches,
-    diagnostics,
-  });
+  const indexes = profiler.time("selectorReachability.buildIndexes", () =>
+    buildIndexes({
+      renderModel: input.renderModel,
+      selectorBranches,
+      elementMatches,
+      branchMatches,
+      diagnostics,
+    }),
+  );
 
-  const selectorQueries = buildSelectorQueries(selectorBranches);
+  const selectorQueries = profiler.time("selectorReachability.buildSelectorQueries", () =>
+    buildSelectorQueries(selectorBranches),
+  );
+  profiler.logSummary();
 
   return {
     meta: {
@@ -140,6 +183,40 @@ export function buildSelectorReachability(
     branchMatches,
     diagnostics,
     indexes,
+  };
+}
+
+function createSelectorReachabilityProfiler(enabled: boolean): SelectorReachabilityProfiler {
+  const totals = new Map<string, number>();
+  const counts = new Map<string, number>();
+  return {
+    enabled,
+    totals,
+    counts,
+    time<T>(label: string, run: () => T): T {
+      if (!enabled) {
+        return run();
+      }
+      const start = performance.now();
+      const result = run();
+      const elapsed = performance.now() - start;
+      totals.set(label, (totals.get(label) ?? 0) + elapsed);
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+      return result;
+    },
+    logSummary(): void {
+      if (!enabled) {
+        return;
+      }
+      const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]);
+      for (const [label, totalMs] of rows) {
+        const count = counts.get(label) ?? 0;
+        const avgMs = count > 0 ? totalMs / count : 0;
+        console.error(
+          `[profile:selector-reachability] ${label}: total=${totalMs.toFixed(1)}ms count=${count} avg=${avgMs.toFixed(3)}ms`,
+        );
+      }
+    },
   };
 }
 

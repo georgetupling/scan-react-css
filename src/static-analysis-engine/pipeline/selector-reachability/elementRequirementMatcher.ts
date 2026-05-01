@@ -22,6 +22,8 @@ export function matchElementClassRequirement(input: {
   let sawPossible = false;
   let sawUnsupported = false;
   const supportingEmissionSiteIds: string[] = [];
+  const isSingleClass = input.classNames.length === 1;
+  const requiredClass = isSingleClass ? input.classNames[0] : undefined;
 
   for (const siteId of emissionSiteIds) {
     const site = input.indexes.emissionSitesById.get(siteId);
@@ -31,7 +33,7 @@ export function matchElementClassRequirement(input: {
 
     const completeVariant = site.emissionVariants.find(
       (variant) =>
-        includesAll(variant.tokens, input.classNames) &&
+        includesAll(variant.tokens, input.classNames, requiredClass) &&
         variant.completeness === "complete" &&
         !variant.unknownDynamic,
     );
@@ -48,7 +50,11 @@ export function matchElementClassRequirement(input: {
       continue;
     }
 
-    if (site.emissionVariants.some((variant) => includesAll(variant.tokens, input.classNames))) {
+    if (
+      site.emissionVariants.some((variant) =>
+        includesAll(variant.tokens, input.classNames, requiredClass),
+      )
+    ) {
       sawPossible = true;
       supportingEmissionSiteIds.push(siteId);
       continue;
@@ -128,7 +134,14 @@ function noMatch(classNames: string[]): ElementRequirementMatch {
   };
 }
 
-function includesAll(tokens: string[], requiredClassNames: string[]): boolean {
+function includesAll(
+  tokens: string[],
+  requiredClassNames: string[],
+  requiredClass?: string,
+): boolean {
+  if (requiredClass !== undefined) {
+    return tokens.includes(requiredClass);
+  }
   return requiredClassNames.every((className) => tokens.includes(className));
 }
 

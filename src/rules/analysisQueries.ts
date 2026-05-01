@@ -132,7 +132,7 @@ export function getReferenceMatchesByDefinitionId(
 ): ClassReferenceMatchRelation[] {
   return resolveRelationIds(
     analysis.projectEvidence.indexes.classReferenceMatchIdsByDefinitionId.get(definitionId),
-    analysis.projectEvidence.relations.referenceMatches,
+    analysis.projectEvidence.indexes.classReferenceMatchesById,
   );
 }
 
@@ -142,7 +142,7 @@ export function getReferenceMatchesByReferenceId(
 ): ClassReferenceMatchRelation[] {
   return resolveRelationIds(
     analysis.projectEvidence.indexes.classReferenceMatchIdsByReferenceId.get(referenceId),
-    analysis.projectEvidence.relations.referenceMatches,
+    analysis.projectEvidence.indexes.classReferenceMatchesById,
   );
 }
 
@@ -151,8 +151,11 @@ export function getReferenceMatchesByReferenceAndClassName(
   referenceId: ProjectEvidenceId,
   className: string,
 ): ClassReferenceMatchRelation[] {
-  return getReferenceMatchesByReferenceId(analysis, referenceId).filter(
-    (match) => match.className === className,
+  return resolveRelationIds(
+    analysis.projectEvidence.indexes.classReferenceMatchIdsByReferenceAndClassName.get(
+      createReferenceClassKey(referenceId, className),
+    ),
+    analysis.projectEvidence.indexes.classReferenceMatchesById,
   );
 }
 
@@ -169,9 +172,11 @@ export function getProviderSatisfactionsByReferenceAndClassName(input: {
   referenceId: ProjectEvidenceId;
   className: string;
 }): ProviderClassSatisfactionRelation[] {
-  return input.analysis.projectEvidence.relations.providerClassSatisfactions.filter(
-    (satisfaction) =>
-      satisfaction.referenceId === input.referenceId && satisfaction.className === input.className,
+  return resolveRelationIds(
+    input.analysis.projectEvidence.indexes.providerClassSatisfactionIdsByReferenceAndClassName.get(
+      createReferenceClassKey(input.referenceId, input.className),
+    ),
+    input.analysis.projectEvidence.indexes.providerClassSatisfactionsById,
   );
 }
 
@@ -382,16 +387,19 @@ function resolveSelectorBranchIds(
     .filter((branch): branch is SelectorBranchAnalysis => Boolean(branch));
 }
 
-function resolveRelationIds<TRelation extends { id: string }>(
+function resolveRelationIds<TRelation>(
   ids: string[] | undefined,
-  relations: TRelation[],
+  relationById: Map<string, TRelation>,
 ): TRelation[] {
   if (!ids || ids.length === 0) {
     return [];
   }
 
-  const relationById = new Map(relations.map((relation) => [relation.id, relation]));
   return ids
     .map((id) => relationById.get(id))
     .filter((relation): relation is TRelation => Boolean(relation));
+}
+
+function createReferenceClassKey(referenceId: string, className: string): string {
+  return `${referenceId}::${className}`;
 }

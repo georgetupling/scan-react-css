@@ -16,6 +16,8 @@ export type BuildProjectEvidenceAssemblyInput = {
 export function buildProjectEvidenceAssembly(
   input: BuildProjectEvidenceAssemblyInput,
 ): ProjectEvidenceAssemblyResult {
+  const logEnabled = process.env.SCAN_REACT_CSS_PROFILE_PROJECT_EVIDENCE === "1";
+  const startedAt = performance.now();
   const includeTraces = input.options?.includeTraces ?? true;
   const indexes = createEmptyIndexes();
   const projectInput: ProjectEvidenceBuildInput = {
@@ -23,22 +25,47 @@ export function buildProjectEvidenceAssembly(
     cssModuleLocalsConvention: input.options?.cssModuleLocalsConvention,
     includeTraces,
   };
-  const entities = buildProjectEvidenceEntities({
-    projectInput,
-    indexes,
-    includeTraces,
-  });
-  indexProjectEvidenceEntities(entities, indexes);
-
-  return buildProjectEvidence({
-    entities,
-    relations: buildProjectEvidenceRelations({
+  const entities = measure("entities.total", () =>
+    buildProjectEvidenceEntities({
+      projectInput,
+      indexes,
+      includeTraces,
+      profileLogsEnabled: logEnabled,
+    }),
+  );
+  measure("entities.indexing", () => indexProjectEvidenceEntities(entities, indexes));
+  const relations = measure("relations.total", () =>
+    buildProjectEvidenceRelations({
       projectInput,
       entities,
       indexes,
       includeTraces,
+      profileLogsEnabled: logEnabled,
     }),
-  });
+  );
+  const assembled = measure("assembly.finalize", () =>
+    buildProjectEvidence({
+      entities,
+      relations,
+    }),
+  );
+  log("project-evidence.total", performance.now() - startedAt);
+  return assembled;
+
+  function measure<T>(label: string, run: () => T): T {
+    const start = performance.now();
+    const result = run();
+    log(label, performance.now() - start);
+    return result;
+  }
+
+  function log(label: string, durationMs: number): void {
+    if (!logEnabled) {
+      return;
+    }
+
+    console.error(`[profile:project-evidence] ${label}: ${durationMs.toFixed(1)}ms`);
+  }
 }
 
 function indexProjectEvidenceEntities(

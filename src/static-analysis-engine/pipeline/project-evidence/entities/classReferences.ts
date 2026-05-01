@@ -37,6 +37,39 @@ type StaticallySkippedPlacementCondition = PlacementCondition & {
   reason: "condition-resolved-true" | "condition-resolved-false" | "expression-resolved-nullish";
 };
 
+type ClassReferencesProfiler = {
+  enabled: boolean;
+  totals: Map<string, number>;
+  counts: Map<string, number>;
+  time<T>(label: string, run: () => T): T;
+  logSummary(): void;
+};
+
+type ClassExpressionSiteLookupResult = {
+  rawExpressionText: string;
+  emittingComponentNodeId?: string;
+};
+
+type ClassExpressionSiteLookupEntry = {
+  location: SourceAnchor;
+  span: number;
+  rawExpressionText: string;
+  emittingComponentNodeId?: string;
+};
+
+type ComponentLookupEntry = {
+  location: SourceAnchor;
+  span: number;
+  componentKey: string;
+};
+
+type ClassReferencesLookupContext = {
+  classExpressionSitesByFilePath: Map<string, ClassExpressionSiteLookupEntry[]>;
+  componentsByFilePath: Map<string, ComponentLookupEntry[]>;
+  classExpressionSiteLookupCache: Map<string, ClassExpressionSiteLookupResult | null>;
+  componentAtLocationCache: Map<string, ProjectEvidenceId | null>;
+};
+
 export function buildClassReferences(input: {
   renderModel: RenderModel;
   symbolicEvaluation: ProjectEvidenceBuildInput["symbolicEvaluation"];
@@ -68,6 +101,10 @@ function buildClassReferencesFromEmissionSites(input: {
   indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
 }): ClassReferenceAnalysis[] {
+  const profiler = createClassReferencesProfiler(
+    process.env.SCAN_REACT_CSS_PROFILE_PROJECT_EVIDENCE === "1",
+  );
+  const lookupContext = createClassReferencesLookupContext(input.factGraph);
   const expressionsById = new Map(
     input.symbolicEvaluation.evaluatedExpressions.classExpressions.map((expression) => [
       expression.id,
@@ -87,7 +124,9 @@ function buildClassReferencesFromEmissionSites(input: {
     "unconsumed-component-class-prop",
   );
 
-  for (const emissionSite of sortEmissionSites(input.renderModel.emissionSites)) {
+  for (const emissionSite of profiler.time("classReferences.sortEmissionSites", () =>
+    sortEmissionSites(input.renderModel.emissionSites),
+  )) {
     const expression = expressionsById.get(emissionSite.classExpressionId);
     if (!expression) {
       continue;
@@ -104,26 +143,34 @@ function buildClassReferencesFromEmissionSites(input: {
     ) {
       continue;
     }
-    const dedupeKey = createEmissionReferenceDedupeKey({
-      emissionSite,
-      expression,
-      factGraph: input.factGraph,
-      indexes: input.indexes,
-    });
+    const dedupeKey = profiler.time("classReferences.createEmissionReferenceDedupeKey", () =>
+      createEmissionReferenceDedupeKey({
+        emissionSite,
+        expression,
+        factGraph: input.factGraph,
+        indexes: input.indexes,
+        lookupContext,
+        profiler,
+      }),
+    );
     if (emittedReferenceKeys.has(dedupeKey)) {
       continue;
     }
     emittedReferenceKeys.add(dedupeKey);
 
     references.push(
-      buildClassReferenceFromEmissionSite({
-        emissionSite,
-        expression,
-        factGraph: input.factGraph,
-        indexes: input.indexes,
-        includeTraces: input.includeTraces,
-        index: references.length,
-      }),
+      profiler.time("classReferences.buildClassReferenceFromEmissionSite", () =>
+        buildClassReferenceFromEmissionSite({
+          emissionSite,
+          expression,
+          factGraph: input.factGraph,
+          indexes: input.indexes,
+          includeTraces: input.includeTraces,
+          index: references.length,
+          lookupContext,
+          profiler,
+        }),
+      ),
     );
   }
 
@@ -158,19 +205,26 @@ function buildClassReferencesFromEmissionSites(input: {
     }
 
     references.push(
-      buildSymbolicClassReference({
-        expression,
-        classExpression: toClassExpressionSummary(expression),
-        origin:
-          expression.classExpressionSiteKind === "runtime-dom-class" ? "runtime-dom" : "render-ir",
-        factGraph: input.factGraph,
-        indexes: input.indexes,
-        includeTraces: input.includeTraces,
-        index: references.length,
-      }),
+      profiler.time("classReferences.buildSymbolicClassReference", () =>
+        buildSymbolicClassReference({
+          expression,
+          classExpression: toClassExpressionSummary(expression),
+          origin:
+            expression.classExpressionSiteKind === "runtime-dom-class"
+              ? "runtime-dom"
+              : "render-ir",
+          factGraph: input.factGraph,
+          indexes: input.indexes,
+          includeTraces: input.includeTraces,
+          index: references.length,
+          lookupContext,
+          profiler,
+        }),
+      ),
     );
   }
 
+  profiler.logSummary();
   return references.sort(compareById);
 }
 
@@ -240,18 +294,28 @@ function buildClassReferenceFromEmissionSite(input: {
   indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
   index: number;
+  lookupContext: ClassReferencesLookupContext;
+  profiler: ClassReferencesProfiler;
 }): ClassReferenceAnalysis {
   const site = input.factGraph?.graph.indexes.nodesById.get(
     input.expression.classExpressionSiteNodeId,
   );
-  const classExpression = withInferredTemplateCandidates(
-    toEmissionSiteClassExpressionSummary(input.emissionSite, input.expression),
-    input.expression.rawExpressionText,
-    [...input.indexes.definitionsByClassName.keys()],
-    shouldInferTemplateCandidatesForSite(site),
+  const classExpression = input.profiler.time(
+    "classReferences.withInferredTemplateCandidates",
+    () =>
+      withInferredTemplateCandidates(
+        toEmissionSiteClassExpressionSummary(input.emissionSite, input.expression),
+        input.expression.rawExpressionText,
+        [...input.indexes.definitionsByClassName.keys()],
+        shouldInferTemplateCandidatesForSite(site),
+      ),
   );
   const sourceLocation = resolveReferenceSourceLocation(classExpression, input.emissionSite);
-  const sourceSite = findClassExpressionSiteAtLocation(input.factGraph, sourceLocation);
+  const sourceSite = findClassExpressionSiteAtLocation(
+    sourceLocation,
+    input.lookupContext,
+    input.profiler,
+  );
   const sourceFileId =
     input.indexes.sourceFileIdByPath.get(sourceLocation.filePath) ??
     createPathId("source", sourceLocation.filePath);
@@ -261,7 +325,7 @@ function buildClassReferenceFromEmissionSite(input: {
   );
   const sourceComponentId =
     projectComponentNodeId(sourceSite?.emittingComponentNodeId, input) ??
-    projectComponentAtLocation(sourceLocation, input);
+    projectComponentAtLocation(sourceLocation, input, input.lookupContext, input.profiler);
   const suppliedByComponentId =
     sourceComponentId ??
     projectComponentNodeId(input.emissionSite.suppliedByComponentNodeId, input);
@@ -312,15 +376,21 @@ function buildSymbolicClassReference(input: {
   indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
   index: number;
+  lookupContext: ClassReferencesLookupContext;
+  profiler: ClassReferencesProfiler;
 }): ClassReferenceAnalysis {
   const site = input.factGraph?.graph.indexes.nodesById.get(
     input.expression.classExpressionSiteNodeId,
   );
-  const classExpression = withInferredTemplateCandidates(
-    input.classExpression,
-    input.expression.rawExpressionText,
-    [...input.indexes.definitionsByClassName.keys()],
-    shouldInferTemplateCandidatesForSite(site),
+  const classExpression = input.profiler.time(
+    "classReferences.withInferredTemplateCandidates",
+    () =>
+      withInferredTemplateCandidates(
+        input.classExpression,
+        input.expression.rawExpressionText,
+        [...input.indexes.definitionsByClassName.keys()],
+        shouldInferTemplateCandidatesForSite(site),
+      ),
   );
   const filePath = normalizeProjectPath(input.expression.filePath);
   const sourceFileId =
@@ -538,6 +608,8 @@ function createEmissionReferenceDedupeKey(input: {
   expression: CanonicalClassExpression;
   factGraph: ProjectEvidenceBuildInput["factGraph"];
   indexes: ProjectEvidenceBuilderIndexes;
+  lookupContext: ClassReferencesLookupContext;
+  profiler: ClassReferencesProfiler;
 }): string {
   const classExpression = toEmissionSiteClassExpressionSummary(
     input.emissionSite,
@@ -591,6 +663,8 @@ function buildEmissionClassNameComponentIds(input: {
   emissionSite: EmissionSite;
   factGraph: ProjectEvidenceBuildInput["factGraph"];
   indexes: ProjectEvidenceBuilderIndexes;
+  lookupContext: ClassReferencesLookupContext;
+  profiler: ClassReferencesProfiler;
 }): Record<string, ProjectEvidenceId> | undefined {
   const componentIdsByClassName: Record<string, ProjectEvidenceId> = {};
 
@@ -599,11 +673,13 @@ function buildEmissionClassNameComponentIds(input: {
       ? normalizeAnchor(provenance.sourceLocation)
       : undefined;
     const sourceSite = sourceLocation
-      ? findClassExpressionSiteAtLocation(input.factGraph, sourceLocation)
+      ? findClassExpressionSiteAtLocation(sourceLocation, input.lookupContext, input.profiler)
       : undefined;
     const sourceLocationComponentId =
       projectComponentNodeId(sourceSite?.emittingComponentNodeId, input) ??
-      (sourceLocation ? projectComponentAtLocation(sourceLocation, input) : undefined);
+      (sourceLocation
+        ? projectComponentAtLocation(sourceLocation, input, input.lookupContext, input.profiler)
+        : undefined);
     const componentId =
       sourceLocationComponentId ??
       projectComponentNodeId(
@@ -646,19 +722,43 @@ function resolveReferenceSourceLocation(
 }
 
 function findClassExpressionSiteAtLocation(
-  factGraph: ProjectEvidenceBuildInput["factGraph"],
   location: SourceAnchor,
-): { rawExpressionText: string; emittingComponentNodeId?: string } | undefined {
-  return factGraph?.graph.nodes.classExpressionSites
-    .filter((site) => {
-      const siteLocation = normalizeAnchor(site.location);
-      return (
+  lookupContext: ClassReferencesLookupContext,
+  profiler?: ClassReferencesProfiler,
+): ClassExpressionSiteLookupResult | undefined {
+  const run = () => {
+    const cacheKey = toAnchorCacheKey(location);
+    const cached = lookupContext.classExpressionSiteLookupCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached ?? undefined;
+    }
+
+    const filePath = normalizeProjectPath(location.filePath);
+    const candidates = lookupContext.classExpressionSitesByFilePath.get(filePath) ?? [];
+    let bestMatch: ClassExpressionSiteLookupEntry | undefined;
+    for (const candidate of candidates) {
+      const siteLocation = candidate.location;
+      if (
         anchorsEqual(siteLocation, location) ||
         sourceAnchorContains(siteLocation, location) ||
         sourceAnchorContains(location, siteLocation)
-      );
-    })
-    .sort((left, right) => anchorSpan(left.location) - anchorSpan(right.location))[0];
+      ) {
+        if (!bestMatch || candidate.span < bestMatch.span) {
+          bestMatch = candidate;
+        }
+      }
+    }
+
+    const result = bestMatch
+      ? {
+          rawExpressionText: bestMatch.rawExpressionText,
+          emittingComponentNodeId: bestMatch.emittingComponentNodeId,
+        }
+      : undefined;
+    lookupContext.classExpressionSiteLookupCache.set(cacheKey, result ?? null);
+    return result;
+  };
+  return profiler ? profiler.time("classReferences.findClassExpressionSiteAtLocation", run) : run();
 }
 
 function projectComponentAtLocation(
@@ -667,22 +767,41 @@ function projectComponentAtLocation(
     factGraph: ProjectEvidenceBuildInput["factGraph"];
     indexes: ProjectEvidenceBuilderIndexes;
   },
+  lookupContext: ClassReferencesLookupContext,
+  profiler?: ClassReferencesProfiler,
 ): ProjectEvidenceId | undefined {
-  const component = input.factGraph?.graph.nodes.components
-    .filter((candidate) => sourceAnchorContains(candidate.location, location))
-    .sort((left, right) => anchorSpan(left.location) - anchorSpan(right.location))[0];
-  if (component) {
-    return input.indexes.componentIdByComponentKey.get(component.componentKey);
-  }
+  const run = () => {
+    const cacheKey = toAnchorCacheKey(location);
+    const cached = lookupContext.componentAtLocationCache.get(cacheKey);
+    if (cached !== undefined) {
+      return cached ?? undefined;
+    }
 
-  const sameFileComponents =
-    input.factGraph?.graph.nodes.components.filter(
-      (candidate) =>
-        normalizeProjectPath(candidate.filePath) === normalizeProjectPath(location.filePath),
-    ) ?? [];
-  return sameFileComponents.length === 1
-    ? input.indexes.componentIdByComponentKey.get(sameFileComponents[0].componentKey)
-    : undefined;
+    const filePath = normalizeProjectPath(location.filePath);
+    const sameFileComponents = lookupContext.componentsByFilePath.get(filePath) ?? [];
+
+    let bestComponent: ComponentLookupEntry | undefined;
+    for (const candidate of sameFileComponents) {
+      if (sourceAnchorContains(candidate.location, location)) {
+        if (!bestComponent || candidate.span < bestComponent.span) {
+          bestComponent = candidate;
+        }
+      }
+    }
+    if (bestComponent) {
+      const resolved = input.indexes.componentIdByComponentKey.get(bestComponent.componentKey);
+      lookupContext.componentAtLocationCache.set(cacheKey, resolved ?? null);
+      return resolved;
+    }
+
+    const resolved =
+      sameFileComponents.length === 1
+        ? input.indexes.componentIdByComponentKey.get(sameFileComponents[0].componentKey)
+        : undefined;
+    lookupContext.componentAtLocationCache.set(cacheKey, resolved ?? null);
+    return resolved;
+  };
+  return profiler ? profiler.time("classReferences.projectComponentAtLocation", run) : run();
 }
 
 function anchorsEqual(left: SourceAnchor, right: SourceAnchor): boolean {
@@ -920,6 +1039,86 @@ function buildStaticallySkippedClassReferenceTraces(input: {
       },
     },
   ];
+}
+
+function createClassReferencesLookupContext(
+  factGraph: ProjectEvidenceBuildInput["factGraph"],
+): ClassReferencesLookupContext {
+  const classExpressionSitesByFilePath = new Map<string, ClassExpressionSiteLookupEntry[]>();
+  for (const site of factGraph?.graph.nodes.classExpressionSites ?? []) {
+    const filePath = normalizeProjectPath(site.location.filePath);
+    const entries = classExpressionSitesByFilePath.get(filePath) ?? [];
+    entries.push({
+      location: normalizeAnchor(site.location),
+      span: anchorSpan(site.location),
+      rawExpressionText: site.rawExpressionText,
+      emittingComponentNodeId: site.emittingComponentNodeId,
+    });
+    classExpressionSitesByFilePath.set(filePath, entries);
+  }
+
+  const componentsByFilePath = new Map<string, ComponentLookupEntry[]>();
+  for (const component of factGraph?.graph.nodes.components ?? []) {
+    const filePath = normalizeProjectPath(component.filePath);
+    const entries = componentsByFilePath.get(filePath) ?? [];
+    entries.push({
+      location: normalizeAnchor(component.location),
+      span: anchorSpan(component.location),
+      componentKey: component.componentKey,
+    });
+    componentsByFilePath.set(filePath, entries);
+  }
+
+  return {
+    classExpressionSitesByFilePath,
+    componentsByFilePath,
+    classExpressionSiteLookupCache: new Map(),
+    componentAtLocationCache: new Map(),
+  };
+}
+
+function toAnchorCacheKey(anchor: SourceAnchor): string {
+  return [
+    normalizeProjectPath(anchor.filePath),
+    anchor.startLine,
+    anchor.startColumn,
+    anchor.endLine ?? "",
+    anchor.endColumn ?? "",
+  ].join(":");
+}
+
+function createClassReferencesProfiler(enabled: boolean): ClassReferencesProfiler {
+  const totals = new Map<string, number>();
+  const counts = new Map<string, number>();
+  return {
+    enabled,
+    totals,
+    counts,
+    time<T>(label: string, run: () => T): T {
+      if (!enabled) {
+        return run();
+      }
+      const startedAt = performance.now();
+      const result = run();
+      const elapsed = performance.now() - startedAt;
+      totals.set(label, (totals.get(label) ?? 0) + elapsed);
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+      return result;
+    },
+    logSummary(): void {
+      if (!enabled) {
+        return;
+      }
+      const rows = [...totals.entries()].sort((left, right) => right[1] - left[1]);
+      for (const [label, totalMs] of rows) {
+        const count = counts.get(label) ?? 0;
+        const avgMs = count > 0 ? totalMs / count : 0;
+        console.error(
+          `[profile:classReferences] ${label}: total=${totalMs.toFixed(1)}ms count=${count} avg=${avgMs.toFixed(3)}ms`,
+        );
+      }
+    },
+  };
 }
 
 function sortEmissionSites(emissionSites: EmissionSite[]): EmissionSite[] {
