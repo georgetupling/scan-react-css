@@ -466,10 +466,6 @@ export function createReferenceClassKey(referenceId: ProjectAnalysisId, classNam
   return `${referenceId}:${className}`;
 }
 
-export function createClassOwnershipId(classDefinitionId: ProjectAnalysisId): string {
-  return `class-ownership:${classDefinitionId}`;
-}
-
 export function createStylesheetClassKey(
   stylesheetId: ProjectAnalysisId,
   className: string,
@@ -568,61 +564,6 @@ export function normalizeOptionalProjectPath(filePath: string | undefined): stri
 
 export function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
-}
-
-export function maxConfidence(
-  left: "low" | "medium" | "high",
-  right: "low" | "medium" | "high",
-): "low" | "medium" | "high" {
-  const rank = {
-    low: 0,
-    medium: 1,
-    high: 2,
-  };
-
-  return rank[left] >= rank[right] ? left : right;
-}
-
-export function getDirectoryName(filePath: string): string {
-  const normalized = normalizeProjectPath(filePath);
-  const separatorIndex = normalized.lastIndexOf("/");
-  return separatorIndex === -1 ? "" : normalized.slice(0, separatorIndex);
-}
-
-export function getBaseNameWithoutExtension(filePath: string): string {
-  const normalized = normalizeProjectPath(filePath);
-  const baseName = normalized.slice(normalized.lastIndexOf("/") + 1);
-  const dotIndex = baseName.indexOf(".");
-  return dotIndex === -1 ? baseName : baseName.slice(0, dotIndex);
-}
-
-export function getFeatureRoot(filePath: string): string | undefined {
-  const segments = normalizeProjectPath(filePath).split("/");
-  const featureIndex = segments.findIndex((segment) => segment === "features");
-  if (featureIndex === -1 || !segments[featureIndex + 1]) {
-    return undefined;
-  }
-
-  return segments.slice(0, featureIndex + 2).join("/");
-}
-
-export function normalizeSegments(segments: string[]): string {
-  const normalized: string[] = [];
-
-  for (const segment of segments) {
-    if (segment === ".") {
-      continue;
-    }
-
-    if (segment === "..") {
-      normalized.pop();
-      continue;
-    }
-
-    normalized.push(segment);
-  }
-
-  return normalized.join("/");
 }
 
 export function normalizeAnchor(anchor: SourceAnchor): SourceAnchor {

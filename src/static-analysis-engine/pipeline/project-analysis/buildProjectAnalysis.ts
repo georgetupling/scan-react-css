@@ -86,10 +86,6 @@ export function buildProjectAnalysis(input: ProjectAnalysisBuildInput): ProjectA
       includeTraces,
       sharedCssPatterns: [],
     },
-    compatibility: {
-      projectInput: input,
-      projectIndexes: indexes,
-    },
   });
   const classOwnership = classOwnershipAnalysisFromOwnershipInference(ownershipInference);
 

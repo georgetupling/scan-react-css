@@ -340,9 +340,11 @@ The engine should support both, but the intended product behavior should be defi
 
 The deleted scanner had ownership-style concepts such as component, page, global, and utility.
 
-The current engine now exposes evidence-based class ownership records in `ProjectAnalysis`.
-Those records preserve owner candidates, consumer summaries, path-convention reasons, confidence,
-and traces without reviving fixed ownership buckets as the primary model.
+The current engine now exposes Stage 7B ownership inference evidence through
+`ProjectAnalysis.evidence.ownershipInference`, with compatibility ownership records and indexes still
+available on `ProjectAnalysis` for older internal consumers. Those records preserve owner
+candidates, consumer summaries, path-convention reasons, confidence, and traces without reviving
+fixed ownership buckets as the primary model.
 
 Remaining decisions:
 
@@ -352,7 +354,8 @@ Remaining decisions:
 
 The initial ownership rules are implemented as `single-component-style-not-colocated`,
 `style-used-outside-owner`, and `style-shared-without-shared-owner`; broader policy work should
-continue to consume `ProjectAnalysis` ownership records rather than rebuilding import/reference maps.
+continue to consume Stage 7B ownership evidence from `ProjectAnalysis` rather than rebuilding
+import/reference maps.
 
 ### 5. How far should bounded render analysis go?
 

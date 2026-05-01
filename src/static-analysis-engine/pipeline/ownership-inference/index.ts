@@ -1,13 +1,9 @@
 export { buildOwnershipInference } from "./buildOwnershipInference.js";
 export type {
-  OwnershipInferenceCompatibilityInput,
   OwnershipInferenceInput,
   OwnershipInferenceOptions,
 } from "./buildOwnershipInference.js";
-export {
-  classOwnershipAnalysisFromOwnershipInference,
-  ownershipEvidenceFromClassOwnershipAnalysis,
-} from "./projectAnalysisAdapter.js";
+export { classOwnershipAnalysisFromOwnershipInference } from "./projectAnalysisAdapter.js";
 export {
   classDefinitionConsumerEvidenceId,
   classOwnershipEvidenceId,

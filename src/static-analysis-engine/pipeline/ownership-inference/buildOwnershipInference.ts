@@ -1,15 +1,9 @@
 import { buildIndexes } from "./indexes.js";
-import { ownershipEvidenceFromClassOwnershipAnalysis } from "./projectAnalysisAdapter.js";
-import { applyConsumerSummariesToClassOwnership, buildDefinitionConsumers } from "./consumers.js";
+import { buildClassOwnershipEvidence } from "./classOwnership.js";
+import { buildDefinitionConsumers } from "./consumers.js";
 import { applySelectorContextEvidence } from "./selectorContext.js";
 import { buildStylesheetOwnership } from "./stylesheets.js";
-import { buildClassOwnership } from "../project-analysis/relations/classOwnership.js";
 import type { ProjectEvidenceAssemblyResult } from "../project-evidence/index.js";
-import type {
-  ClassOwnershipAnalysis,
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisIndexes,
-} from "../project-analysis/index.js";
 import type { SelectorReachabilityResult } from "../selector-reachability/index.js";
 import type { OwnershipInferenceResult } from "./types.js";
 
@@ -17,7 +11,6 @@ export type OwnershipInferenceInput = {
   projectEvidence: ProjectEvidenceAssemblyResult;
   selectorReachability: SelectorReachabilityResult;
   options?: OwnershipInferenceOptions;
-  compatibility?: OwnershipInferenceCompatibilityInput;
 };
 
 export type OwnershipInferenceOptions = {
@@ -25,43 +18,29 @@ export type OwnershipInferenceOptions = {
   includeTraces?: boolean;
 };
 
-export type OwnershipInferenceCompatibilityInput = {
-  projectInput?: ProjectAnalysisBuildInput;
-  projectIndexes?: ProjectAnalysisIndexes;
-  classOwnership?: ClassOwnershipAnalysis[];
-};
-
 export function buildOwnershipInference(input: OwnershipInferenceInput): OwnershipInferenceResult {
-  void input.selectorReachability;
-
-  const legacyClassOwnership =
-    input.compatibility?.classOwnership ??
-    buildCompatibilityClassOwnership({
-      projectEvidence: input.projectEvidence,
-      compatibility: input.compatibility,
-      includeTraces: input.options?.includeTraces ?? true,
-    });
-  const ownershipEvidence = ownershipEvidenceFromClassOwnershipAnalysis(legacyClassOwnership);
   const definitionConsumers = buildDefinitionConsumers({
     projectEvidence: input.projectEvidence,
     selectorReachability: input.selectorReachability,
-  });
-  const classOwnership = applyConsumerSummariesToClassOwnership({
-    classOwnership: ownershipEvidence.classOwnership,
-    definitionConsumers,
   });
   const stylesheetEvidence = buildStylesheetOwnership({
     projectEvidence: input.projectEvidence,
     options: input.options,
   });
+  const classOwnershipEvidence = buildClassOwnershipEvidence({
+    projectEvidence: input.projectEvidence,
+    definitionConsumers,
+    stylesheetOwnership: stylesheetEvidence.stylesheetOwnership,
+    includeTraces: input.options?.includeTraces ?? true,
+  });
   const ownerCandidatesBeforeSelectorContext = [
-    ...ownershipEvidence.ownerCandidates,
+    ...classOwnershipEvidence.ownerCandidates,
     ...stylesheetEvidence.ownerCandidates,
   ].sort((left, right) => left.id.localeCompare(right.id));
   const selectorContextEvidence = applySelectorContextEvidence({
     projectEvidence: input.projectEvidence,
     selectorReachability: input.selectorReachability,
-    classOwnership,
+    classOwnership: classOwnershipEvidence.classOwnership,
     definitionConsumers,
     ownerCandidates: ownerCandidatesBeforeSelectorContext,
     classifications: stylesheetEvidence.classifications,
@@ -75,7 +54,7 @@ export function buildOwnershipInference(input: OwnershipInferenceInput): Ownersh
   return {
     meta: {
       generatedAtStage: "ownership-inference",
-      classOwnershipCount: classOwnership.length,
+      classOwnershipCount: selectorContextEvidence.classOwnership.length,
       definitionConsumerCount: definitionConsumers.length,
       ownerCandidateCount: ownerCandidates.length,
       stylesheetOwnershipCount: stylesheetOwnership.length,
@@ -97,25 +76,4 @@ export function buildOwnershipInference(input: OwnershipInferenceInput): Ownersh
       diagnostics,
     }),
   };
-}
-
-function buildCompatibilityClassOwnership(input: {
-  projectEvidence: ProjectEvidenceAssemblyResult;
-  compatibility: OwnershipInferenceCompatibilityInput | undefined;
-  includeTraces: boolean;
-}): ClassOwnershipAnalysis[] {
-  if (!input.compatibility?.projectInput || !input.compatibility.projectIndexes) {
-    return [];
-  }
-
-  return buildClassOwnership({
-    input: input.compatibility.projectInput,
-    definitions: input.projectEvidence.entities.classDefinitions,
-    references: input.projectEvidence.entities.classReferences,
-    components: input.projectEvidence.entities.components,
-    stylesheets: input.projectEvidence.entities.stylesheets,
-    referenceMatches: input.projectEvidence.relations.referenceMatches,
-    indexes: input.compatibility.projectIndexes,
-    includeTraces: input.includeTraces,
-  });
 }

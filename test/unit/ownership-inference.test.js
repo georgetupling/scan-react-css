@@ -55,6 +55,47 @@ test("ownership inference ports class ownership evidence deterministically", () 
   const result = buildOwnershipInference({
     projectEvidence: buildProjectEvidence({
       entities: {
+        sourceFiles: [
+          sourceFile({ id: "source:alpha", filePath: "src/Alpha.tsx" }),
+          sourceFile({ id: "source:beta", filePath: "src/Beta.tsx" }),
+          sourceFile({ id: "source:gamma", filePath: "src/Gamma.tsx" }),
+        ],
+        components: [
+          component({ id: "component-a", filePath: "src/Alpha.tsx", componentName: "Alpha" }),
+          component({ id: "component-b", filePath: "src/Beta.tsx", componentName: "Beta" }),
+          component({ id: "component-c", filePath: "src/Gamma.tsx", componentName: "Gamma" }),
+        ],
+        stylesheets: [
+          stylesheet({ id: "style-a", filePath: "src/Alpha.css" }),
+          stylesheet({ id: "style-b", filePath: "src/Beta.css" }),
+          stylesheet({ id: "style-c", filePath: "src/Gamma.module.css" }),
+        ],
+        classDefinitions: [
+          classDefinition({
+            id: "def-a",
+            stylesheetId: "style-a",
+            className: "alpha",
+            selectorText: ".alpha",
+            line: 1,
+            contextClassNames: [],
+          }),
+          classDefinition({
+            id: "def-b",
+            stylesheetId: "style-b",
+            className: "beta",
+            selectorText: ".beta",
+            line: 1,
+            contextClassNames: [],
+          }),
+          classDefinition({
+            id: "def-c",
+            stylesheetId: "style-c",
+            className: "gamma",
+            selectorText: ".gamma",
+            line: 1,
+            contextClassNames: [],
+          }),
+        ],
         classReferences: [
           classReference({
             id: "reference:alpha",
@@ -85,8 +126,27 @@ test("ownership inference ports class ownership evidence deterministically", () 
             traces: [],
           },
         ],
+        cssModuleImports: [
+          {
+            id: "css-module-import:gamma",
+            sourceFileId: "source:gamma",
+            stylesheetId: "style-c",
+            sourceFilePath: "src/Gamma.tsx",
+            stylesheetFilePath: "src/Gamma.module.css",
+            specifier: "./Gamma.module.css",
+            localName: "styles",
+            importKind: "default",
+          },
+        ],
       },
       relations: {
+        moduleImports: [
+          moduleImport({
+            fromSourceFileId: "source:beta",
+            specifier: "./Beta.css",
+            resolvedFilePath: "src/Beta.css",
+          }),
+        ],
         referenceMatches: [
           referenceMatch({
             id: "match:beta",
@@ -125,55 +185,21 @@ test("ownership inference ports class ownership evidence deterministically", () 
     options: {
       includeTraces: false,
     },
-    compatibility: {
-      classOwnership: [
-        legacyClassOwnership({
-          id: "class-ownership:def-b",
-          classDefinitionId: "def-b",
-          stylesheetId: "style-b",
-          className: "beta",
-          evidenceKind: "single-importing-component",
-          ownerComponentId: "component-b",
-          reasons: ["single-importing-component", "same-directory"],
-          confidence: "high",
-        }),
-        legacyClassOwnership({
-          id: "class-ownership:def-c",
-          classDefinitionId: "def-c",
-          stylesheetId: "style-c",
-          className: "gamma",
-          evidenceKind: "single-consuming-component",
-          ownerComponentId: "component-c",
-          reasons: ["single-consuming-component"],
-          confidence: "medium",
-        }),
-        legacyClassOwnership({
-          id: "class-ownership:def-a",
-          classDefinitionId: "def-a",
-          stylesheetId: "style-a",
-          className: "alpha",
-          evidenceKind: "single-consuming-component",
-          ownerComponentId: "component-a",
-          reasons: ["single-consuming-component"],
-          confidence: "medium",
-        }),
-      ],
-    },
   });
 
   assert.equal(result.meta.classOwnershipCount, 3);
   assert.equal(result.meta.definitionConsumerCount, 3);
-  assert.equal(result.meta.ownerCandidateCount, 3);
+  assert.equal(result.meta.ownerCandidateCount, 5);
   assert.deepEqual(
     result.classOwnership.map((ownership) => ownership.id),
-    ["class-ownership:def-a", "class-ownership:def-b", "class-ownership:def-c"],
+    ["ownership:class:def-a", "ownership:class:def-b", "ownership:class:def-c"],
   );
   assert.deepEqual(
     result.classOwnership.map((ownership) => ownership.compatibilityEvidenceKind),
-    ["single-consuming-component", "single-importing-component", "single-consuming-component"],
+    ["single-consuming-component", "single-importing-component", "single-importing-component"],
   );
   assert.deepEqual(result.indexes.classOwnershipIdsByClassName.get("alpha"), [
-    "class-ownership:def-a",
+    "ownership:class:def-a",
   ]);
   assert.deepEqual(result.indexes.ownerCandidateIdsByOwnerComponentId.get("component-a"), [
     result.classOwnership[0].ownerCandidateIds[0],
@@ -238,14 +264,14 @@ test("ownership inference ports class ownership evidence deterministically", () 
   const projectAnalysisOwnership = classOwnershipAnalysisFromOwnershipInference(result);
   assert.deepEqual(
     projectAnalysisOwnership.map((ownership) => ownership.evidenceKind),
-    ["single-consuming-component", "single-importing-component", "single-consuming-component"],
+    ["single-consuming-component", "single-importing-component", "single-importing-component"],
   );
   assert.deepEqual(projectAnalysisOwnership[0].ownerCandidates[0], {
     kind: "component",
     id: "component-a",
     path: "src/Alpha.tsx",
     confidence: "medium",
-    reasons: ["single-consuming-component"],
+    reasons: ["same-directory", "sibling-basename-convention", "single-consuming-component"],
     traces: [],
   });
 });
@@ -363,6 +389,7 @@ test("ownership inference preserves Stage 6 selector context evidence", () => {
   const result = buildOwnershipInference({
     projectEvidence: buildProjectEvidence({
       entities: {
+        sourceFiles: [sourceFile({ id: "source:button", filePath: "src/Button.tsx" })],
         stylesheets: [stylesheet({ id: "style:button", filePath: "src/Button.css" })],
         components: [
           component({
@@ -400,6 +427,13 @@ test("ownership inference preserves Stage 6 selector context evidence", () => {
         ],
       },
       relations: {
+        moduleImports: [
+          moduleImport({
+            fromSourceFileId: "source:button",
+            specifier: "./Button.css",
+            resolvedFilePath: "src/Button.css",
+          }),
+        ],
         referenceMatches: [
           referenceMatch({
             id: "match:panel",
@@ -415,20 +449,6 @@ test("ownership inference preserves Stage 6 selector context evidence", () => {
     selectorReachability,
     options: {
       includeTraces: false,
-    },
-    compatibility: {
-      classOwnership: [
-        legacyClassOwnership({
-          id: "class-ownership:definition:panel",
-          classDefinitionId: "definition:panel",
-          stylesheetId: "style:button",
-          className: "panel",
-          evidenceKind: "single-importing-component",
-          ownerComponentId: "component:button",
-          reasons: ["single-importing-component", "sibling-basename-convention"],
-          confidence: "high",
-        }),
-      ],
     },
   });
 
@@ -452,41 +472,6 @@ test("ownership inference preserves Stage 6 selector context evidence", () => {
     ),
   );
 });
-
-function legacyClassOwnership(input) {
-  return {
-    id: input.id,
-    classDefinitionId: input.classDefinitionId,
-    stylesheetId: input.stylesheetId,
-    className: input.className,
-    consumerSummary: {
-      classDefinitionId: input.classDefinitionId,
-      className: input.className,
-      consumerComponentIds: [input.ownerComponentId],
-      consumerSourceFileIds: [`source:${input.ownerComponentId}`],
-      referenceIds: [`reference:${input.className}`],
-      matchIds: [`match:${input.className}`],
-    },
-    ownerCandidates: [
-      {
-        kind: "component",
-        id: input.ownerComponentId,
-        path:
-          input.ownerComponentId === "component-a"
-            ? "src/Alpha.tsx"
-            : input.ownerComponentId === "component-b"
-              ? "src/Beta.tsx"
-              : "src/Gamma.tsx",
-        confidence: input.confidence,
-        reasons: input.reasons,
-        traces: [],
-      },
-    ],
-    evidenceKind: input.evidenceKind,
-    confidence: input.confidence,
-    traces: [],
-  };
-}
 
 function classDefinition(input) {
   return {
