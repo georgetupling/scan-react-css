@@ -284,7 +284,6 @@ export function analyzeProjectSourceTexts(input: {
       selectorReachability: selectorReachabilityStage.selectorReachability,
       ownershipInference: ownershipInferenceStage.ownershipInference,
     },
-    ...(symbolicEvaluationStage ? { symbolicEvaluation: symbolicEvaluationStage } : {}),
   };
 }
 

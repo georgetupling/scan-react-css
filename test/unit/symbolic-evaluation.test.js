@@ -274,7 +274,7 @@ test("symbolic evaluation promotes definitely truthy object map entries", async 
 });
 
 test("symbolic evaluation preserves runtime DOM exact class text", async () => {
-  const { snapshot, frontends, factGraph } = await buildEngineFlowFixture([
+  const { factGraph } = await buildEngineFlowFixture([
     'import { EditorView as ProseMirrorView } from "prosemirror-view";',
     "const mount = document.createElement('div');",
     "const state = {};",
@@ -286,19 +286,13 @@ test("symbolic evaluation preserves runtime DOM exact class text", async () => {
     "});",
     "",
   ]);
-  const result = analyzeProjectSourceTexts({
-    sourceFiles: frontends.source.files.map((file) => ({
-      filePath: file.filePath,
-      sourceText: file.sourceText,
-    })),
-    source: frontends.source,
-    css: frontends.css,
-    boundaries: snapshot.boundaries,
-    resourceEdges: snapshot.edges,
-    factGraph,
-    includeTraces: false,
+  const result = evaluateSymbolicExpressions({
+    graph: factGraph.graph,
+    options: {
+      includeTraces: false,
+    },
   });
-  const runtimeExpression = result.symbolicEvaluation.evaluatedExpressions.classExpressions.find(
+  const runtimeExpression = result.evaluatedExpressions.classExpressions.find(
     (expression) => expression.classExpressionSiteKind === "runtime-dom-class",
   );
 
@@ -309,7 +303,7 @@ test("symbolic evaluation preserves runtime DOM exact class text", async () => {
   );
 });
 
-test("analyzeProjectSourceTexts produces internal symbolic evaluation facts when graph input exists", async () => {
+test("analyzeProjectSourceTexts keeps symbolic internals out of return payload", async () => {
   const { snapshot, frontends, factGraph } = await buildEngineFlowFixture([
     'export function App() { return <div className="internal-symbolic" />; }',
     "",
@@ -327,17 +321,7 @@ test("analyzeProjectSourceTexts produces internal symbolic evaluation facts when
     includeTraces: false,
   });
 
-  assert.ok(result.symbolicEvaluation);
-  assert.equal(
-    result.symbolicEvaluation.evaluatedExpressions.meta.evaluatedClassExpressionCount,
-    1,
-  );
-  assert.deepEqual(
-    result.symbolicEvaluation.evaluatedExpressions.classExpressions[0].tokens.map(
-      (token) => token.token,
-    ),
-    ["internal-symbolic"],
-  );
+  assert.equal("symbolicEvaluation" in result, false);
 });
 
 test("symbolic evaluation ids and indexes are deterministic across repeated runs", async () => {
