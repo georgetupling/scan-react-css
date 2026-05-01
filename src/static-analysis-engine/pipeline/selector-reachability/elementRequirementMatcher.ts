@@ -29,16 +29,15 @@ export function matchElementClassRequirement(input: {
       continue;
     }
 
-    if (
-      site.emissionVariants.some(
-        (variant) =>
-          includesAll(variant.tokens, input.classNames) &&
-          variant.completeness === "complete" &&
-          !variant.unknownDynamic,
-      )
-    ) {
+    const completeVariant = site.emissionVariants.find(
+      (variant) =>
+        includesAll(variant.tokens, input.classNames) &&
+        variant.completeness === "complete" &&
+        !variant.unknownDynamic,
+    );
+    if (completeVariant) {
       supportingEmissionSiteIds.push(siteId);
-      if (isDefiniteElementEmission(input.indexes, element, site)) {
+      if (isDefiniteElementEmission(input.indexes, element, site, input.classNames)) {
         return {
           certainty: "definite",
           supportingEmissionSiteIds: uniqueSorted(supportingEmissionSiteIds),
@@ -94,12 +93,26 @@ function isDefiniteElementEmission(
   indexes: SelectorRenderMatchIndexes,
   element: RenderedElement,
   emissionSite: EmissionSite,
+  classNames: string[],
 ): boolean {
   if (element.certainty !== "definite" || element.placementConditionIds.length > 0) {
     return false;
   }
 
   if (emissionSite.placementConditionIds.length > 0) {
+    return false;
+  }
+
+  if (
+    !classNames.every((className) =>
+      emissionSite.tokens.some(
+        (token) =>
+          token.token === className &&
+          token.tokenKind !== "css-module-export" &&
+          token.presence === "always",
+      ),
+    )
+  ) {
     return false;
   }
 

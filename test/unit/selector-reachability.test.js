@@ -34,6 +34,24 @@ test("selector reachability returns empty facts when no selector branches exist"
   assert.deepEqual(result.diagnostics, []);
 });
 
+test("selector reachability output is deterministic across repeated runs", async () => {
+  const firstRenderStructure = await buildRenderStructureFixture({
+    sourceText:
+      'export function App({ active }) { return <button className={active ? "button primary" : "button secondary"} />; }\n',
+    cssText: ".button.primary, .button.secondary { color: blue; }\n",
+  });
+  const secondRenderStructure = await buildRenderStructureFixture({
+    sourceText:
+      'export function App({ active }) { return <button className={active ? "button primary" : "button secondary"} />; }\n',
+    cssText: ".button.primary, .button.secondary { color: blue; }\n",
+  });
+
+  assert.deepEqual(
+    serializeSelectorReachability(buildSelectorReachability(firstRenderStructure)),
+    serializeSelectorReachability(buildSelectorReachability(secondRenderStructure)),
+  );
+});
+
 test("selector reachability matches same-element compound class selectors", async () => {
   const renderStructure = await buildRenderStructureFixture({
     sourceText: 'export function App() { return <button className="button button--primary" />; }\n',
@@ -150,6 +168,25 @@ test("selector reachability does not match compound classes split across element
   assert.deepEqual(branch.matchIds, []);
 });
 
+test("selector reachability marks bounded class alternatives as possible matches", async () => {
+  const renderStructure = await buildRenderStructureFixture({
+    sourceText:
+      'export function App({ primary }) { return <button className={primary ? "button button--primary" : "button"} />; }\n',
+    cssText: ".button.button--primary { color: blue; }\n",
+  });
+
+  const result = buildSelectorReachability(renderStructure);
+  const branch = findBranch(result, ".button.button--primary");
+
+  assert.equal(branch.status, "possibly-matchable");
+  assert.equal(branch.confidence, "medium");
+  assert.equal(branch.matchIds.length, 1);
+
+  const match = result.indexes.matchById.get(branch.matchIds[0]);
+  assert.ok(match);
+  assert.equal(match.certainty, "possible");
+});
+
 test("selector reachability respects mutually exclusive class variants", async () => {
   const renderStructure = await buildRenderStructureFixture({
     sourceText: [
@@ -249,6 +286,71 @@ test("selector reachability marks type-qualified selector branches unsupported",
   assert.equal(branch.diagnosticIds.length, 1);
 });
 
+test("selector reachability does not treat CSS Module exports as global class selector matches", async () => {
+  const renderStructure = await buildRenderStructureFixture({
+    sourceText: [
+      'import styles from "./App.module.css";',
+      "export function App() {",
+      "  return <button className={styles.button} />;",
+      "}",
+      "",
+    ].join("\n"),
+    cssFilePath: "src/App.module.css",
+    cssText: ".button { color: blue; }\n",
+  });
+
+  const result = buildSelectorReachability(renderStructure);
+  const branch = findBranch(result, ".button");
+
+  assert.notEqual(branch.status, "definitely-matchable");
+  assert.notEqual(branch.status, "possibly-matchable");
+  assert.deepEqual(branch.matchIds, []);
+});
+
+test("selector reachability preserves child emission provenance across component boundaries", async () => {
+  const renderStructure = await buildRenderStructureFixture({
+    sourceText: [
+      "function Child() {",
+      '  return <h2 className="title" />;',
+      "}",
+      "export function App() {",
+      '  return <article className="card"><Child /></article>;',
+      "}",
+      "",
+    ].join("\n"),
+    cssText: ".card .title { color: blue; }\n",
+  });
+
+  const result = buildSelectorReachability(renderStructure);
+  const branch = findBranch(result, ".card .title");
+  const match = result.indexes.matchById.get(branch.matchIds[0]);
+  assert.ok(match);
+
+  const childComponent = renderStructure.renderModel.components.find(
+    (component) => component.componentName === "Child",
+  );
+  const appComponent = renderStructure.renderModel.components.find(
+    (component) => component.componentName === "App",
+  );
+  assert.ok(childComponent?.componentNodeId);
+  assert.ok(appComponent?.componentNodeId);
+
+  const titleEmissionSite = match.supportingEmissionSiteIds
+    .map((emissionSiteId) => result.indexes.emissionSiteById.get(emissionSiteId))
+    .find((emissionSite) =>
+      emissionSite?.tokens.some(
+        (token) => token.token === "title" && token.tokenKind === "global-class",
+      ),
+    );
+  assert.ok(titleEmissionSite);
+  assert.equal(titleEmissionSite.emittingComponentNodeId, childComponent.componentNodeId);
+
+  const subjectElement = result.indexes.renderElementById.get(match.subjectElementId);
+  assert.ok(subjectElement);
+  assert.equal(subjectElement.emittingComponentNodeId, childComponent.componentNodeId);
+  assert.equal(subjectElement.placementComponentNodeId, appComponent.componentNodeId);
+});
+
 test("selector reachability marks multi-class structural sides unsupported", async () => {
   const renderStructure = await buildRenderStructureFixture({
     sourceText:
@@ -265,9 +367,10 @@ test("selector reachability marks multi-class structural sides unsupported", asy
 });
 
 async function buildRenderStructureFixture(input) {
+  const cssFilePath = input.cssFilePath ?? "src/app.css";
   const project = await new TestProjectBuilder()
     .withSourceFile("src/App.tsx", input.sourceText)
-    .withCssFile("src/app.css", input.cssText)
+    .withCssFile(cssFilePath, input.cssText)
     .build();
 
   try {
@@ -275,7 +378,7 @@ async function buildRenderStructureFixture(input) {
       scanInput: {
         rootDir: project.rootDir,
         sourceFilePaths: ["src/App.tsx"],
-        cssFilePaths: ["src/app.css"],
+        cssFilePaths: [cssFilePath],
       },
       runStage: async (_stage, _message, run) => run(),
     });
@@ -283,7 +386,7 @@ async function buildRenderStructureFixture(input) {
     const factGraph = buildFactGraph({ snapshot, frontends });
     const moduleFacts = buildModuleFacts({
       source: frontends.source,
-      stylesheetFilePaths: ["src/app.css"],
+      stylesheetFilePaths: [cssFilePath],
     });
     const symbolResolution = buildProjectBindingResolution({
       source: frontends.source,
@@ -316,4 +419,32 @@ function findBranch(result, selectorText) {
   const branch = result.selectorBranches.find((candidate) => candidate.branchText === selectorText);
   assert.ok(branch);
   return branch;
+}
+
+function serializeSelectorReachability(result) {
+  return {
+    meta: result.meta,
+    selectorBranches: result.selectorBranches,
+    elementMatches: result.elementMatches,
+    branchMatches: result.branchMatches,
+    diagnostics: result.diagnostics,
+    indexes: {
+      branchReachabilityBySelectorBranchNodeId: mapEntries(
+        result.indexes.branchReachabilityBySelectorBranchNodeId,
+      ),
+      branchReachabilityBySourceKey: mapEntries(result.indexes.branchReachabilityBySourceKey),
+      matchIdsBySelectorBranchNodeId: mapEntries(result.indexes.matchIdsBySelectorBranchNodeId),
+      matchIdsByElementId: mapEntries(result.indexes.matchIdsByElementId),
+      matchIdsByClassName: mapEntries(result.indexes.matchIdsByClassName),
+      branchIdsByRequiredClassName: mapEntries(result.indexes.branchIdsByRequiredClassName),
+      branchIdsByStylesheetNodeId: mapEntries(result.indexes.branchIdsByStylesheetNodeId),
+      diagnosticIdsBySelectorBranchNodeId: mapEntries(
+        result.indexes.diagnosticIdsBySelectorBranchNodeId,
+      ),
+    },
+  };
+}
+
+function mapEntries(map) {
+  return [...map.entries()].sort(([left], [right]) => left.localeCompare(right));
 }
