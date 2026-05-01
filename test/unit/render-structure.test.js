@@ -74,6 +74,83 @@ test("render structure empty model ids and indexes are deterministic", () => {
   );
 });
 
+test("render structure expands intrinsic elements in native mode", async () => {
+  const fixture = await buildProjectionFixture();
+  const symbolicEvaluation = evaluateSymbolicExpressions({
+    graph: fixture.graph,
+    cssModuleBindingResolution: fixture.symbolResolution,
+  });
+  const result = buildRenderStructure({
+    graph: fixture.graph,
+    symbolicEvaluation,
+    options: {
+      includeTraces: true,
+    },
+  });
+
+  assert.equal(result.renderModel.components.length, fixture.graph.nodes.components.length);
+  assert.equal(
+    result.renderModel.componentBoundaries.length,
+    fixture.graph.nodes.components.length,
+  );
+  assert.ok(result.renderModel.renderPaths.length >= fixture.graph.nodes.components.length);
+  assert.equal(
+    result.renderModel.renderPaths.filter((path) => path.terminalKind === "component-boundary")
+      .length,
+    fixture.graph.nodes.components.length,
+  );
+  assert.equal(result.renderModel.renderRegions.length, fixture.graph.nodes.components.length);
+  assert.equal(result.renderModel.renderGraph.nodes.length, fixture.graph.nodes.components.length);
+  assert.equal(result.renderModel.renderGraph.edges.length, 0);
+
+  assert.ok(
+    result.renderModel.componentBoundaries.every(
+      (boundary) => boundary.boundaryKind === "component-root",
+    ),
+  );
+  assert.ok(
+    result.renderModel.renderRegions.every((region) => region.regionKind === "component-root"),
+  );
+  assert.ok(
+    result.renderModel.renderPaths
+      .filter((path) => path.terminalKind === "component-boundary")
+      .every((path) => path.terminalKind === "component-boundary"),
+  );
+
+  assert.ok(result.renderModel.elements.length > 0);
+  assert.ok(result.renderModel.elements.every((element) => element.tagName.length > 0));
+  assert.ok(
+    result.renderModel.elements.every((element) =>
+      result.renderModel.indexes.elementById.has(element.id),
+    ),
+  );
+  assert.ok(
+    result.renderModel.elements.every((element) =>
+      result.renderModel.indexes.renderPathById.has(element.renderPathId),
+    ),
+  );
+  assert.ok(
+    result.renderModel.elements.some(
+      (element) =>
+        element.childElementIds.length > 0 ||
+        result.renderModel.indexes.ancestorElementIdsByElementId.get(element.id)?.length,
+    ),
+  );
+
+  assert.deepEqual(result.renderModel.emissionSites, []);
+  assert.deepEqual(result.renderModel.placementConditions, []);
+  assert.deepEqual(result.renderModel.diagnostics, []);
+
+  for (const component of result.renderModel.components) {
+    assert.equal(component.rootBoundaryIds.length, 1);
+    assert.ok(result.renderModel.indexes.componentsById.has(component.id));
+  }
+  assert.ok(
+    result.renderModel.componentBoundaries.every((boundary) => boundary.rootElementIds.length > 0),
+  );
+  assert.ok(result.renderModel.renderRegions.every((region) => region.childElementIds.length > 0));
+});
+
 test("render structure projects the current render model into the stage 5 model", async () => {
   const fixture = await buildProjectionFixture();
   const symbolicEvaluation = evaluateSymbolicExpressions({
