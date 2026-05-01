@@ -1,13 +1,14 @@
 import {
   renderedComponentBoundaryId,
   renderedComponentId,
-  renderedElementId,
   renderPathId,
   renderRegionId,
 } from "../ids.js";
 import type {
   EmissionSite,
+  PlacementCondition,
   RenderGraphProjection,
+  RenderGraphProjectionEdge,
   RenderPath,
   RenderPathSegment,
   RenderRegion,
@@ -18,11 +19,18 @@ import type {
   RenderedElement,
 } from "../types.js";
 import { buildNativeEmissionSites } from "./emissions.js";
+import { createUnknownBarrierCondition } from "./diagnostics.js";
+import { expandRenderSite, type ExpansionState } from "./expansion.js";
 import {
   buildChildRenderSitesByParentRenderSiteId,
   buildRootRenderSitesByComponentNodeId,
   buildTemplatesByRenderSiteId,
 } from "./lookups.js";
+import {
+  buildRenderEdgesByFromComponentNodeId,
+  buildRenderGraphNodes,
+  sortRenderGraphEdges,
+} from "./renderGraph.js";
 import { compareAnchors, normalizeAnchor, normalizeProjectPath, uniqueSorted } from "./common.js";
 
 type NativeRenderStructureProjection = {
@@ -31,7 +39,7 @@ type NativeRenderStructureProjection = {
   elements: RenderedElement[];
   emissionSites: EmissionSite[];
   renderPaths: RenderPath[];
-  placementConditions: [];
+  placementConditions: PlacementCondition[];
   renderRegions: RenderRegion[];
   renderGraph: RenderGraphProjection;
   diagnostics: RenderStructureDiagnostic[];
@@ -44,17 +52,97 @@ export function buildNativeRenderStructure(
   const componentBoundaries: RenderedComponentBoundary[] = [];
   const elements: RenderedElement[] = [];
   const renderPaths: RenderPath[] = [];
+  const placementConditions: PlacementCondition[] = [];
   const renderRegions: RenderRegion[] = [];
+  const diagnostics: RenderStructureDiagnostic[] = [];
+  const renderGraphEdges: RenderGraphProjectionEdge[] = [];
 
+  const componentById = new Map(
+    input.graph.nodes.components.map((node) => [node.id, node] as const),
+  );
+  const boundaryById = new Map<string, RenderedComponentBoundary>();
   const renderSitesById = new Map(
     input.graph.nodes.renderSites.map((site) => [site.id, site] as const),
   );
   const templatesByRenderSiteId = buildTemplatesByRenderSiteId(input);
   const childRenderSitesByParentRenderSiteId = buildChildRenderSitesByParentRenderSiteId(input);
   const rootRenderSitesByComponentNodeId = buildRootRenderSitesByComponentNodeId(input);
+  const renderEdgesByFromComponentNodeId = buildRenderEdgesByFromComponentNodeId(input);
   const elementIdCounts = new Map<string, number>();
   const elementsById = new Map<string, RenderedElement>();
   const rootBoundaryIdByComponentNodeId = new Map<string, string>();
+
+  const linkBoundaryToParent = (boundary: RenderedComponentBoundary): void => {
+    if (boundary.parentBoundaryId) {
+      const parent = boundaryById.get(boundary.parentBoundaryId);
+      if (parent) {
+        parent.childBoundaryIds = uniqueSorted([...parent.childBoundaryIds, boundary.id]);
+      }
+    }
+    if (boundary.parentElementId) {
+      const parentElement = elementsById.get(boundary.parentElementId);
+      if (parentElement) {
+        parentElement.childBoundaryIds = uniqueSorted([
+          ...parentElement.childBoundaryIds,
+          boundary.id,
+        ]);
+      }
+    }
+  };
+
+  const addUnknownBarrier = (inputBarrier: {
+    boundary: RenderedComponentBoundary;
+    sourceLocation: RenderStructureInput["graph"]["nodes"]["components"][number]["location"];
+    reason: string;
+  }): void => {
+    const condition = createUnknownBarrierCondition({
+      boundaryId: inputBarrier.boundary.id,
+      sourceLocation: inputBarrier.sourceLocation,
+      reason: inputBarrier.reason,
+    });
+    placementConditions.push(condition);
+    inputBarrier.boundary.placementConditionIds = uniqueSorted([
+      ...inputBarrier.boundary.placementConditionIds,
+      condition.id,
+    ]);
+    const regionId = renderRegionId({
+      regionKind: "unknown-barrier",
+      key: `${inputBarrier.boundary.id}:${inputBarrier.reason}`,
+    });
+    renderRegions.push({
+      id: regionId,
+      regionKind: "unknown-barrier",
+      boundaryId: inputBarrier.boundary.id,
+      ...(inputBarrier.boundary.componentNodeId
+        ? { componentNodeId: inputBarrier.boundary.componentNodeId }
+        : {}),
+      renderPathId: inputBarrier.boundary.renderPathId,
+      sourceLocation: normalizeAnchor(inputBarrier.sourceLocation),
+      placementConditionIds: [condition.id],
+      childElementIds: [],
+      childBoundaryIds: [],
+    });
+  };
+
+  const expansionState: ExpansionState = {
+    input,
+    componentById,
+    boundaryById,
+    renderSitesById,
+    templatesByRenderSiteId,
+    childRenderSitesByParentRenderSiteId,
+    rootRenderSitesByComponentNodeId,
+    renderEdgesByFromComponentNodeId,
+    elementIdCounts,
+    elements,
+    elementsById,
+    renderPaths,
+    renderGraphEdges,
+    diagnostics,
+    componentBoundaries,
+    linkBoundaryToParent,
+    addUnknownBarrier,
+  };
 
   for (const componentNode of [...input.graph.nodes.components].sort(compareComponentNodes)) {
     const boundaryId = renderedComponentBoundaryId({
@@ -75,7 +163,7 @@ export function buildNativeRenderStructure(
       terminalKind: "component-boundary",
       terminalId: boundaryId,
     });
-    const boundaryRenderPath: RenderPath = {
+    renderPaths.push({
       id: boundaryRenderPathId,
       rootComponentNodeId: componentNode.id,
       terminalKind: "component-boundary",
@@ -84,7 +172,7 @@ export function buildNativeRenderStructure(
       placementConditionIds: [],
       certainty: "definite",
       traces: [],
-    };
+    });
     const rootElementIds: string[] = [];
 
     components.push({
@@ -108,7 +196,7 @@ export function buildNativeRenderStructure(
       traces: [],
     });
 
-    componentBoundaries.push({
+    const boundary: RenderedComponentBoundary = {
       id: boundaryId,
       boundaryKind: "component-root",
       componentNodeId: componentNode.id,
@@ -118,35 +206,31 @@ export function buildNativeRenderStructure(
       declarationLocation,
       childBoundaryIds: [],
       rootElementIds,
-      renderPathId: boundaryRenderPath.id,
+      renderPathId: boundaryRenderPathId,
       placementConditionIds: [],
       expansion: { status: "root" },
       traces: [],
-    });
-    rootBoundaryIdByComponentNodeId.set(componentNode.id, boundaryId);
+    };
+    componentBoundaries.push(boundary);
+    boundaryById.set(boundary.id, boundary);
+    rootBoundaryIdByComponentNodeId.set(componentNode.id, boundary.id);
 
-    renderPaths.push(boundaryRenderPath);
-
-    const rootRenderSites = rootRenderSitesByComponentNodeId.get(componentNode.id) ?? [];
-    for (const [rootIndex, rootRenderSiteId] of rootRenderSites.entries()) {
+    for (const [rootIndex, rootRenderSiteId] of (
+      rootRenderSitesByComponentNodeId.get(componentNode.id) ?? []
+    ).entries()) {
       const rootRenderSite = renderSitesById.get(rootRenderSiteId);
       if (!rootRenderSite) {
         continue;
       }
-      expandIntrinsicElementsForRenderSite({
-        input,
+      expandRenderSite(expansionState, {
         componentNodeId: componentNode.id,
-        boundaryId,
+        boundaryId: boundary.id,
         renderSite: rootRenderSite,
         childIndex: rootIndex,
-        parentElementId: undefined,
         basePathSegments: boundaryPathSegments,
-        templatesByRenderSiteId,
-        childRenderSitesByParentRenderSiteId,
-        elements,
-        elementsById,
-        elementIdCounts,
-        renderPaths,
+        componentExpansionStack: [componentNode.id],
+        componentExpansionDepth: 0,
+        renderExpressionDepth: 0,
         rootElementIds,
       });
     }
@@ -157,201 +241,45 @@ export function buildNativeRenderStructure(
         key: componentNode.componentKey,
       }),
       regionKind: "component-root",
-      boundaryId,
+      boundaryId: boundary.id,
       componentNodeId: componentNode.id,
-      renderPathId: boundaryRenderPath.id,
+      renderPathId: boundary.renderPathId,
       sourceLocation: declarationLocation,
       placementConditionIds: [],
       childElementIds: uniqueSorted(rootElementIds),
-      childBoundaryIds: [],
+      childBoundaryIds: uniqueSorted(boundary.childBoundaryIds),
     });
   }
 
   const emissionResult = buildNativeEmissionSites({
     renderInput: input,
     elements,
+    componentBoundaries,
     renderPaths,
     rootBoundaryIdByComponentNodeId,
   });
 
   return {
     components,
-    componentBoundaries,
+    componentBoundaries: componentBoundaries.sort((left, right) => left.id.localeCompare(right.id)),
     elements: elements.sort((left, right) => left.id.localeCompare(right.id)),
     emissionSites: emissionResult.emissionSites.sort((left, right) =>
       left.id.localeCompare(right.id),
     ),
     renderPaths: renderPaths.sort((left, right) => left.id.localeCompare(right.id)),
-    placementConditions: [],
-    renderRegions,
+    placementConditions: placementConditions.sort((left, right) => left.id.localeCompare(right.id)),
+    renderRegions: renderRegions.sort((left, right) => left.id.localeCompare(right.id)),
     renderGraph: {
-      nodes: components
-        .map((component) => ({
-          componentNodeId: component.componentNodeId,
-          componentKey: component.componentKey,
-          componentName: component.componentName,
-          filePath: component.filePath,
-          exported: component.exported,
-          sourceLocation: component.declarationLocation,
-        }))
-        .sort(
-          (left, right) =>
-            [
-              left.filePath.localeCompare(right.filePath),
-              left.componentKey.localeCompare(right.componentKey),
-              left.componentName.localeCompare(right.componentName),
-              compareAnchors(left.sourceLocation, right.sourceLocation),
-            ].find((value) => value !== 0) ?? 0,
-        ),
-      edges: [],
+      nodes: buildRenderGraphNodes(components),
+      edges: sortRenderGraphEdges(renderGraphEdges),
     },
-    diagnostics: emissionResult.diagnostics.sort(
+    diagnostics: [...diagnostics, ...emissionResult.diagnostics].sort(
       (left, right) =>
         left.code.localeCompare(right.code) ||
         (left.filePath ?? "").localeCompare(right.filePath ?? "") ||
         left.message.localeCompare(right.message),
     ),
   };
-}
-
-function expandIntrinsicElementsForRenderSite(input: {
-  input: RenderStructureInput;
-  componentNodeId: string;
-  boundaryId: string;
-  renderSite: RenderStructureInput["graph"]["nodes"]["renderSites"][number];
-  childIndex: number;
-  parentElementId: string | undefined;
-  basePathSegments: RenderPathSegment[];
-  templatesByRenderSiteId: Map<string, RenderStructureInput["graph"]["nodes"]["elementTemplates"]>;
-  childRenderSitesByParentRenderSiteId: Map<string, string[]>;
-  elements: RenderedElement[];
-  elementsById: Map<string, RenderedElement>;
-  elementIdCounts: Map<string, number>;
-  renderPaths: RenderPath[];
-  rootElementIds: string[];
-}): void {
-  const templates = input.templatesByRenderSiteId.get(input.renderSite.id) ?? [];
-  const childRenderSiteIds =
-    input.childRenderSitesByParentRenderSiteId.get(input.renderSite.id) ?? [];
-
-  const intrinsicTemplates = templates.filter((template) => template.templateKind === "intrinsic");
-  if (intrinsicTemplates.length > 0) {
-    for (const [templateIndex, template] of intrinsicTemplates.entries()) {
-      const location = normalizeAnchor(template.location);
-      const id = createRenderedElementId({
-        boundaryId: input.boundaryId,
-        templateNodeId: template.id,
-        tagName: template.name,
-        counts: input.elementIdCounts,
-      });
-      const pathSegments: RenderPathSegment[] = [
-        ...input.basePathSegments,
-        { kind: "child-index", index: input.childIndex },
-        { kind: "element", elementId: id, tagName: template.name, location },
-      ];
-      const pathId = renderPathId({
-        terminalKind: "element",
-        terminalId: id,
-      });
-      const element: RenderedElement = {
-        id,
-        tagName: template.name,
-        elementTemplateNodeId: template.id,
-        renderSiteNodeId: input.renderSite.id,
-        sourceLocation: location,
-        ...(input.parentElementId ? { parentElementId: input.parentElementId } : {}),
-        parentBoundaryId: input.boundaryId,
-        childElementIds: [],
-        childBoundaryIds: [],
-        emissionSiteIds: [],
-        ...(template.emittingComponentNodeId
-          ? { emittingComponentNodeId: template.emittingComponentNodeId }
-          : input.renderSite.emittingComponentNodeId
-            ? { emittingComponentNodeId: input.renderSite.emittingComponentNodeId }
-            : {}),
-        ...(template.placementComponentNodeId
-          ? { placementComponentNodeId: template.placementComponentNodeId }
-          : input.renderSite.placementComponentNodeId
-            ? { placementComponentNodeId: input.renderSite.placementComponentNodeId }
-            : {}),
-        renderPathId: pathId,
-        placementConditionIds: [],
-        certainty: "definite",
-        traces: [],
-      };
-      input.elements.push(element);
-      input.elementsById.set(element.id, element);
-      input.renderPaths.push({
-        id: pathId,
-        rootComponentNodeId: input.componentNodeId,
-        terminalKind: "element",
-        terminalId: id,
-        segments: pathSegments,
-        placementConditionIds: [],
-        certainty: "definite",
-        traces: [],
-      });
-
-      if (input.parentElementId) {
-        const parentElement = input.elementsById.get(input.parentElementId);
-        if (parentElement) {
-          parentElement.childElementIds = uniqueSorted([
-            ...parentElement.childElementIds,
-            element.id,
-          ]);
-        }
-      } else {
-        input.rootElementIds.push(element.id);
-      }
-
-      for (const [childIndex, childRenderSiteId] of childRenderSiteIds.entries()) {
-        const childRenderSite = input.input.graph.indexes.nodesById.get(childRenderSiteId);
-        if (!childRenderSite || childRenderSite.kind !== "render-site") {
-          continue;
-        }
-        expandIntrinsicElementsForRenderSite({
-          ...input,
-          renderSite: childRenderSite,
-          childIndex,
-          parentElementId: element.id,
-          basePathSegments: pathSegments,
-        });
-      }
-
-      if (templateIndex < intrinsicTemplates.length - 1) {
-        continue;
-      }
-    }
-    return;
-  }
-
-  for (const [childIndex, childRenderSiteId] of childRenderSiteIds.entries()) {
-    const childRenderSite = input.input.graph.indexes.nodesById.get(childRenderSiteId);
-    if (!childRenderSite || childRenderSite.kind !== "render-site") {
-      continue;
-    }
-    expandIntrinsicElementsForRenderSite({
-      ...input,
-      renderSite: childRenderSite,
-      childIndex,
-    });
-  }
-}
-
-function createRenderedElementId(input: {
-  boundaryId: string;
-  templateNodeId: string;
-  tagName: string;
-  counts: Map<string, number>;
-}): string {
-  const key = `${input.boundaryId}:${input.templateNodeId}`;
-  const index = input.counts.get(key) ?? 0;
-  input.counts.set(key, index + 1);
-  return renderedElementId({
-    key,
-    tagName: input.tagName,
-    index,
-  });
 }
 
 function compareComponentNodes(
