@@ -368,6 +368,7 @@ export type ProjectAnalysisRelations = {
 export type ModuleImportRelation = {
   fromSourceFileId: ProjectAnalysisId;
   toModuleId?: string;
+  resolvedFilePath?: string;
   specifier: string;
   importKind: ModuleFactsImportKind;
 };

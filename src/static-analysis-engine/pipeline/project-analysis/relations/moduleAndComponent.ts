@@ -30,6 +30,9 @@ export function buildModuleImports(
       imports.push({
         fromSourceFileId: sourceFileId,
         toModuleId: importRecord.resolution.resolvedModuleId,
+        resolvedFilePath: importRecord.resolution.resolvedFilePath
+          ? normalizeProjectPath(importRecord.resolution.resolvedFilePath)
+          : undefined,
         specifier: importRecord.specifier,
         importKind: importRecord.importKind,
       });
@@ -64,6 +67,9 @@ function buildModuleImportsFromFactGraph(
     imports.push({
       fromSourceFileId: sourceFileId,
       toModuleId: importEdge.resolvedTargetNodeId,
+      resolvedFilePath: importEdge.resolvedFilePath
+        ? normalizeProjectPath(importEdge.resolvedFilePath)
+        : undefined,
       specifier: importEdge.specifier,
       importKind: importEdge.importKind,
     });

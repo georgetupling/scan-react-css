@@ -1,6 +1,7 @@
 import { buildIndexes } from "./indexes.js";
 import { ownershipEvidenceFromClassOwnershipAnalysis } from "./projectAnalysisAdapter.js";
 import { applyConsumerSummariesToClassOwnership, buildDefinitionConsumers } from "./consumers.js";
+import { buildStylesheetOwnership } from "./stylesheets.js";
 import { buildClassOwnership } from "../project-analysis/relations/classOwnership.js";
 import type { ProjectEvidenceAssemblyResult } from "../project-evidence/index.js";
 import type {
@@ -31,7 +32,6 @@ export type OwnershipInferenceCompatibilityInput = {
 
 export function buildOwnershipInference(input: OwnershipInferenceInput): OwnershipInferenceResult {
   void input.selectorReachability;
-  void input.options?.sharedCssPatterns;
 
   const legacyClassOwnership =
     input.compatibility?.classOwnership ??
@@ -49,9 +49,16 @@ export function buildOwnershipInference(input: OwnershipInferenceInput): Ownersh
     classOwnership: ownershipEvidence.classOwnership,
     definitionConsumers,
   });
-  const ownerCandidates = ownershipEvidence.ownerCandidates;
-  const stylesheetOwnership: OwnershipInferenceResult["stylesheetOwnership"] = [];
-  const classifications: OwnershipInferenceResult["classifications"] = [];
+  const stylesheetEvidence = buildStylesheetOwnership({
+    projectEvidence: input.projectEvidence,
+    options: input.options,
+  });
+  const ownerCandidates = [
+    ...ownershipEvidence.ownerCandidates,
+    ...stylesheetEvidence.ownerCandidates,
+  ].sort((left, right) => left.id.localeCompare(right.id));
+  const stylesheetOwnership = stylesheetEvidence.stylesheetOwnership;
+  const classifications = stylesheetEvidence.classifications;
   const diagnostics: OwnershipInferenceResult["diagnostics"] = [];
 
   return {

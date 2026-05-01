@@ -78,6 +78,7 @@ function normalizeRelations(
           left.specifier.localeCompare(right.specifier),
           left.importKind.localeCompare(right.importKind),
           (left.toModuleId ?? "").localeCompare(right.toModuleId ?? ""),
+          (left.resolvedFilePath ?? "").localeCompare(right.resolvedFilePath ?? ""),
         ].find((comparison) => comparison !== 0) ?? 0,
     ),
     componentRenders: [...(input.componentRenders ?? [])].sort(

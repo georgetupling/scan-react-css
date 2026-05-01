@@ -250,6 +250,97 @@ test("ownership inference ports class ownership evidence deterministically", () 
   });
 });
 
+test("ownership inference builds stylesheet ownership evidence from Stage 7A imports", () => {
+  const result = buildOwnershipInference({
+    projectEvidence: buildProjectEvidence({
+      entities: {
+        sourceFiles: [
+          sourceFile({ id: "source:button", filePath: "src/Button.tsx" }),
+          sourceFile({ id: "source:card", filePath: "src/Card.tsx" }),
+        ],
+        components: [
+          component({
+            id: "component:button",
+            filePath: "src/Button.tsx",
+            componentName: "Button",
+          }),
+          component({ id: "component:card", filePath: "src/Card.tsx", componentName: "Card" }),
+        ],
+        stylesheets: [
+          stylesheet({ id: "style:button", filePath: "src/Button.css" }),
+          stylesheet({ id: "style:shared", filePath: "src/styles/shared.css" }),
+          stylesheet({ id: "style:configured", filePath: "src/theme/app.css" }),
+        ],
+      },
+      relations: {
+        moduleImports: [
+          moduleImport({
+            fromSourceFileId: "source:button",
+            specifier: "./Button.css",
+            resolvedFilePath: "src/Button.css",
+          }),
+          moduleImport({
+            fromSourceFileId: "source:button",
+            specifier: "./styles/shared.css",
+            resolvedFilePath: "src/styles/shared.css",
+          }),
+          moduleImport({
+            fromSourceFileId: "source:card",
+            specifier: "./theme/app.css",
+            resolvedFilePath: "src/theme/app.css",
+          }),
+        ],
+      },
+    }),
+    selectorReachability: emptySelectorReachability(),
+    options: {
+      sharedCssPatterns: ["src/theme/*.css"],
+      includeTraces: false,
+    },
+  });
+
+  assert.equal(result.meta.stylesheetOwnershipCount, 3);
+  assert.equal(result.indexes.stylesheetOwnershipByStylesheetId.size, 3);
+
+  const buttonOwnership = result.indexes.stylesheetOwnershipByStylesheetId.get("style:button");
+  assert.ok(buttonOwnership);
+  assert.deepEqual(buttonOwnership.importerComponentIds, ["component:button"]);
+  assert.deepEqual(buttonOwnership.importerSourceFileIds, ["source:button"]);
+  assert.equal(buttonOwnership.broadness, "private-component-like");
+  assert.equal(buttonOwnership.configuredShared, false);
+  assert.deepEqual(
+    buttonOwnership.ownerCandidateIds.map(
+      (candidateId) => result.indexes.ownerCandidateById.get(candidateId)?.ownerKind,
+    ),
+    ["component"],
+  );
+
+  const sharedOwnership = result.indexes.stylesheetOwnershipByStylesheetId.get("style:shared");
+  assert.ok(sharedOwnership);
+  assert.equal(sharedOwnership.broadness, "shared-like");
+  assert.deepEqual(
+    sharedOwnership.ownerCandidateIds
+      .map((candidateId) => result.indexes.ownerCandidateById.get(candidateId)?.ownerKind)
+      .sort(),
+    ["component", "shared-layer"],
+  );
+
+  const configuredOwnership =
+    result.indexes.stylesheetOwnershipByStylesheetId.get("style:configured");
+  assert.ok(configuredOwnership);
+  assert.equal(configuredOwnership.configuredShared, true);
+  assert.equal(configuredOwnership.broadness, "shared-like");
+  assert.deepEqual(
+    result.indexes.classificationIdsByTargetId
+      .get("style:configured")
+      ?.map(
+        (classificationId) =>
+          result.indexes.classificationById.get(classificationId)?.classification,
+      ),
+    ["shared"],
+  );
+});
+
 function legacyClassOwnership(input) {
   return {
     id: input.id,
@@ -282,6 +373,45 @@ function legacyClassOwnership(input) {
     evidenceKind: input.evidenceKind,
     confidence: input.confidence,
     traces: [],
+  };
+}
+
+function sourceFile(input) {
+  return {
+    id: input.id,
+    filePath: input.filePath,
+    moduleKind: "source",
+  };
+}
+
+function component(input) {
+  return {
+    id: input.id,
+    componentKey: `${input.filePath}::${input.componentName}`,
+    filePath: input.filePath,
+    componentName: input.componentName,
+    exported: true,
+    location: { filePath: input.filePath, startLine: 1, startColumn: 1 },
+  };
+}
+
+function stylesheet(input) {
+  return {
+    id: input.id,
+    filePath: input.filePath,
+    origin: "project-css",
+    definitions: [],
+    selectors: [],
+  };
+}
+
+function moduleImport(input) {
+  return {
+    fromSourceFileId: input.fromSourceFileId,
+    toModuleId: input.resolvedFilePath,
+    resolvedFilePath: input.resolvedFilePath,
+    specifier: input.specifier,
+    importKind: "css",
   };
 }
 
