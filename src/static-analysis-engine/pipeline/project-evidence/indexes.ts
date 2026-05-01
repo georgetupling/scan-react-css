@@ -1,8 +1,8 @@
 import type {
   ClassReferenceAnalysis,
-  ProjectAnalysisId,
+  ProjectEvidenceId,
   StylesheetReachabilityRelation,
-} from "../project-analysis/index.js";
+} from "./analysisTypes.js";
 import { stylesheetReachabilityEvidenceId } from "./ids.js";
 import type {
   ProjectEvidenceDiagnostic,
@@ -34,23 +34,23 @@ export function buildIndexes(input: {
   const componentsById = new Map(
     input.entities.components.map((component) => [component.id, component]),
   );
-  const componentIdsBySourceFileId = new Map<ProjectAnalysisId, ProjectAnalysisId[]>();
+  const componentIdsBySourceFileId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
   const classDefinitionsById = new Map(
     input.entities.classDefinitions.map((definition) => [definition.id, definition]),
   );
-  const classDefinitionIdsByClassName = new Map<string, ProjectAnalysisId[]>();
-  const classDefinitionIdsByStylesheetId = new Map<ProjectAnalysisId, ProjectAnalysisId[]>();
+  const classDefinitionIdsByClassName = new Map<string, ProjectEvidenceId[]>();
+  const classDefinitionIdsByStylesheetId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
   const classReferencesById = new Map(
     input.entities.classReferences.map((reference) => [reference.id, reference]),
   );
-  const classReferenceIdsByClassName = new Map<string, ProjectAnalysisId[]>();
-  const classReferenceIdsBySourceFileId = new Map<ProjectAnalysisId, ProjectAnalysisId[]>();
-  const classReferenceMatchIdsByDefinitionId = new Map<ProjectAnalysisId, ProjectAnalysisId[]>();
-  const classReferenceMatchIdsByReferenceId = new Map<ProjectAnalysisId, ProjectAnalysisId[]>();
-  const stylesheetReachabilityIdsByStylesheetId = new Map<ProjectAnalysisId, ProjectAnalysisId[]>();
-  const selectorBranchIdsByStylesheetId = new Map<ProjectAnalysisId, ProjectAnalysisId[]>();
+  const classReferenceIdsByClassName = new Map<string, ProjectEvidenceId[]>();
+  const classReferenceIdsBySourceFileId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
+  const classReferenceMatchIdsByDefinitionId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
+  const classReferenceMatchIdsByReferenceId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
+  const stylesheetReachabilityIdsByStylesheetId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
+  const selectorBranchIdsByStylesheetId = new Map<ProjectEvidenceId, ProjectEvidenceId[]>();
   const diagnosticById = new Map<ProjectEvidenceDiagnosticId, ProjectEvidenceDiagnostic>();
-  const diagnosticsByTargetId = new Map<ProjectAnalysisId, ProjectEvidenceDiagnosticId[]>();
+  const diagnosticsByTargetId = new Map<ProjectEvidenceId, ProjectEvidenceDiagnosticId[]>();
 
   for (const component of input.entities.components) {
     const sourceFileId = sourceFileIdByPath.get(component.filePath);

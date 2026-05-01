@@ -4,7 +4,6 @@ import test from "node:test";
 import {
   buildOwnershipInference,
   buildProjectEvidence,
-  classOwnershipAnalysisFromOwnershipInference,
 } from "../../dist/static-analysis-engine.js";
 
 test("ownership inference returns deterministic empty facts from Stage 7A and Stage 6 evidence", () => {
@@ -261,16 +260,22 @@ test("ownership inference ports class ownership evidence deterministically", () 
     matchIds: ["match:alpha"],
   });
 
-  const projectAnalysisOwnership = classOwnershipAnalysisFromOwnershipInference(result);
   assert.deepEqual(
-    projectAnalysisOwnership.map((ownership) => ownership.evidenceKind),
+    result.classOwnership.map((ownership) => ownership.compatibilityEvidenceKind),
     ["single-consuming-component", "single-importing-component", "single-importing-component"],
   );
-  assert.deepEqual(projectAnalysisOwnership[0].ownerCandidates[0], {
-    kind: "component",
-    id: "component-a",
-    path: "src/Alpha.tsx",
+  const firstOwnerCandidate = result.indexes.ownerCandidateById.get(
+    result.classOwnership[0].ownerCandidateIds[0],
+  );
+  assert.deepEqual(firstOwnerCandidate, {
+    id: "ownership:candidate:class-definition:def-a:component:component-a:same-directory-sibling-basename-convention-single-consuming-component",
+    targetKind: "class-definition",
+    targetId: "def-a",
+    ownerKind: "component",
+    ownerId: "component-a",
+    ownerPath: "src/Alpha.tsx",
     confidence: "medium",
+    actable: true,
     reasons: ["same-directory", "sibling-basename-convention", "single-consuming-component"],
     traces: [],
   });

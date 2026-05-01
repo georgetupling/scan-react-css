@@ -3,14 +3,14 @@ import { getAllResolvedModuleFacts } from "../../module-facts/index.js";
 import type {
   ComponentRenderRelation,
   ModuleImportRelation,
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisIndexes,
-} from "../../project-analysis/index.js";
+  ProjectEvidenceBuildInput,
+  ProjectEvidenceBuilderIndexes,
+} from "../analysisTypes.js";
 import { createComponentKey, normalizeAnchor, normalizeProjectPath } from "../internal/shared.js";
 
 export function buildModuleImports(
-  input: ProjectAnalysisBuildInput,
-  indexes: ProjectAnalysisIndexes,
+  input: ProjectEvidenceBuildInput,
+  indexes: ProjectEvidenceBuilderIndexes,
 ): ModuleImportRelation[] {
   if (input.factGraph) {
     return buildModuleImportsFromFactGraph(input, indexes);
@@ -47,8 +47,8 @@ export function buildModuleImports(
 }
 
 function buildModuleImportsFromFactGraph(
-  input: ProjectAnalysisBuildInput,
-  indexes: ProjectAnalysisIndexes,
+  input: ProjectEvidenceBuildInput,
+  indexes: ProjectEvidenceBuilderIndexes,
 ): ModuleImportRelation[] {
   const imports: ModuleImportRelation[] = [];
 
@@ -84,7 +84,7 @@ function buildModuleImportsFromFactGraph(
 
 export function buildComponentRenders(
   edges: RenderGraphProjectionEdge[],
-  indexes: ProjectAnalysisIndexes,
+  indexes: ProjectEvidenceBuilderIndexes,
   includeTraces: boolean,
 ): ComponentRenderRelation[] {
   const relations: ComponentRenderRelation[] = [];

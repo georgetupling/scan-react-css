@@ -6,9 +6,9 @@ import type {
   CssModuleMemberMatchRelation,
   CssModuleMemberReferenceAnalysis,
   CssModuleReferenceDiagnosticAnalysis,
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisIndexes,
-} from "../../project-analysis/index.js";
+  ProjectEvidenceBuildInput,
+  ProjectEvidenceBuilderIndexes,
+} from "../analysisTypes.js";
 import {
   getCssModuleBindingsForFile,
   getSymbolResolutionFilePaths,
@@ -28,8 +28,8 @@ import {
 } from "../internal/shared.js";
 
 export function buildCssModuleImports(
-  input: ProjectAnalysisBuildInput,
-  indexes: ProjectAnalysisIndexes,
+  input: ProjectEvidenceBuildInput,
+  indexes: ProjectEvidenceBuilderIndexes,
 ): CssModuleImportAnalysis[] {
   return getSymbolResolutionFilePaths({
     symbolResolution: input.symbolResolution,
@@ -73,9 +73,9 @@ export function buildCssModuleImports(
 }
 
 export function buildCssModuleMemberReferences(input: {
-  projectInput: ProjectAnalysisBuildInput;
+  projectInput: ProjectEvidenceBuildInput;
   imports: CssModuleImportAnalysis[];
-  indexes: ProjectAnalysisIndexes;
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
 }): {
   aliases: CssModuleAliasAnalysis[];
@@ -239,7 +239,7 @@ export function buildCssModuleMemberReferences(input: {
 
 export function buildCssModuleMemberMatches(input: {
   references: CssModuleMemberReferenceAnalysis[];
-  indexes: ProjectAnalysisIndexes;
+  indexes: ProjectEvidenceBuilderIndexes;
   localsConvention?: CssModuleLocalsConvention;
   includeTraces: boolean;
 }): CssModuleMemberMatchRelation[] {

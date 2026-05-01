@@ -1,6 +1,6 @@
 import type { AnalysisConfidence, AnalysisTrace } from "../../types/analysis.js";
 import type { FactNodeId } from "../fact-graph/index.js";
-import type { ClassOwnershipEvidenceKind, ProjectAnalysisId } from "../project-analysis/index.js";
+import type { ProjectEvidenceId } from "../project-evidence/index.js";
 import type { SelectorBranchMatchId } from "../selector-reachability/index.js";
 
 export type OwnershipEvidenceId = string;
@@ -40,37 +40,44 @@ export type OwnershipEvidenceKind =
 
 export type ClassOwnershipEvidence = {
   id: OwnershipEvidenceId;
-  classDefinitionId: ProjectAnalysisId;
-  stylesheetId: ProjectAnalysisId;
+  classDefinitionId: ProjectEvidenceId;
+  stylesheetId: ProjectEvidenceId;
   className: string;
   consumerSummary: ClassConsumerSummary;
   ownerCandidateIds: OwnershipCandidateId[];
   classificationIds: OwnershipClassificationId[];
   evidenceKind: OwnershipEvidenceKind;
-  compatibilityEvidenceKind?: ClassOwnershipEvidenceKind;
+  compatibilityEvidenceKind?: ClassOwnershipCompatibilityEvidenceKind;
   confidence: AnalysisConfidence;
   actable: boolean;
   traces: AnalysisTrace[];
 };
 
+export type ClassOwnershipCompatibilityEvidenceKind =
+  | "single-importing-component"
+  | "single-consuming-component"
+  | "multi-consumer"
+  | "path-convention"
+  | "unknown";
+
 export type ClassConsumerSummary = {
-  classDefinitionId: ProjectAnalysisId;
+  classDefinitionId: ProjectEvidenceId;
   className: string;
-  consumerComponentIds: ProjectAnalysisId[];
-  consumerSourceFileIds: ProjectAnalysisId[];
-  referenceIds: ProjectAnalysisId[];
-  matchIds: ProjectAnalysisId[];
+  consumerComponentIds: ProjectEvidenceId[];
+  consumerSourceFileIds: ProjectEvidenceId[];
+  referenceIds: ProjectEvidenceId[];
+  matchIds: ProjectEvidenceId[];
 };
 
 export type ClassDefinitionConsumerEvidence = {
   id: OwnershipEvidenceId;
-  classDefinitionId: ProjectAnalysisId;
-  referenceId: ProjectAnalysisId;
-  matchId?: ProjectAnalysisId;
-  consumingComponentId?: ProjectAnalysisId;
-  emittingComponentId?: ProjectAnalysisId;
-  supplyingComponentId?: ProjectAnalysisId;
-  consumingSourceFileId: ProjectAnalysisId;
+  classDefinitionId: ProjectEvidenceId;
+  referenceId: ProjectEvidenceId;
+  matchId?: ProjectEvidenceId;
+  consumingComponentId?: ProjectEvidenceId;
+  emittingComponentId?: ProjectEvidenceId;
+  supplyingComponentId?: ProjectEvidenceId;
+  consumingSourceFileId: ProjectEvidenceId;
   selectorBranchNodeIds: FactNodeId[];
   selectorMatchIds: SelectorBranchMatchId[];
   availability: OwnershipConsumerAvailability;
@@ -92,9 +99,9 @@ export type OwnershipConsumptionKind =
 export type StyleOwnerCandidate = {
   id: OwnershipCandidateId;
   targetKind: OwnershipCandidateTargetKind;
-  targetId: ProjectAnalysisId;
+  targetId: ProjectEvidenceId;
   ownerKind: OwnershipCandidateOwnerKind;
-  ownerId?: ProjectAnalysisId;
+  ownerId?: ProjectEvidenceId;
   ownerPath?: string;
   confidence: AnalysisConfidence;
   actable: boolean;
@@ -132,9 +139,9 @@ export type OwnershipCandidateReason =
 
 export type StylesheetOwnershipEvidence = {
   id: OwnershipEvidenceId;
-  stylesheetId: ProjectAnalysisId;
-  importerComponentIds: ProjectAnalysisId[];
-  importerSourceFileIds: ProjectAnalysisId[];
+  stylesheetId: ProjectEvidenceId;
+  importerComponentIds: ProjectEvidenceId[];
+  importerSourceFileIds: ProjectEvidenceId[];
   ownerCandidateIds: OwnershipCandidateId[];
   broadness: StylesheetOwnershipBroadness;
   configuredShared: boolean;
@@ -152,7 +159,7 @@ export type StylesheetOwnershipBroadness =
 export type StyleClassificationEvidence = {
   id: OwnershipClassificationId;
   targetKind: OwnershipClassificationTargetKind;
-  targetId: ProjectAnalysisId | FactNodeId;
+  targetId: ProjectEvidenceId | FactNodeId;
   className?: string;
   classification: OwnershipClassification;
   confidence: AnalysisConfidence;
@@ -178,7 +185,7 @@ export type OwnershipClassification =
 export type OwnershipInferenceDiagnostic = {
   id: OwnershipInferenceDiagnosticId;
   targetKind: OwnershipDiagnosticTargetKind;
-  targetId: ProjectAnalysisId | FactNodeId;
+  targetId: ProjectEvidenceId | FactNodeId;
   severity: "debug" | "warning";
   code: OwnershipInferenceDiagnosticCode;
   message: string;
@@ -197,19 +204,19 @@ export type OwnershipInferenceDiagnosticCode =
 
 export type OwnershipInferenceIndexes = {
   classOwnershipById: Map<OwnershipEvidenceId, ClassOwnershipEvidence>;
-  classOwnershipIdsByClassDefinitionId: Map<ProjectAnalysisId, OwnershipEvidenceId[]>;
-  classOwnershipIdsByStylesheetId: Map<ProjectAnalysisId, OwnershipEvidenceId[]>;
+  classOwnershipIdsByClassDefinitionId: Map<ProjectEvidenceId, OwnershipEvidenceId[]>;
+  classOwnershipIdsByStylesheetId: Map<ProjectEvidenceId, OwnershipEvidenceId[]>;
   classOwnershipIdsByClassName: Map<string, OwnershipEvidenceId[]>;
   consumerEvidenceById: Map<OwnershipEvidenceId, ClassDefinitionConsumerEvidence>;
-  consumerEvidenceIdsByClassDefinitionId: Map<ProjectAnalysisId, OwnershipEvidenceId[]>;
-  consumerEvidenceIdsByComponentId: Map<ProjectAnalysisId, OwnershipEvidenceId[]>;
+  consumerEvidenceIdsByClassDefinitionId: Map<ProjectEvidenceId, OwnershipEvidenceId[]>;
+  consumerEvidenceIdsByComponentId: Map<ProjectEvidenceId, OwnershipEvidenceId[]>;
   ownerCandidateById: Map<OwnershipCandidateId, StyleOwnerCandidate>;
-  ownerCandidateIdsByOwnerComponentId: Map<ProjectAnalysisId, OwnershipCandidateId[]>;
-  ownerCandidateIdsByStylesheetId: Map<ProjectAnalysisId, OwnershipCandidateId[]>;
+  ownerCandidateIdsByOwnerComponentId: Map<ProjectEvidenceId, OwnershipCandidateId[]>;
+  ownerCandidateIdsByStylesheetId: Map<ProjectEvidenceId, OwnershipCandidateId[]>;
   stylesheetOwnershipById: Map<OwnershipEvidenceId, StylesheetOwnershipEvidence>;
-  stylesheetOwnershipByStylesheetId: Map<ProjectAnalysisId, StylesheetOwnershipEvidence>;
+  stylesheetOwnershipByStylesheetId: Map<ProjectEvidenceId, StylesheetOwnershipEvidence>;
   classificationById: Map<OwnershipClassificationId, StyleClassificationEvidence>;
-  classificationIdsByTargetId: Map<ProjectAnalysisId | FactNodeId, OwnershipClassificationId[]>;
+  classificationIdsByTargetId: Map<ProjectEvidenceId | FactNodeId, OwnershipClassificationId[]>;
   diagnosticById: Map<OwnershipInferenceDiagnosticId, OwnershipInferenceDiagnostic>;
-  diagnosticsByTargetId: Map<ProjectAnalysisId | FactNodeId, OwnershipInferenceDiagnosticId[]>;
+  diagnosticsByTargetId: Map<ProjectEvidenceId | FactNodeId, OwnershipInferenceDiagnosticId[]>;
 };

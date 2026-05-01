@@ -4,7 +4,7 @@ import type {
   ClassDefinitionAnalysis,
   ComponentAnalysis,
   StylesheetAnalysis,
-} from "../project-analysis/index.js";
+} from "../project-evidence/index.js";
 import type {
   ClassConsumerSummary,
   ClassDefinitionConsumerEvidence,
@@ -16,7 +16,7 @@ import type {
   StylesheetOwnershipEvidence,
 } from "./types.js";
 
-type ProjectAnalysisEvidenceKind = NonNullable<ClassOwnershipEvidence["compatibilityEvidenceKind"]>;
+type CompatibilityEvidenceKind = NonNullable<ClassOwnershipEvidence["compatibilityEvidenceKind"]>;
 
 export function buildClassOwnershipEvidence(input: {
   projectEvidence: ProjectEvidenceAssemblyResult;
@@ -357,7 +357,7 @@ function getCompatibilityEvidenceKind(input: {
   evidenceKind: OwnershipEvidenceKind;
   ownerCandidates: StyleOwnerCandidate[];
   consumerSummary: ClassConsumerSummary;
-}): ProjectAnalysisEvidenceKind {
+}): CompatibilityEvidenceKind {
   if (
     input.ownerCandidates.some((candidate) =>
       candidate.reasons.includes("single-importing-component"),

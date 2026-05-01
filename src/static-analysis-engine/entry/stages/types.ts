@@ -3,9 +3,7 @@ import ts from "typescript";
 import type { ExperimentalCssFileAnalysis } from "../../pipeline/css-analysis/index.js";
 import type { ExternalCssSummary } from "../../pipeline/external-css/index.js";
 import type { ReachabilitySummary } from "../../pipeline/reachability/index.js";
-import type { ProjectAnalysis } from "../../pipeline/project-analysis/index.js";
 import type { AnalysisEvidence } from "../../pipeline/analysis-evidence/index.js";
-import type { ProjectAnalysisIndexes } from "../../pipeline/project-analysis/index.js";
 import type { ModuleFacts } from "../../pipeline/module-facts/index.js";
 import type { LanguageFrontendsResult } from "../../pipeline/language-frontends/index.js";
 import type { FactGraphResult } from "../../pipeline/fact-graph/index.js";
@@ -56,9 +54,4 @@ export type SelectorAnalysisStageResult = {
 
 export type AnalysisEvidenceStageResult = {
   analysisEvidence: AnalysisEvidence;
-  projectAnalysisIndexes: ProjectAnalysisIndexes;
-};
-
-export type ProjectAnalysisStageResult = {
-  projectAnalysis: ProjectAnalysis;
 };

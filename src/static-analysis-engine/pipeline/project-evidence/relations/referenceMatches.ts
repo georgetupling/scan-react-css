@@ -2,10 +2,10 @@ import type {
   ClassDefinitionAnalysis,
   ClassReferenceAnalysis,
   ClassReferenceMatchRelation,
-  ProjectAnalysisId,
-  ProjectAnalysisIndexes,
+  ProjectEvidenceId,
+  ProjectEvidenceBuilderIndexes,
   StylesheetReachabilityRelation,
-} from "../../project-analysis/index.js";
+} from "../analysisTypes.js";
 import {
   collectReferenceClassNames,
   compareById,
@@ -19,11 +19,11 @@ export function buildReferenceMatches(input: {
   references: ClassReferenceAnalysis[];
   definitions: ClassDefinitionAnalysis[];
   reachability: StylesheetReachabilityRelation[];
-  indexes: ProjectAnalysisIndexes;
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
 }): ClassReferenceMatchRelation[] {
   const reachabilityByStylesheetAndSource = new Map<string, StylesheetReachabilityRelation[]>();
-  const reachabilityByStylesheet = new Map<ProjectAnalysisId, StylesheetReachabilityRelation[]>();
+  const reachabilityByStylesheet = new Map<ProjectEvidenceId, StylesheetReachabilityRelation[]>();
   for (const relation of input.reachability) {
     pushMapValue(reachabilityByStylesheet, relation.stylesheetId, relation);
 

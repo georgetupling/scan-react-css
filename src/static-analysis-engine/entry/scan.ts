@@ -14,8 +14,8 @@ import {
 } from "../pipeline/language-frontends/index.js";
 import type {
   CssModuleLocalsConvention,
-  ProjectAnalysisStylesheetInput,
-} from "../pipeline/project-analysis/index.js";
+  ProjectEvidenceStylesheetInput,
+} from "../pipeline/project-evidence/index.js";
 import { collectWorkspacePackageBoundaries } from "../pipeline/workspace-discovery/boundaries/collectWorkspacePackageBoundaries.js";
 import type {
   ProjectBoundary,
@@ -30,7 +30,6 @@ import { runAnalysisEvidenceStage } from "./stages/analysisEvidenceStage.js";
 import { runCssAnalysisStage } from "./stages/cssAnalysisStage.js";
 import { runExternalCssStage } from "./stages/externalCssStage.js";
 import { runModuleFactsStage } from "./stages/moduleFactsStage.js";
-import { runProjectAnalysisStage } from "./stages/projectAnalysisStage.js";
 import { runReachabilityStage } from "./stages/reachabilityStage.js";
 import { runRenderStructureStage } from "./stages/renderStructureStage.js";
 import { runSelectorAnalysisStage } from "./stages/selectorAnalysisStage.js";
@@ -45,7 +44,7 @@ export function analyzeSourceText(input: {
   selectorCssSources?: SelectorSourceInput[];
   source?: SourceFrontendFacts;
   css?: CssFrontendFacts;
-  stylesheets?: ProjectAnalysisStylesheetInput[];
+  stylesheets?: ProjectEvidenceStylesheetInput[];
   boundaries?: ProjectBoundary[];
   resourceEdges?: ProjectResourceEdge[];
   externalCss?: ExternalCssAnalysisInput;
@@ -88,7 +87,7 @@ export function analyzeProjectSourceTexts(input: {
   selectorCssSources?: SelectorSourceInput[];
   source?: SourceFrontendFacts;
   css?: CssFrontendFacts;
-  stylesheets?: ProjectAnalysisStylesheetInput[];
+  stylesheets?: ProjectEvidenceStylesheetInput[];
   boundaries?: ProjectBoundary[];
   resourceEdges?: ProjectResourceEdge[];
   externalCss?: ExternalCssAnalysisInput;
@@ -291,22 +290,8 @@ export function analyzeProjectSourceTexts(input: {
         includeTraces,
       }),
   );
-  const projectAnalysisStage = runAnalysisStage(
-    progress,
-    "project-analysis",
-    "Building project analysis",
-    () =>
-      runProjectAnalysisStage({
-        analysisEvidence: analysisEvidenceStage.analysisEvidence,
-        projectAnalysisIndexes: analysisEvidenceStage.projectAnalysisIndexes,
-        externalCssSummary: externalCssStage.externalCssSummary,
-        selectorReachability: selectorReachabilityStage.selectorReachability,
-      }),
-  );
-
   return {
     analysisEvidence: analysisEvidenceStage.analysisEvidence,
-    projectAnalysis: projectAnalysisStage.projectAnalysis,
     ...(symbolicEvaluationStage ? { symbolicEvaluation: symbolicEvaluationStage } : {}),
   };
 }
@@ -319,7 +304,7 @@ function buildInlineProjectSnapshot(input: {
   projectRoot?: string;
   css?: CssFrontendFacts;
   selectorCssSources?: SelectorSourceInput[];
-  stylesheets?: ProjectAnalysisStylesheetInput[];
+  stylesheets?: ProjectEvidenceStylesheetInput[];
   boundaries?: ProjectBoundary[];
   resourceEdges?: ProjectResourceEdge[];
   externalCss?: ExternalCssAnalysisInput;

@@ -14,7 +14,7 @@ import type {
   CssModuleMemberReferenceAnalysis,
   CssModuleReferenceDiagnosticAnalysis,
   ModuleImportRelation,
-  ProjectAnalysisId,
+  ProjectEvidenceId,
   ProviderClassSatisfactionRelation,
   RenderSubtreeAnalysis,
   SelectorBranchAnalysis,
@@ -25,7 +25,7 @@ import type {
   StylesheetAnalysis,
   StylesheetReachabilityRelation,
   UnsupportedClassReferenceAnalysis,
-} from "../project-analysis/index.js";
+} from "./analysisTypes.js";
 
 export type ProjectEvidenceDiagnosticId = string;
 
@@ -80,7 +80,7 @@ export type ProjectEvidenceRelations = {
 export type ProjectEvidenceDiagnostic = {
   id: ProjectEvidenceDiagnosticId;
   targetKind: ProjectEvidenceDiagnosticTargetKind;
-  targetId?: ProjectAnalysisId | FactNodeId;
+  targetId?: ProjectEvidenceId | FactNodeId;
   severity: "debug" | "warning";
   code: ProjectEvidenceDiagnosticCode;
   message: string;
@@ -100,22 +100,22 @@ export type ProjectEvidenceDiagnosticCode =
   | "contradictory-project-evidence";
 
 export type ProjectEvidenceIndexes = {
-  sourceFilesById: Map<ProjectAnalysisId, SourceFileAnalysis>;
-  sourceFileIdByPath: Map<string, ProjectAnalysisId>;
-  stylesheetsById: Map<ProjectAnalysisId, StylesheetAnalysis>;
-  stylesheetIdByPath: Map<string, ProjectAnalysisId>;
-  componentsById: Map<ProjectAnalysisId, ComponentAnalysis>;
-  componentIdsBySourceFileId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
-  classDefinitionsById: Map<ProjectAnalysisId, ClassDefinitionAnalysis>;
-  classDefinitionIdsByClassName: Map<string, ProjectAnalysisId[]>;
-  classDefinitionIdsByStylesheetId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
-  classReferencesById: Map<ProjectAnalysisId, ClassReferenceAnalysis>;
-  classReferenceIdsByClassName: Map<string, ProjectAnalysisId[]>;
-  classReferenceIdsBySourceFileId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
-  classReferenceMatchIdsByDefinitionId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
-  classReferenceMatchIdsByReferenceId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
-  stylesheetReachabilityIdsByStylesheetId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
-  selectorBranchIdsByStylesheetId: Map<ProjectAnalysisId, ProjectAnalysisId[]>;
+  sourceFilesById: Map<ProjectEvidenceId, SourceFileAnalysis>;
+  sourceFileIdByPath: Map<string, ProjectEvidenceId>;
+  stylesheetsById: Map<ProjectEvidenceId, StylesheetAnalysis>;
+  stylesheetIdByPath: Map<string, ProjectEvidenceId>;
+  componentsById: Map<ProjectEvidenceId, ComponentAnalysis>;
+  componentIdsBySourceFileId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
+  classDefinitionsById: Map<ProjectEvidenceId, ClassDefinitionAnalysis>;
+  classDefinitionIdsByClassName: Map<string, ProjectEvidenceId[]>;
+  classDefinitionIdsByStylesheetId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
+  classReferencesById: Map<ProjectEvidenceId, ClassReferenceAnalysis>;
+  classReferenceIdsByClassName: Map<string, ProjectEvidenceId[]>;
+  classReferenceIdsBySourceFileId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
+  classReferenceMatchIdsByDefinitionId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
+  classReferenceMatchIdsByReferenceId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
+  stylesheetReachabilityIdsByStylesheetId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
+  selectorBranchIdsByStylesheetId: Map<ProjectEvidenceId, ProjectEvidenceId[]>;
   diagnosticById: Map<ProjectEvidenceDiagnosticId, ProjectEvidenceDiagnostic>;
-  diagnosticsByTargetId: Map<ProjectAnalysisId | FactNodeId, ProjectEvidenceDiagnosticId[]>;
+  diagnosticsByTargetId: Map<ProjectEvidenceId | FactNodeId, ProjectEvidenceDiagnosticId[]>;
 };

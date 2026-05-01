@@ -66,7 +66,6 @@ export {
 } from "./pipeline/selector-reachability/index.js";
 export {
   buildOwnershipInference,
-  classOwnershipAnalysisFromOwnershipInference,
   classDefinitionConsumerEvidenceId,
   classOwnershipEvidenceId,
   ownershipInferenceDiagnosticId,
@@ -84,10 +83,6 @@ export {
 export { buildAnalysisEvidence } from "./pipeline/analysis-evidence/index.js";
 export type { AnalysisEvidence } from "./pipeline/analysis-evidence/index.js";
 export { buildReachabilitySummary } from "./pipeline/reachability/index.js";
-export {
-  buildProjectAnalysis,
-  serializeProjectAnalysis,
-} from "./pipeline/project-analysis/index.js";
 export type { EngineModuleId, EngineSymbolId, SourceAnchor } from "./types/core.js";
 export type {
   CssAtRuleContextFact,
@@ -263,9 +258,6 @@ export type {
   ClassContextAnalysis,
   ClassDefinitionAnalysis,
   ClassDefinitionSelectorKind,
-  ClassConsumerSummary,
-  ClassOwnershipAnalysis,
-  ClassOwnershipEvidenceKind,
   ClassReferenceAnalysis,
   ClassReferenceExpressionKind,
   ClassReferenceMatchRelation,
@@ -278,30 +270,19 @@ export type {
   CssModuleMemberReferenceAnalysis,
   CssModuleReferenceDiagnosticAnalysis,
   ModuleImportRelation,
-  OwnerCandidate,
-  OwnerCandidateReason,
-  ProjectAnalysis,
-  ProjectAnalysisEntities,
-  ProjectAnalysisEvidence,
-  ProjectAnalysisId,
-  ProjectAnalysisIndexes,
-  ProjectAnalysisInputs,
-  ProjectAnalysisMeta,
-  ProjectAnalysisRelations,
+  ProjectEvidenceId,
   ProviderClassSatisfactionRelation,
   RenderSubtreeAnalysis,
   SelectorBranchAnalysis,
   SelectorMatchRelation,
   SelectorQueryAnalysis,
-  SerializableProjectAnalysis,
-  SerializableProjectAnalysisIndexes,
   SourceFileAnalysis,
   StaticallySkippedClassReferenceAnalysis,
   StylesheetAnalysis,
   StylesheetOrigin,
   StylesheetReachabilityRelation,
   UnsupportedClassReferenceAnalysis,
-} from "./pipeline/project-analysis/index.js";
+} from "./pipeline/project-evidence/index.js";
 export type {
   ExtractedSelectorQuery,
   SelectorConstraint,
@@ -322,6 +303,8 @@ export type {
   SelectorSubjectRequirement,
 } from "./pipeline/selector-reachability/index.js";
 export type {
+  ClassConsumerSummary,
+  ClassOwnershipCompatibilityEvidenceKind,
   ClassDefinitionConsumerEvidence,
   ClassOwnershipEvidence,
   OwnershipCandidateId,

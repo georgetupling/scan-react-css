@@ -1,11 +1,11 @@
 import type { ReachabilityAvailability } from "../../reachability/types.js";
 import type {
   ClassReferenceAnalysis,
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisId,
-  ProjectAnalysisIndexes,
+  ProjectEvidenceBuildInput,
+  ProjectEvidenceId,
+  ProjectEvidenceBuilderIndexes,
   StylesheetReachabilityRelation,
-} from "../../project-analysis/index.js";
+} from "../analysisTypes.js";
 import {
   compareReachabilityRelations,
   createComponentKey,
@@ -18,8 +18,8 @@ import {
 import type { AnalysisTrace } from "../../../types/analysis.js";
 
 export function buildStylesheetReachability(
-  input: ProjectAnalysisBuildInput,
-  indexes: ProjectAnalysisIndexes,
+  input: ProjectEvidenceBuildInput,
+  indexes: ProjectEvidenceBuilderIndexes,
   includeTraces: boolean,
 ): StylesheetReachabilityRelation[] {
   const relations: StylesheetReachabilityRelation[] = [];
@@ -80,9 +80,9 @@ export function buildStylesheetReachability(
 
 export function getBestReachabilityForReference(input: {
   reference: ClassReferenceAnalysis;
-  stylesheetId: ProjectAnalysisId;
+  stylesheetId: ProjectEvidenceId;
   reachabilityByStylesheetAndSource: Map<string, StylesheetReachabilityRelation[]>;
-  reachabilityByStylesheet: Map<ProjectAnalysisId, StylesheetReachabilityRelation[]>;
+  reachabilityByStylesheet: Map<ProjectEvidenceId, StylesheetReachabilityRelation[]>;
 }): {
   availability: ReachabilityAvailability;
   traces: AnalysisTrace[];
@@ -143,9 +143,9 @@ export function getBestReachabilityForReference(input: {
 }
 
 export function getReachabilityRelations(input: {
-  stylesheetId: ProjectAnalysisId;
+  stylesheetId: ProjectEvidenceId;
   kind: "source" | "component";
-  id: ProjectAnalysisId;
+  id: ProjectEvidenceId;
   reachabilityByStylesheetAndSource: Map<string, StylesheetReachabilityRelation[]>;
 }): StylesheetReachabilityRelation[] {
   return (
@@ -157,8 +157,8 @@ export function getReachabilityRelations(input: {
 
 export function getSourceFileIdForContext(
   contextRecord: StylesheetReachabilityRelation["contexts"][number],
-  indexes: ProjectAnalysisIndexes,
-): ProjectAnalysisId | undefined {
+  indexes: ProjectEvidenceBuilderIndexes,
+): ProjectEvidenceId | undefined {
   const context = contextRecord.context;
   if (
     context.kind === "source-file" ||
@@ -174,8 +174,8 @@ export function getSourceFileIdForContext(
 
 export function getComponentIdForContext(
   contextRecord: StylesheetReachabilityRelation["contexts"][number],
-  indexes: ProjectAnalysisIndexes,
-): ProjectAnalysisId | undefined {
+  indexes: ProjectEvidenceBuilderIndexes,
+): ProjectEvidenceId | undefined {
   const context = contextRecord.context;
   if (
     (context.kind === "component" ||

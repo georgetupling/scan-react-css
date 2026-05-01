@@ -9,14 +9,14 @@ import type {
   ClassContextAnalysis,
   ClassDefinitionAnalysis,
   ComponentAnalysis,
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisIndexes,
-  ProjectAnalysisStylesheetInput,
+  ProjectEvidenceBuildInput,
+  ProjectEvidenceBuilderIndexes,
+  ProjectEvidenceStylesheetInput,
   RenderSubtreeAnalysis,
   SourceFileAnalysis,
   StylesheetAnalysis,
   UnsupportedClassReferenceAnalysis,
-} from "../../project-analysis/index.js";
+} from "../analysisTypes.js";
 import {
   compareById,
   compareAnchors,
@@ -39,8 +39,8 @@ import {
 } from "../internal/shared.js";
 
 export function buildSourceFiles(
-  input: ProjectAnalysisBuildInput,
-  indexes: ProjectAnalysisIndexes,
+  input: ProjectEvidenceBuildInput,
+  indexes: ProjectEvidenceBuilderIndexes,
 ): SourceFileAnalysis[] {
   const sourceFiles: SourceFileAnalysis[] = [];
   const sourcePaths = new Set<string>();
@@ -76,8 +76,8 @@ export function buildSourceFiles(
 
 export function buildComponents(
   renderGraphNodes: RenderGraphProjectionNode[],
-  indexes: ProjectAnalysisIndexes,
-  input?: ProjectAnalysisBuildInput,
+  indexes: ProjectEvidenceBuilderIndexes,
+  input?: ProjectEvidenceBuildInput,
 ): ComponentAnalysis[] {
   const graphComponentNodes = input?.factGraph?.graph.nodes.components;
   const components = graphComponentNodes
@@ -123,7 +123,7 @@ export function buildComponents(
 
 export function buildRenderSubtrees(
   renderModel: RenderModel,
-  indexes: ProjectAnalysisIndexes,
+  indexes: ProjectEvidenceBuilderIndexes,
 ): RenderSubtreeAnalysis[] {
   return renderModel.componentBoundaries
     .filter((boundary) => boundary.boundaryKind === "component-root")
@@ -162,8 +162,8 @@ export function buildRenderSubtrees(
 }
 
 export function buildStylesheets(
-  input: ProjectAnalysisBuildInput,
-  indexes: ProjectAnalysisIndexes,
+  input: ProjectEvidenceBuildInput,
+  indexes: ProjectEvidenceBuilderIndexes,
 ): StylesheetAnalysis[] {
   const stylesheetInputsByPath = indexStylesheetInputsByPath(input);
   const stylesheets = input.cssFiles.map((cssFile, index) => {
@@ -187,9 +187,9 @@ export function buildStylesheets(
 }
 
 export function buildClassDefinitions(
-  input: ProjectAnalysisBuildInput,
+  input: ProjectEvidenceBuildInput,
   stylesheets: StylesheetAnalysis[],
-  indexes: ProjectAnalysisIndexes,
+  indexes: ProjectEvidenceBuilderIndexes,
 ): ClassDefinitionAnalysis[] {
   const stylesheetInputsByPath = indexStylesheetInputsByPath(input);
   const stylesheetsByPath = new Map(
@@ -237,9 +237,9 @@ export function buildClassDefinitions(
 }
 
 function indexStylesheetInputsByPath(
-  input: ProjectAnalysisBuildInput,
-): Map<string, ProjectAnalysisStylesheetInput> {
-  const stylesheetsByPath = new Map<string, ProjectAnalysisStylesheetInput>();
+  input: ProjectEvidenceBuildInput,
+): Map<string, ProjectEvidenceStylesheetInput> {
+  const stylesheetsByPath = new Map<string, ProjectEvidenceStylesheetInput>();
   for (const stylesheet of input.factGraph?.graph.nodes.stylesheets ?? []) {
     const filePath = normalizeOptionalProjectPath(stylesheet.filePath);
     if (!filePath) {
@@ -267,7 +267,7 @@ function indexStylesheetInputsByPath(
 function graphStylesheetToProjectInput(
   stylesheet: StyleSheetNode,
   filePath: string,
-): ProjectAnalysisStylesheetInput {
+): ProjectEvidenceStylesheetInput {
   return {
     filePath,
     cssKind: stylesheet.cssKind,
@@ -276,9 +276,9 @@ function graphStylesheetToProjectInput(
 }
 
 export function buildClassContexts(
-  input: ProjectAnalysisBuildInput,
+  input: ProjectEvidenceBuildInput,
   stylesheets: StylesheetAnalysis[],
-  indexes: ProjectAnalysisIndexes,
+  indexes: ProjectEvidenceBuilderIndexes,
 ): ClassContextAnalysis[] {
   const stylesheetsByPath = new Map(
     stylesheets.map((stylesheet) => [stylesheet.filePath ?? stylesheet.id, stylesheet]),
@@ -318,8 +318,8 @@ export function buildClassContexts(
 }
 
 export function buildUnsupportedClassReferences(
-  input: ProjectAnalysisBuildInput,
-  indexes: ProjectAnalysisIndexes,
+  input: ProjectEvidenceBuildInput,
+  indexes: ProjectEvidenceBuilderIndexes,
   includeTraces: boolean,
 ): UnsupportedClassReferenceAnalysis[] {
   const diagnostics =
@@ -347,7 +347,7 @@ export function buildUnsupportedClassReferences(
 }
 
 function collectUnsupportedClassReferenceDiagnosticsFromRenderModel(
-  input: ProjectAnalysisBuildInput,
+  input: ProjectEvidenceBuildInput,
   includeTraces: boolean,
 ): UnsupportedClassReferenceDiagnostic[] {
   if (!input.factGraph) {

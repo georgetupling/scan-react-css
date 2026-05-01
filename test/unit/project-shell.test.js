@@ -297,7 +297,7 @@ test("scanProject degrades empty string intrinsic tag bindings without crashing"
   }
 });
 
-test("scanProject reports unreachable matching classes without exposing ProjectAnalysis", async () => {
+test("scanProject reports unreachable matching classes without exposing engine internals", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
       "src/App.tsx",

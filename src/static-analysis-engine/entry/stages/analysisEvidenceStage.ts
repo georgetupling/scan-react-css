@@ -1,9 +1,11 @@
-import { buildAnalysisEvidenceWithCompatibilityIndexes } from "../../pipeline/analysis-evidence/index.js";
-import type { ProjectAnalysisBuildInput } from "../../pipeline/project-analysis/index.js";
+import { buildAnalysisEvidence } from "../../pipeline/analysis-evidence/index.js";
+import type { ProjectEvidenceBuildInput } from "../../pipeline/project-evidence/index.js";
 import type { AnalysisEvidenceStageResult } from "./types.js";
 
 export function runAnalysisEvidenceStage(
-  input: ProjectAnalysisBuildInput,
+  input: ProjectEvidenceBuildInput,
 ): AnalysisEvidenceStageResult {
-  return buildAnalysisEvidenceWithCompatibilityIndexes(input);
+  return {
+    analysisEvidence: buildAnalysisEvidence(input),
+  };
 }

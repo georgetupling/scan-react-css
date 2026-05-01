@@ -1,15 +1,15 @@
 import type {
   ClassReferenceAnalysis,
-  ProjectAnalysisBuildInput,
+  ProjectEvidenceBuildInput,
   ProviderClassSatisfactionRelation,
   SelectorMatchRelation,
   SelectorQueryAnalysis,
-} from "../../project-analysis/index.js";
+} from "../analysisTypes.js";
 import { collectReferenceClassNames, compareById, mergeTraces } from "../internal/shared.js";
 
 export function buildProviderClassSatisfactions(input: {
   references: ClassReferenceAnalysis[];
-  input: ProjectAnalysisBuildInput;
+  input: ProjectEvidenceBuildInput;
   includeTraces: boolean;
 }): ProviderClassSatisfactionRelation[] {
   const relations: ProviderClassSatisfactionRelation[] = [];

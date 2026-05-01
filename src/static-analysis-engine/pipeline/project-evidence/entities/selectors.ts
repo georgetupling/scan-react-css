@@ -1,10 +1,10 @@
 import type { SelectorQueryResult } from "../../selector-analysis/types.js";
 import type {
-  ProjectAnalysisIndexes,
+  ProjectEvidenceBuilderIndexes,
   SelectorBranchAnalysis,
   SelectorQueryAnalysis,
   StylesheetAnalysis,
-} from "../../project-analysis/index.js";
+} from "../analysisTypes.js";
 import {
   compareById,
   createSelectorBranchId,
@@ -19,7 +19,7 @@ import {
 export function buildSelectorQueries(
   selectorQueryResults: SelectorQueryResult[],
   stylesheets: StylesheetAnalysis[],
-  indexes: ProjectAnalysisIndexes,
+  indexes: ProjectEvidenceBuilderIndexes,
   includeTraces: boolean,
 ): SelectorQueryAnalysis[] {
   const stylesheetById = new Map(stylesheets.map((stylesheet) => [stylesheet.id, stylesheet]));

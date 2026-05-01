@@ -10,11 +10,11 @@ import type { AnalysisTrace } from "../../../types/analysis.js";
 import type { SourceAnchor } from "../../../types/core.js";
 import type {
   ClassReferenceAnalysis,
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisId,
-  ProjectAnalysisIndexes,
+  ProjectEvidenceBuildInput,
+  ProjectEvidenceId,
+  ProjectEvidenceBuilderIndexes,
   StaticallySkippedClassReferenceAnalysis,
-} from "../../project-analysis/index.js";
+} from "../analysisTypes.js";
 import {
   collectReferenceClassNames,
   collectSkippedReferenceClassNames,
@@ -39,9 +39,9 @@ type StaticallySkippedPlacementCondition = PlacementCondition & {
 
 export function buildClassReferences(input: {
   renderModel: RenderModel;
-  symbolicEvaluation: ProjectAnalysisBuildInput["symbolicEvaluation"];
-  factGraph: ProjectAnalysisBuildInput["factGraph"];
-  indexes: ProjectAnalysisIndexes;
+  symbolicEvaluation: ProjectEvidenceBuildInput["symbolicEvaluation"];
+  factGraph: ProjectEvidenceBuildInput["factGraph"];
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
 }): ClassReferenceAnalysis[] {
   if (!input.symbolicEvaluation) {
@@ -63,9 +63,9 @@ export function buildClassReferences(input: {
 
 function buildClassReferencesFromEmissionSites(input: {
   renderModel: RenderModel;
-  symbolicEvaluation: NonNullable<ProjectAnalysisBuildInput["symbolicEvaluation"]>;
-  factGraph: ProjectAnalysisBuildInput["factGraph"];
-  indexes: ProjectAnalysisIndexes;
+  symbolicEvaluation: NonNullable<ProjectEvidenceBuildInput["symbolicEvaluation"]>;
+  factGraph: ProjectEvidenceBuildInput["factGraph"];
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
 }): ClassReferenceAnalysis[] {
   const expressionsById = new Map(
@@ -148,8 +148,8 @@ function buildClassReferencesFromEmissionSites(input: {
 function buildClassReferenceFromEmissionSite(input: {
   emissionSite: EmissionSite;
   expression: CanonicalClassExpression;
-  factGraph: ProjectAnalysisBuildInput["factGraph"];
-  indexes: ProjectAnalysisIndexes;
+  factGraph: ProjectEvidenceBuildInput["factGraph"];
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
   index: number;
 }): ClassReferenceAnalysis {
@@ -218,8 +218,8 @@ function buildSymbolicClassReference(input: {
   expression: CanonicalClassExpression;
   classExpression: ClassExpressionSummary;
   origin: ClassReferenceAnalysis["origin"];
-  factGraph: ProjectAnalysisBuildInput["factGraph"];
-  indexes: ProjectAnalysisIndexes;
+  factGraph: ProjectEvidenceBuildInput["factGraph"];
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
   index: number;
 }): ClassReferenceAnalysis {
@@ -266,9 +266,9 @@ function buildSymbolicClassReference(input: {
 
 export function buildStaticallySkippedClassReferences(input: {
   renderModel: RenderModel;
-  symbolicEvaluation: ProjectAnalysisBuildInput["symbolicEvaluation"];
-  factGraph: ProjectAnalysisBuildInput["factGraph"];
-  indexes: ProjectAnalysisIndexes;
+  symbolicEvaluation: ProjectEvidenceBuildInput["symbolicEvaluation"];
+  factGraph: ProjectEvidenceBuildInput["factGraph"];
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
 }): StaticallySkippedClassReferenceAnalysis[] {
   if (!input.symbolicEvaluation || !input.factGraph) {
@@ -355,7 +355,7 @@ export function buildStaticallySkippedClassReferences(input: {
 }
 
 function pushClassReferenceIndexes(
-  indexes: ProjectAnalysisIndexes,
+  indexes: ProjectEvidenceBuilderIndexes,
   reference: ClassReferenceAnalysis,
 ): void {
   pushMapValue(indexes.referencesBySourceFileId, reference.sourceFileId, reference.id);
@@ -367,8 +367,8 @@ function pushClassReferenceIndexes(
 function createEmissionReferenceDedupeKey(input: {
   emissionSite: EmissionSite;
   expression: CanonicalClassExpression;
-  factGraph: ProjectAnalysisBuildInput["factGraph"];
-  indexes: ProjectAnalysisIndexes;
+  factGraph: ProjectEvidenceBuildInput["factGraph"];
+  indexes: ProjectEvidenceBuilderIndexes;
 }): string {
   const classExpression = toEmissionSiteClassExpressionSummary(
     input.emissionSite,
@@ -402,10 +402,10 @@ function createEmissionReferenceDedupeKey(input: {
 function projectComponentNodeId(
   componentNodeId: string | undefined,
   input: {
-    factGraph: ProjectAnalysisBuildInput["factGraph"];
-    indexes: ProjectAnalysisIndexes;
+    factGraph: ProjectEvidenceBuildInput["factGraph"];
+    indexes: ProjectEvidenceBuilderIndexes;
   },
-): ProjectAnalysisId | undefined {
+): ProjectEvidenceId | undefined {
   if (!componentNodeId) {
     return undefined;
   }
@@ -420,10 +420,10 @@ function projectComponentNodeId(
 
 function buildEmissionClassNameComponentIds(input: {
   emissionSite: EmissionSite;
-  factGraph: ProjectAnalysisBuildInput["factGraph"];
-  indexes: ProjectAnalysisIndexes;
-}): Record<string, ProjectAnalysisId> | undefined {
-  const componentIdsByClassName: Record<string, ProjectAnalysisId> = {};
+  factGraph: ProjectEvidenceBuildInput["factGraph"];
+  indexes: ProjectEvidenceBuilderIndexes;
+}): Record<string, ProjectEvidenceId> | undefined {
+  const componentIdsByClassName: Record<string, ProjectEvidenceId> = {};
 
   for (const provenance of input.emissionSite.tokenProvenance) {
     const sourceLocation = provenance.sourceLocation
@@ -477,7 +477,7 @@ function resolveReferenceSourceLocation(
 }
 
 function findClassExpressionSiteAtLocation(
-  factGraph: ProjectAnalysisBuildInput["factGraph"],
+  factGraph: ProjectEvidenceBuildInput["factGraph"],
   location: SourceAnchor,
 ): { rawExpressionText: string; emittingComponentNodeId?: string } | undefined {
   return factGraph?.graph.nodes.classExpressionSites
@@ -495,10 +495,10 @@ function findClassExpressionSiteAtLocation(
 function projectComponentAtLocation(
   location: SourceAnchor,
   input: {
-    factGraph: ProjectAnalysisBuildInput["factGraph"];
-    indexes: ProjectAnalysisIndexes;
+    factGraph: ProjectEvidenceBuildInput["factGraph"];
+    indexes: ProjectEvidenceBuilderIndexes;
   },
-): ProjectAnalysisId | undefined {
+): ProjectEvidenceId | undefined {
   const component = input.factGraph?.graph.nodes.components
     .filter((candidate) => sourceAnchorContains(candidate.location, location))
     .sort((left, right) => anchorSpan(left.location) - anchorSpan(right.location))[0];
@@ -718,7 +718,7 @@ function buildStaticallySkippedClassReferenceTraces(input: {
   condition: PlacementCondition;
   expression: CanonicalClassExpression;
   classExpression: ClassExpressionSummary;
-  componentId?: ProjectAnalysisId;
+  componentId?: ProjectEvidenceId;
 }): AnalysisTrace[] {
   return [
     {

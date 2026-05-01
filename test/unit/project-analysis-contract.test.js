@@ -1,11 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import {
-  analyzeProjectSourceTexts,
-  serializeProjectAnalysis,
-} from "../../dist/static-analysis-engine.js";
+import { analyzeProjectSourceTexts } from "../../dist/static-analysis-engine.js";
 
-test("static analysis result exposes staged analysis evidence alongside ProjectAnalysis", () => {
+test("static analysis result exposes staged analysis evidence", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -34,7 +31,7 @@ test("static analysis result exposes staged analysis evidence alongside ProjectA
   );
 });
 
-test("ProjectAnalysis exposes reference match semantics for reachable and unreachable definitions", () => {
+test("analysis evidence exposes reference match semantics for reachable and unreachable definitions", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -51,7 +48,7 @@ test("ProjectAnalysis exposes reference match semantics for reachable and unreac
     ],
   });
 
-  const analysis = result.projectAnalysis;
+  const analysis = result.analysisEvidence.projectEvidence;
   const definiteReference = analysis.entities.classReferences.find((reference) =>
     reference.definiteClassNames.includes("ghost"),
   );
@@ -60,14 +57,12 @@ test("ProjectAnalysis exposes reference match semantics for reachable and unreac
   );
   assert.ok(definiteReference);
   assert.ok(possibleReference);
-  const ghostMatchIds =
-    analysis.indexes.referenceMatchesByReferenceAndClassName.get(`${definiteReference.id}:ghost`) ??
-    [];
-  const maybeMatchIds =
-    analysis.indexes.referenceMatchesByReferenceAndClassName.get(`${possibleReference.id}:maybe`) ??
-    [];
-  const ghostMatch = analysis.indexes.referenceMatchesById.get(ghostMatchIds[0]);
-  const maybeMatch = analysis.indexes.referenceMatchesById.get(maybeMatchIds[0]);
+  const ghostMatch = analysis.relations.referenceMatches.find(
+    (match) => match.referenceId === definiteReference.id && match.className === "ghost",
+  );
+  const maybeMatch = analysis.relations.referenceMatches.find(
+    (match) => match.referenceId === possibleReference.id && match.className === "maybe",
+  );
 
   assert.ok(ghostMatch);
   assert.equal(ghostMatch.className, "ghost");
@@ -79,7 +74,7 @@ test("ProjectAnalysis exposes reference match semantics for reachable and unreac
   assert.equal(maybeMatch.referenceClassKind, "possible");
 });
 
-test("ProjectAnalysis prefers supplied stylesheet inventory for origin and CSS Module kind", () => {
+test("analysis evidence prefers supplied stylesheet inventory for origin and CSS Module kind", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -117,13 +112,13 @@ test("ProjectAnalysis prefers supplied stylesheet inventory for origin and CSS M
   });
 
   const stylesheetsByPath = new Map(
-    result.projectAnalysis.entities.stylesheets.map((stylesheet) => [
+    result.analysisEvidence.projectEvidence.entities.stylesheets.map((stylesheet) => [
       stylesheet.filePath,
       stylesheet,
     ]),
   );
   const definitionsByStylesheetId = new Map(
-    result.projectAnalysis.entities.classDefinitions.map((definition) => [
+    result.analysisEvidence.projectEvidence.entities.classDefinitions.map((definition) => [
       definition.stylesheetId,
       definition,
     ]),
@@ -139,7 +134,7 @@ test("ProjectAnalysis prefers supplied stylesheet inventory for origin and CSS M
   );
 });
 
-test("ProjectAnalysis records class references from statically skipped render branches", () => {
+test("analysis evidence records class references from statically skipped render branches", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -162,21 +157,22 @@ test("ProjectAnalysis records class references from statically skipped render br
     ],
   });
 
-  const analysis = result.projectAnalysis;
-  assert.equal(analysis.indexes.referencesByClassName.get("badge-count"), undefined);
-  const skippedReferenceIds =
-    analysis.indexes.staticallySkippedReferencesByClassName.get("badge-count") ?? [];
-  assert.equal(skippedReferenceIds.length, 1);
-  const skippedReference = analysis.indexes.staticallySkippedClassReferencesById.get(
-    skippedReferenceIds[0],
+  const analysis = result.analysisEvidence.projectEvidence;
+  assert.equal(analysis.indexes.classReferenceIdsByClassName.get("badge-count"), undefined);
+  const skippedReferences = analysis.entities.staticallySkippedClassReferences.filter(
+    (reference) =>
+      reference.definiteClassNames.includes("badge-count") ||
+      reference.possibleClassNames.includes("badge-count"),
   );
+  assert.equal(skippedReferences.length, 1);
+  const skippedReference = skippedReferences[0];
   assert.ok(skippedReference);
   assert.equal(skippedReference.conditionSourceText, "hasItems");
   assert.equal(skippedReference.skippedBranch, "when-true");
   assert.equal(skippedReference.reason, "condition-resolved-false");
 });
 
-test("ProjectAnalysis indexes declared-provider satisfaction from resource edges", () => {
+test("analysis evidence indexes declared-provider satisfaction from resource edges", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -211,52 +207,19 @@ test("ProjectAnalysis indexes declared-provider satisfaction from resource edges
     },
   });
 
-  const analysis = result.projectAnalysis;
+  const analysis = result.analysisEvidence.projectEvidence;
   const reference = analysis.entities.classReferences[0];
-  const satisfactionIds =
-    analysis.indexes.providerSatisfactionsByReferenceAndClassName.get(`${reference.id}:fa-user`) ??
-    [];
-  const satisfaction = analysis.indexes.providerSatisfactionsById.get(satisfactionIds[0]);
+  const satisfaction = analysis.relations.providerClassSatisfactions.find(
+    (candidate) => candidate.referenceId === reference.id && candidate.className === "fa-user",
+  );
 
   assert.ok(satisfaction);
   assert.equal(satisfaction.className, "fa-user");
   assert.equal(satisfaction.referenceClassKind, "definite");
   assert.equal(satisfaction.provider, "fontawesome");
-  assert.deepEqual(analysis.inputs.externalCss.projectWideEntrySources, [
-    {
-      entrySourceFilePath: "src/App.tsx",
-      appRootPath: ".",
-    },
-  ]);
 });
 
-test("ProjectAnalysis can be serialized for debug output with populated indexes", () => {
-  const result = analyzeProjectSourceTexts({
-    sourceFiles: [
-      {
-        filePath: "src/App.tsx",
-        sourceText:
-          'import "./App.css";\nexport function App() { return <main className="shell" />; }\n',
-      },
-    ],
-    selectorCssSources: [
-      {
-        filePath: "src/App.css",
-        cssText: ".shell { display: block; }\n",
-      },
-    ],
-  });
-
-  const serialized = serializeProjectAnalysis(result.projectAnalysis);
-  const json = JSON.stringify(serialized);
-
-  assert.equal(Array.isArray(serialized.indexes.definitionsByClassName.shell), true);
-  assert.equal(typeof serialized.indexes.stylesheetsById["stylesheet:src/App.css"], "object");
-  assert.match(json, /definitionsByClassName/);
-  assert.match(json, /stylesheet:src\/App.css/);
-});
-
-test("ProjectAnalysis exposes ownership evidence for class definitions", () => {
+test("analysis evidence exposes ownership evidence for class definitions", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -273,24 +236,31 @@ test("ProjectAnalysis exposes ownership evidence for class definitions", () => {
     ],
   });
 
-  const analysis = result.projectAnalysis;
-  const definition = analysis.entities.classDefinitions.find(
+  const projectEvidence = result.analysisEvidence.projectEvidence;
+  const definition = projectEvidence.entities.classDefinitions.find(
     (candidate) => candidate.className === "button",
   );
   assert.ok(definition);
 
-  const ownershipId = analysis.indexes.classOwnershipByClassDefinitionId.get(definition.id);
+  const ownershipId =
+    result.analysisEvidence.ownershipInference.indexes.classOwnershipIdsByClassDefinitionId.get(
+      definition.id,
+    )?.[0];
   assert.ok(ownershipId);
-  const ownership = analysis.indexes.classOwnershipById.get(ownershipId);
+  const ownership =
+    result.analysisEvidence.ownershipInference.indexes.classOwnershipById.get(ownershipId);
   assert.ok(ownership);
   assert.equal(ownership.className, "button");
   assert.equal(ownership.consumerSummary.consumerComponentIds.length, 1);
-  assert.equal(ownership.ownerCandidates[0].kind, "component");
-  assert.ok(ownership.ownerCandidates[0].reasons.includes("single-importing-component"));
-  assert.ok(ownership.ownerCandidates[0].reasons.includes("single-consuming-component"));
+  const ownerCandidate = result.analysisEvidence.ownershipInference.indexes.ownerCandidateById.get(
+    ownership.ownerCandidateIds[0],
+  );
+  assert.equal(ownerCandidate?.ownerKind, "component");
+  assert.ok(ownerCandidate?.reasons.includes("single-importing-component"));
+  assert.ok(ownerCandidate?.reasons.includes("single-consuming-component"));
 });
 
-test("ProjectAnalysis records supplier and emitter for forwarded class props", () => {
+test("analysis evidence records supplier and emitter for forwarded class props", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -315,8 +285,8 @@ test("ProjectAnalysis records supplier and emitter for forwarded class props", (
     ],
   });
 
-  const reference = result.projectAnalysis.entities.classReferences.find((candidate) =>
-    candidate.definiteClassNames.includes("members-page__select"),
+  const reference = result.analysisEvidence.projectEvidence.entities.classReferences.find(
+    (candidate) => candidate.definiteClassNames.includes("members-page__select"),
   );
 
   assert.ok(reference);
@@ -325,7 +295,7 @@ test("ProjectAnalysis records supplier and emitter for forwarded class props", (
   assert.equal(reference.emittedByComponentId, "component:src/components/Select.tsx:Select");
 });
 
-test("ProjectAnalysis records per-class suppliers for merged forwarded class props", () => {
+test("analysis evidence records per-class suppliers for merged forwarded class props", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -354,8 +324,8 @@ test("ProjectAnalysis records per-class suppliers for merged forwarded class pro
     ],
   });
 
-  const reference = result.projectAnalysis.entities.classReferences.find((candidate) =>
-    candidate.definiteClassNames.includes("members-page__select"),
+  const reference = result.analysisEvidence.projectEvidence.entities.classReferences.find(
+    (candidate) => candidate.definiteClassNames.includes("members-page__select"),
   );
 
   assert.ok(reference);
@@ -372,7 +342,7 @@ test("ProjectAnalysis records per-class suppliers for merged forwarded class pro
   );
 });
 
-test("ProjectAnalysis preserves caller class props through props-object destructuring", () => {
+test("analysis evidence preserves caller class props through props-object destructuring", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -408,8 +378,8 @@ test("ProjectAnalysis preserves caller class props through props-object destruct
     ],
   });
 
-  const reference = result.projectAnalysis.entities.classReferences.find((candidate) =>
-    candidate.definiteClassNames.includes("browse-toolbar-button"),
+  const reference = result.analysisEvidence.projectEvidence.entities.classReferences.find(
+    (candidate) => candidate.definiteClassNames.includes("browse-toolbar-button"),
   );
 
   assert.ok(reference);
@@ -420,7 +390,7 @@ test("ProjectAnalysis preserves caller class props through props-object destruct
   assert.equal(reference.classNameComponentIds?.button, "component:src/ui/Button.tsx:Button");
 });
 
-test("ProjectAnalysis indexes className on unresolved component references", () => {
+test("analysis evidence indexes className on unresolved component references", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -440,12 +410,13 @@ test("ProjectAnalysis indexes className on unresolved component references", () 
     ],
   });
 
-  const reference = result.projectAnalysis.entities.classReferences.find((candidate) =>
-    candidate.definiteClassNames.includes("site-header__brand"),
+  const reference = result.analysisEvidence.projectEvidence.entities.classReferences.find(
+    (candidate) => candidate.definiteClassNames.includes("site-header__brand"),
   );
-  const unsupportedReference = result.projectAnalysis.entities.unsupportedClassReferences.find(
-    (candidate) => candidate.rawExpressionText === '"site-header__brand"',
-  );
+  const unsupportedReference =
+    result.analysisEvidence.projectEvidence.entities.unsupportedClassReferences.find(
+      (candidate) => candidate.rawExpressionText === '"site-header__brand"',
+    );
 
   assert.ok(reference);
   assert.equal(reference.componentId, "component:src/SiteHeader.tsx:SiteHeader");
@@ -454,7 +425,7 @@ test("ProjectAnalysis indexes className on unresolved component references", () 
   assert.equal(unsupportedReference, undefined);
 });
 
-test("ProjectAnalysis resolves subtree prop identifiers inside nullish fallback branches", () => {
+test("analysis evidence resolves subtree prop identifiers inside nullish fallback branches", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -485,10 +456,13 @@ test("ProjectAnalysis resolves subtree prop identifiers inside nullish fallback 
     ],
   });
 
-  assertIndexedClassReferences(result.projectAnalysis, ["slot-content", "slot-fallback"]);
+  assertIndexedClassReferences(result.analysisEvidence.projectEvidence, [
+    "slot-content",
+    "slot-fallback",
+  ]);
 });
 
-test("ProjectAnalysis preserves class expression context across helper-forwarded props", () => {
+test("analysis evidence preserves class expression context across helper-forwarded props", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -548,7 +522,7 @@ test("ProjectAnalysis preserves class expression context across helper-forwarded
     ],
   });
 
-  assertIndexedClassReferences(result.projectAnalysis, [
+  assertIndexedClassReferences(result.analysisEvidence.projectEvidence, [
     "site-header__notifications-menu",
     "site-header__menu-trigger",
     "site-header__menu-trigger--round",
@@ -558,7 +532,7 @@ test("ProjectAnalysis preserves class expression context across helper-forwarded
   ]);
 });
 
-test("ProjectAnalysis preserves finite switch helper classes in filtered class arrays", () => {
+test("analysis evidence preserves finite switch helper classes in filtered class arrays", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -591,14 +565,14 @@ test("ProjectAnalysis preserves finite switch helper classes in filtered class a
     ],
   });
 
-  assertIndexedClassReferences(result.projectAnalysis, [
+  assertIndexedClassReferences(result.analysisEvidence.projectEvidence, [
     "browse-filter-chip",
     "browse-filter-chip--require",
     "browse-filter-chip--exclude",
   ]);
 });
 
-test("ProjectAnalysis indexes React child transform references by class name", () => {
+test("analysis evidence indexes React child transform references by class name", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -638,14 +612,14 @@ test("ProjectAnalysis indexes React child transform references by class name", (
     ],
   });
 
-  assertIndexedClassReferences(result.projectAnalysis, [
+  assertIndexedClassReferences(result.analysisEvidence.projectEvidence, [
     "field-list__control",
     "invite-form__email",
     "invite-form__message",
   ]);
 });
 
-test("ProjectAnalysis treats React child guard APIs as non-rendering", () => {
+test("analysis evidence treats React child guard APIs as non-rendering", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -675,11 +649,11 @@ test("ProjectAnalysis treats React child guard APIs as non-rendering", () => {
     ],
   });
 
-  assertIndexedClassReferences(result.projectAnalysis, ["guard-only"]);
-  assertNoIndexedClassReferences(result.projectAnalysis, ["child-only"]);
+  assertIndexedClassReferences(result.analysisEvidence.projectEvidence, ["guard-only"]);
+  assertNoIndexedClassReferences(result.analysisEvidence.projectEvidence, ["child-only"]);
 });
 
-test("ProjectAnalysis keeps unbounded cloneElement className values uncertain", () => {
+test("analysis evidence keeps unbounded cloneElement className values uncertain", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -707,9 +681,9 @@ test("ProjectAnalysis keeps unbounded cloneElement className values uncertain", 
     ],
   });
 
-  assertNoIndexedClassReferences(result.projectAnalysis, ["field-list__control"]);
+  assertNoIndexedClassReferences(result.analysisEvidence.projectEvidence, ["field-list__control"]);
   assert.ok(
-    result.projectAnalysis.entities.classReferences.some(
+    result.analysisEvidence.projectEvidence.entities.classReferences.some(
       (reference) =>
         reference.unknownDynamic &&
         reference.definiteClassNames.length === 0 &&
@@ -718,7 +692,7 @@ test("ProjectAnalysis keeps unbounded cloneElement className values uncertain", 
   );
 });
 
-test("ProjectAnalysis preserves distinct same-name component identities across expansion chains", () => {
+test("analysis evidence preserves distinct same-name component identities across expansion chains", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -750,7 +724,7 @@ test("ProjectAnalysis preserves distinct same-name component identities across e
     ],
   });
 
-  const analysis = result.projectAnalysis;
+  const analysis = result.analysisEvidence.projectEvidence;
   const outerButton = analysis.entities.components.find(
     (component) =>
       component.filePath === "src/outer/Button.tsx" && component.componentName === "Button",
@@ -782,8 +756,8 @@ test("ProjectAnalysis preserves distinct same-name component identities across e
 function assertIndexedClassReferences(analysis, classNames) {
   for (const className of classNames) {
     assert.ok(
-      (analysis.indexes.referencesByClassName.get(className) ?? []).length > 0,
-      `expected referencesByClassName to contain ${className}`,
+      (analysis.indexes.classReferenceIdsByClassName.get(className) ?? []).length > 0,
+      `expected classReferenceIdsByClassName to contain ${className}`,
     );
   }
 }
@@ -791,9 +765,9 @@ function assertIndexedClassReferences(analysis, classNames) {
 function assertNoIndexedClassReferences(analysis, classNames) {
   for (const className of classNames) {
     assert.deepEqual(
-      analysis.indexes.referencesByClassName.get(className) ?? [],
+      analysis.indexes.classReferenceIdsByClassName.get(className) ?? [],
       [],
-      `expected referencesByClassName not to contain ${className}`,
+      `expected classReferenceIdsByClassName not to contain ${className}`,
     );
   }
 }

@@ -3,7 +3,6 @@ export type {
   OwnershipInferenceInput,
   OwnershipInferenceOptions,
 } from "./buildOwnershipInference.js";
-export { classOwnershipAnalysisFromOwnershipInference } from "./projectAnalysisAdapter.js";
 export {
   classDefinitionConsumerEvidenceId,
   classOwnershipEvidenceId,
@@ -14,6 +13,7 @@ export {
 } from "./ids.js";
 export type {
   ClassConsumerSummary,
+  ClassOwnershipCompatibilityEvidenceKind,
   ClassDefinitionConsumerEvidence,
   ClassOwnershipEvidence,
   OwnershipCandidateId,

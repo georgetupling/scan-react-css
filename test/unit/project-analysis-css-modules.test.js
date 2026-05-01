@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { analyzeProjectSourceTexts } from "../../dist/static-analysis-engine.js";
 
-test("ProjectAnalysis records CSS Module imports, member references, and matches", () => {
+test("analysis evidence records CSS Module imports, member references, and matches", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -19,7 +19,7 @@ test("ProjectAnalysis records CSS Module imports, member references, and matches
     ],
   });
 
-  const analysis = result.projectAnalysis;
+  const analysis = result.analysisEvidence.projectEvidence;
   const cssModuleImport = analysis.entities.cssModuleImports[0];
   const reference = analysis.entities.cssModuleMemberReferences[0];
   const match = analysis.relations.cssModuleMemberMatches[0];
@@ -32,12 +32,15 @@ test("ProjectAnalysis records CSS Module imports, member references, and matches
   assert.equal(match.className, "root");
   assert.equal(match.exportName, "root");
   assert.equal(match.definitionId, analysis.entities.classDefinitions[0].id);
-  assert.deepEqual(analysis.indexes.cssModuleMemberReferencesByImportId.get(cssModuleImport.id), [
-    reference.id,
-  ]);
+  assert.deepEqual(
+    analysis.entities.cssModuleMemberReferences
+      .filter((candidate) => candidate.importId === cssModuleImport.id)
+      .map((candidate) => candidate.id),
+    [reference.id],
+  );
 });
 
-test("ProjectAnalysis matches CSS Module members through camelCase locals convention", () => {
+test("analysis evidence matches CSS Module members through camelCase locals convention", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -54,7 +57,7 @@ test("ProjectAnalysis matches CSS Module members through camelCase locals conven
     ],
   });
 
-  const analysis = result.projectAnalysis;
+  const analysis = result.analysisEvidence.projectEvidence;
   const match = analysis.relations.cssModuleMemberMatches[0];
 
   assert.equal(match.status, "matched");
@@ -63,7 +66,7 @@ test("ProjectAnalysis matches CSS Module members through camelCase locals conven
   assert.equal(match.definitionId, analysis.entities.classDefinitions[0].id);
 });
 
-test("ProjectAnalysis can require exact CSS Module export names", () => {
+test("analysis evidence can require exact CSS Module export names", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -83,7 +86,7 @@ test("ProjectAnalysis can require exact CSS Module export names", () => {
     },
   });
 
-  const match = result.projectAnalysis.relations.cssModuleMemberMatches[0];
+  const match = result.analysisEvidence.projectEvidence.relations.cssModuleMemberMatches[0];
 
   assert.equal(match.status, "missing");
   assert.equal(match.className, "fooBar");
@@ -91,7 +94,7 @@ test("ProjectAnalysis can require exact CSS Module export names", () => {
   assert.equal(match.definitionId, undefined);
 });
 
-test("ProjectAnalysis records CSS Module destructured bindings as member references", () => {
+test("analysis evidence records CSS Module destructured bindings as member references", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -112,7 +115,7 @@ test("ProjectAnalysis records CSS Module destructured bindings as member referen
     ],
   });
 
-  const analysis = result.projectAnalysis;
+  const analysis = result.analysisEvidence.projectEvidence;
   const cssModuleImport = analysis.entities.cssModuleImports[0];
   const bindings = analysis.entities.cssModuleDestructuredBindings;
   const references = analysis.entities.cssModuleMemberReferences;
@@ -140,12 +143,14 @@ test("ProjectAnalysis records CSS Module destructured bindings as member referen
     ],
   );
   assert.deepEqual(
-    analysis.indexes.cssModuleDestructuredBindingsByImportId.get(cssModuleImport.id),
+    analysis.entities.cssModuleDestructuredBindings
+      .filter((binding) => binding.importId === cssModuleImport.id)
+      .map((binding) => binding.id),
     [bindings[0].id, bindings[1].id],
   );
 });
 
-test("ProjectAnalysis diagnoses unsupported CSS Module destructuring patterns", () => {
+test("analysis evidence diagnoses unsupported CSS Module destructuring patterns", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -167,14 +172,14 @@ test("ProjectAnalysis diagnoses unsupported CSS Module destructuring patterns", 
   });
 
   assert.deepEqual(
-    result.projectAnalysis.entities.cssModuleReferenceDiagnostics.map(
+    result.analysisEvidence.projectEvidence.entities.cssModuleReferenceDiagnostics.map(
       (diagnostic) => diagnostic.reason,
     ),
     ["rest-css-module-destructuring", "computed-css-module-destructuring"],
   );
 });
 
-test("ProjectAnalysis resolves CSS Module member references through simple aliases", () => {
+test("analysis evidence resolves CSS Module member references through simple aliases", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -195,7 +200,7 @@ test("ProjectAnalysis resolves CSS Module member references through simple alias
     ],
   });
 
-  const analysis = result.projectAnalysis;
+  const analysis = result.analysisEvidence.projectEvidence;
   const cssModuleImport = analysis.entities.cssModuleImports[0];
   const alias = analysis.entities.cssModuleAliases[0];
   const reference = analysis.entities.cssModuleMemberReferences[0];
@@ -207,10 +212,15 @@ test("ProjectAnalysis resolves CSS Module member references through simple alias
   assert.equal(reference.memberName, "root");
   assert.equal(reference.rawExpressionText, "s.root");
   assert.equal(match.status, "matched");
-  assert.deepEqual(analysis.indexes.cssModuleAliasesByImportId.get(cssModuleImport.id), [alias.id]);
+  assert.deepEqual(
+    analysis.entities.cssModuleAliases
+      .filter((candidate) => candidate.importId === cssModuleImport.id)
+      .map((candidate) => candidate.id),
+    [alias.id],
+  );
 });
 
-test("ProjectAnalysis diagnoses unsupported CSS Module alias declarations", () => {
+test("analysis evidence diagnoses unsupported CSS Module alias declarations", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -232,14 +242,14 @@ test("ProjectAnalysis diagnoses unsupported CSS Module alias declarations", () =
   });
 
   assert.deepEqual(
-    result.projectAnalysis.entities.cssModuleReferenceDiagnostics.map(
+    result.analysisEvidence.projectEvidence.entities.cssModuleReferenceDiagnostics.map(
       (diagnostic) => diagnostic.reason,
     ),
     ["reassignable-css-module-alias", "self-referential-css-module-alias"],
   );
 });
 
-test("ProjectAnalysis records missing and computed CSS Module member access", () => {
+test("analysis evidence records missing and computed CSS Module member access", () => {
   const result = analyzeProjectSourceTexts({
     sourceFiles: [
       {
@@ -256,7 +266,7 @@ test("ProjectAnalysis records missing and computed CSS Module member access", ()
     ],
   });
 
-  const analysis = result.projectAnalysis;
+  const analysis = result.analysisEvidence.projectEvidence;
   const missingMatch = analysis.relations.cssModuleMemberMatches.find(
     (match) => match.className === "missing",
   );

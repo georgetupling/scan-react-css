@@ -1,9 +1,6 @@
 import { buildOwnershipInference } from "../ownership-inference/index.js";
-import type {
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisIndexes,
-} from "../project-analysis/index.js";
-import { createEmptyIndexes, indexEntities } from "../project-analysis/internal/indexes.js";
+import type { ProjectEvidenceBuildInput } from "../project-evidence/index.js";
+import { createEmptyIndexes, indexEntities } from "../project-evidence/index.js";
 import {
   buildProjectEvidence,
   buildProjectEvidenceEntities,
@@ -11,18 +8,7 @@ import {
 } from "../project-evidence/index.js";
 import type { AnalysisEvidence } from "./types.js";
 
-export function buildAnalysisEvidence(input: ProjectAnalysisBuildInput): AnalysisEvidence {
-  return buildAnalysisEvidenceWithCompatibilityIndexes(input).analysisEvidence;
-}
-
-export type AnalysisEvidenceCompatibilityBuildResult = {
-  analysisEvidence: AnalysisEvidence;
-  projectAnalysisIndexes: ProjectAnalysisIndexes;
-};
-
-export function buildAnalysisEvidenceWithCompatibilityIndexes(
-  input: ProjectAnalysisBuildInput,
-): AnalysisEvidenceCompatibilityBuildResult {
+export function buildAnalysisEvidence(input: ProjectEvidenceBuildInput): AnalysisEvidence {
   const includeTraces = input.includeTraces ?? true;
   const indexes = createEmptyIndexes();
   const projectEvidence = buildProjectEvidence({
@@ -89,17 +75,14 @@ export function buildAnalysisEvidenceWithCompatibilityIndexes(
   });
 
   return {
-    analysisEvidence: {
-      projectEvidence: projectEvidenceWithRelations,
-      selectorReachability,
-      ownershipInference,
-    },
-    projectAnalysisIndexes: indexes,
+    projectEvidence: projectEvidenceWithRelations,
+    selectorReachability,
+    ownershipInference,
   };
 }
 
 function emptySelectorReachability(): NonNullable<
-  ProjectAnalysisBuildInput["selectorReachability"]
+  ProjectEvidenceBuildInput["selectorReachability"]
 > {
   return {
     meta: {

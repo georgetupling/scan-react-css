@@ -2,7 +2,7 @@ import type {
   AnalysisEvidence,
   AnalysisConfidence,
   AnalysisTrace,
-  ProjectAnalysisId,
+  ProjectEvidenceId,
   SourceAnchor,
 } from "../static-analysis-engine/index.js";
 import type { PackageCssImportFact } from "../static-analysis-engine/pipeline/external-css/index.js";
@@ -27,18 +27,18 @@ export type RuleId =
   | "unsupported-syntax-affecting-analysis";
 
 export type AnalysisEntityRef =
-  | { kind: "source-file"; id: ProjectAnalysisId }
-  | { kind: "component"; id: ProjectAnalysisId }
-  | { kind: "stylesheet"; id: ProjectAnalysisId }
-  | { kind: "class-reference"; id: ProjectAnalysisId }
-  | { kind: "statically-skipped-class-reference"; id: ProjectAnalysisId }
-  | { kind: "unsupported-class-reference"; id: ProjectAnalysisId }
-  | { kind: "class-definition"; id: ProjectAnalysisId }
-  | { kind: "selector-branch"; id: ProjectAnalysisId }
-  | { kind: "css-module-import"; id: ProjectAnalysisId }
-  | { kind: "css-module-member-reference"; id: ProjectAnalysisId }
-  | { kind: "css-module-reference-diagnostic"; id: ProjectAnalysisId }
-  | { kind: "selector-query"; id: ProjectAnalysisId };
+  | { kind: "source-file"; id: ProjectEvidenceId }
+  | { kind: "component"; id: ProjectEvidenceId }
+  | { kind: "stylesheet"; id: ProjectEvidenceId }
+  | { kind: "class-reference"; id: ProjectEvidenceId }
+  | { kind: "statically-skipped-class-reference"; id: ProjectEvidenceId }
+  | { kind: "unsupported-class-reference"; id: ProjectEvidenceId }
+  | { kind: "class-definition"; id: ProjectEvidenceId }
+  | { kind: "selector-branch"; id: ProjectEvidenceId }
+  | { kind: "css-module-import"; id: ProjectEvidenceId }
+  | { kind: "css-module-member-reference"; id: ProjectEvidenceId }
+  | { kind: "css-module-reference-diagnostic"; id: ProjectEvidenceId }
+  | { kind: "selector-query"; id: ProjectEvidenceId };
 
 export type Finding = {
   id: string;

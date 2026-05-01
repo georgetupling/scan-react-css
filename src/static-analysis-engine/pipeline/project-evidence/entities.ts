@@ -13,15 +13,12 @@ import {
 } from "./entities/core.js";
 import { buildCssModuleImports, buildCssModuleMemberReferences } from "./entities/cssModules.js";
 import { buildSelectorBranches, buildSelectorQueries } from "./entities/selectors.js";
-import type {
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisIndexes,
-} from "../project-analysis/index.js";
+import type { ProjectEvidenceBuildInput, ProjectEvidenceBuilderIndexes } from "./analysisTypes.js";
 import type { ProjectEvidenceEntities } from "./types.js";
 
 export function buildProjectEvidenceEntities(input: {
-  projectInput: ProjectAnalysisBuildInput;
-  indexes: ProjectAnalysisIndexes;
+  projectInput: ProjectEvidenceBuildInput;
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
 }): ProjectEvidenceEntities {
   const sourceFiles = buildSourceFiles(input.projectInput, input.indexes);

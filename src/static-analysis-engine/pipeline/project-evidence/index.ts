@@ -1,8 +1,46 @@
 export { buildProjectEvidence } from "./buildProjectEvidence.js";
 export { buildProjectEvidenceEntities } from "./entities.js";
 export { buildProjectEvidenceRelations } from "./relations.js";
+export { createEmptyIndexes, indexEntities } from "./internal/indexes.js";
 export type { ProjectEvidenceAssemblyInput } from "./buildProjectEvidence.js";
 export { projectEvidenceDiagnosticId, stylesheetReachabilityEvidenceId } from "./ids.js";
+export type {
+  ClassContextAnalysis,
+  ClassDefinitionAnalysis,
+  ClassDefinitionSelectorKind,
+  ClassReferenceAnalysis,
+  ClassReferenceExpressionKind,
+  ClassReferenceMatchRelation,
+  ClassReferenceOrigin,
+  ComponentAnalysis,
+  ComponentRenderRelation,
+  CssModuleAliasAnalysis,
+  CssModuleDestructuredBindingAnalysis,
+  CssModuleLocalsConvention,
+  CssModuleImportAnalysis,
+  CssModuleMemberMatchRelation,
+  CssModuleMemberReferenceAnalysis,
+  CssModuleReferenceDiagnosticAnalysis,
+  CssFileRecord,
+  DeclarationForSignature,
+  ModuleImportRelation,
+  ProjectEvidenceId,
+  ProjectEvidenceBuilderIndexes,
+  ProjectEvidenceStylesheetInput,
+  ProjectEvidenceBuildInput,
+  ProviderClassSatisfactionRelation,
+  RenderSubtreeAnalysis,
+  SelectorBranchAnalysis,
+  SelectorMatchRelation,
+  SelectorQueryAnalysis,
+  SourceFileAnalysis,
+  SourceFileRecord,
+  StaticallySkippedClassReferenceAnalysis,
+  StylesheetAnalysis,
+  StylesheetOrigin,
+  StylesheetReachabilityRelation,
+  UnsupportedClassReferenceAnalysis,
+} from "./analysisTypes.js";
 export type {
   ProjectEvidenceAssemblyMeta,
   ProjectEvidenceAssemblyResult,

@@ -9,7 +9,7 @@ import {
   type CssModuleImportAnalysis,
   type CssModuleMemberMatchRelation,
   type CssModuleMemberReferenceAnalysis,
-  type ProjectAnalysisId,
+  type ProjectEvidenceId,
   type ProviderClassSatisfactionRelation,
   type SelectorBranchAnalysis,
   type SelectorBranchReachability,
@@ -29,28 +29,28 @@ export type HydratedClassOwnershipEvidence = ClassOwnershipEvidence & {
 
 export function getSourceFileById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): SourceFileAnalysis | undefined {
   return analysis.projectEvidence.indexes.sourceFilesById.get(id);
 }
 
 export function getStylesheetById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): StylesheetAnalysis | undefined {
   return analysis.projectEvidence.indexes.stylesheetsById.get(id);
 }
 
 export function getComponentById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): ComponentAnalysis | undefined {
   return analysis.projectEvidence.indexes.componentsById.get(id);
 }
 
 export function getClassDefinitionById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): ClassDefinitionAnalysis | undefined {
   return analysis.projectEvidence.indexes.classDefinitionsById.get(id);
 }
@@ -71,7 +71,7 @@ export function getClassDefinitions(analysis: AnalysisEvidence): ClassDefinition
 
 export function getClassDefinitionsByStylesheetId(
   analysis: AnalysisEvidence,
-  stylesheetId: ProjectAnalysisId,
+  stylesheetId: ProjectEvidenceId,
 ): ClassDefinitionAnalysis[] {
   return resolveIds(
     analysis.projectEvidence.indexes.classDefinitionIdsByStylesheetId.get(stylesheetId),
@@ -104,7 +104,7 @@ export function getClassReferences(analysis: AnalysisEvidence): ClassReferenceAn
 
 export function getClassReferenceById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): ClassReferenceAnalysis | undefined {
   return analysis.projectEvidence.indexes.classReferencesById.get(id);
 }
@@ -128,7 +128,7 @@ export function getUnsupportedClassReferences(
 
 export function getReferenceMatchesByDefinitionId(
   analysis: AnalysisEvidence,
-  definitionId: ProjectAnalysisId,
+  definitionId: ProjectEvidenceId,
 ): ClassReferenceMatchRelation[] {
   return resolveRelationIds(
     analysis.projectEvidence.indexes.classReferenceMatchIdsByDefinitionId.get(definitionId),
@@ -138,7 +138,7 @@ export function getReferenceMatchesByDefinitionId(
 
 export function getReferenceMatchesByReferenceId(
   analysis: AnalysisEvidence,
-  referenceId: ProjectAnalysisId,
+  referenceId: ProjectEvidenceId,
 ): ClassReferenceMatchRelation[] {
   return resolveRelationIds(
     analysis.projectEvidence.indexes.classReferenceMatchIdsByReferenceId.get(referenceId),
@@ -148,7 +148,7 @@ export function getReferenceMatchesByReferenceId(
 
 export function getReferenceMatchesByReferenceAndClassName(
   analysis: AnalysisEvidence,
-  referenceId: ProjectAnalysisId,
+  referenceId: ProjectEvidenceId,
   className: string,
 ): ClassReferenceMatchRelation[] {
   return getReferenceMatchesByReferenceId(analysis, referenceId).filter(
@@ -158,7 +158,7 @@ export function getReferenceMatchesByReferenceAndClassName(
 
 export function hasProviderSatisfactionForReferenceClass(input: {
   analysis: AnalysisEvidence;
-  referenceId: ProjectAnalysisId;
+  referenceId: ProjectEvidenceId;
   className: string;
 }): boolean {
   return getProviderSatisfactionsByReferenceAndClassName(input).length > 0;
@@ -166,7 +166,7 @@ export function hasProviderSatisfactionForReferenceClass(input: {
 
 export function getProviderSatisfactionsByReferenceAndClassName(input: {
   analysis: AnalysisEvidence;
-  referenceId: ProjectAnalysisId;
+  referenceId: ProjectEvidenceId;
   className: string;
 }): ProviderClassSatisfactionRelation[] {
   return input.analysis.projectEvidence.relations.providerClassSatisfactions.filter(
@@ -177,7 +177,7 @@ export function getProviderSatisfactionsByReferenceAndClassName(input: {
 
 export function getStylesheetReachabilityByStylesheetId(
   analysis: AnalysisEvidence,
-  stylesheetId: ProjectAnalysisId,
+  stylesheetId: ProjectEvidenceId,
 ): StylesheetReachabilityRelation[] {
   return analysis.projectEvidence.relations.stylesheetReachability.filter(
     (relation) => relation.stylesheetId === stylesheetId,
@@ -186,21 +186,21 @@ export function getStylesheetReachabilityByStylesheetId(
 
 export function getSelectorBranchById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): SelectorBranchAnalysis | undefined {
   return analysis.projectEvidence.entities.selectorBranches.find((branch) => branch.id === id);
 }
 
 export function getSelectorQueryById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): SelectorQueryAnalysis | undefined {
   return analysis.projectEvidence.entities.selectorQueries.find((query) => query.id === id);
 }
 
 export function getSelectorBranchesByStylesheetId(
   analysis: AnalysisEvidence,
-  stylesheetId: ProjectAnalysisId,
+  stylesheetId: ProjectEvidenceId,
 ): SelectorBranchAnalysis[] {
   return resolveSelectorBranchIds(
     analysis.projectEvidence.indexes.selectorBranchIdsByStylesheetId.get(stylesheetId),
@@ -267,7 +267,7 @@ export function getProjectSelectorQueryForReachability(
 
 export function getCssModuleImportById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): CssModuleImportAnalysis | undefined {
   return analysis.projectEvidence.entities.cssModuleImports.find(
     (importRecord) => importRecord.id === id,
@@ -276,7 +276,7 @@ export function getCssModuleImportById(
 
 export function getCssModuleImportsByStylesheetId(
   analysis: AnalysisEvidence,
-  stylesheetId: ProjectAnalysisId,
+  stylesheetId: ProjectEvidenceId,
 ): CssModuleImportAnalysis[] {
   return analysis.projectEvidence.entities.cssModuleImports.filter(
     (importRecord) => importRecord.stylesheetId === stylesheetId,
@@ -285,7 +285,7 @@ export function getCssModuleImportsByStylesheetId(
 
 export function getCssModuleMemberReferenceById(
   analysis: AnalysisEvidence,
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): CssModuleMemberReferenceAnalysis | undefined {
   return analysis.projectEvidence.entities.cssModuleMemberReferences.find(
     (reference) => reference.id === id,
@@ -294,7 +294,7 @@ export function getCssModuleMemberReferenceById(
 
 export function getCssModuleMemberMatchesByDefinitionId(
   analysis: AnalysisEvidence,
-  definitionId: ProjectAnalysisId,
+  definitionId: ProjectEvidenceId,
 ): CssModuleMemberMatchRelation[] {
   return analysis.projectEvidence.relations.cssModuleMemberMatches.filter(
     (match) => match.definitionId === definitionId,
@@ -309,7 +309,7 @@ export function getCssModuleMemberMatches(
 
 export function getCssModuleMemberMatchesByReferenceId(
   analysis: AnalysisEvidence,
-  referenceId: ProjectAnalysisId,
+  referenceId: ProjectEvidenceId,
 ): CssModuleMemberMatchRelation[] {
   return analysis.projectEvidence.relations.cssModuleMemberMatches.filter(
     (match) => match.referenceId === referenceId,
@@ -333,7 +333,7 @@ export function getClassOwnershipEvidence(
 
 export function getClassOwnershipEvidenceByDefinitionId(
   analysis: AnalysisEvidence,
-  definitionId: ProjectAnalysisId,
+  definitionId: ProjectEvidenceId,
 ): HydratedClassOwnershipEvidence[] {
   const ownershipIds =
     analysis.ownershipInference.indexes.classOwnershipIdsByClassDefinitionId.get(definitionId);

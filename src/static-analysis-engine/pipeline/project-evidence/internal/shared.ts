@@ -10,20 +10,20 @@ import type {
   ClassReferenceAnalysis,
   ClassReferenceExpressionKind,
   DeclarationForSignature,
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisId,
-  ProjectAnalysisIndexes,
+  ProjectEvidenceBuildInput,
+  ProjectEvidenceId,
+  ProjectEvidenceBuilderIndexes,
   SelectorQueryAnalysis,
   StylesheetOrigin,
   StylesheetReachabilityRelation,
   StaticallySkippedClassReferenceAnalysis,
   ClassContextAnalysis,
-  ProjectAnalysisStylesheetInput,
-} from "../../project-analysis/index.js";
+  ProjectEvidenceStylesheetInput,
+} from "../analysisTypes.js";
 
 export function getStylesheetOrigin(
   filePath: string | undefined,
-  input: ProjectAnalysisBuildInput,
+  input: ProjectEvidenceBuildInput,
 ): StylesheetOrigin {
   if (!filePath) {
     return "unknown";
@@ -38,9 +38,9 @@ export function getStylesheetOrigin(
 }
 
 export function getStylesheetOriginFromInventory(
-  stylesheet: ProjectAnalysisStylesheetInput | undefined,
+  stylesheet: ProjectEvidenceStylesheetInput | undefined,
   filePath: string | undefined,
-  input: ProjectAnalysisBuildInput,
+  input: ProjectEvidenceBuildInput,
 ): StylesheetOrigin {
   if (!stylesheet) {
     return getStylesheetOrigin(filePath, input);
@@ -62,13 +62,13 @@ export function getStylesheetOriginFromInventory(
 }
 
 export function isCssModuleStylesheetFromInventory(
-  stylesheet: ProjectAnalysisStylesheetInput | undefined,
+  stylesheet: ProjectEvidenceStylesheetInput | undefined,
   filePath: string | undefined,
 ): boolean {
   return stylesheet ? stylesheet.cssKind === "css-module" : isCssModuleStylesheet(filePath);
 }
 
-export function isExternalStylesheet(filePath: string, input: ProjectAnalysisBuildInput): boolean {
+export function isExternalStylesheet(filePath: string, input: ProjectEvidenceBuildInput): boolean {
   const normalizedFilePath = normalizeProjectPath(filePath);
   for (const moduleFacts of getAllResolvedModuleFacts({
     moduleFacts: input.moduleFacts,
@@ -155,9 +155,9 @@ export function collectSkippedReferenceClassNames(
 
 export function getBestReachabilityForReference(input: {
   reference: ClassReferenceAnalysis;
-  stylesheetId: ProjectAnalysisId;
+  stylesheetId: ProjectEvidenceId;
   reachabilityByStylesheetAndSource: Map<string, StylesheetReachabilityRelation[]>;
-  reachabilityByStylesheet: Map<ProjectAnalysisId, StylesheetReachabilityRelation[]>;
+  reachabilityByStylesheet: Map<ProjectEvidenceId, StylesheetReachabilityRelation[]>;
 }): {
   availability: ReachabilityAvailability;
   traces: AnalysisTrace[];
@@ -218,9 +218,9 @@ export function getBestReachabilityForReference(input: {
 }
 
 export function getReachabilityRelations(input: {
-  stylesheetId: ProjectAnalysisId;
+  stylesheetId: ProjectEvidenceId;
   kind: "source" | "component";
-  id: ProjectAnalysisId;
+  id: ProjectEvidenceId;
   reachabilityByStylesheetAndSource: Map<string, StylesheetReachabilityRelation[]>;
 }): StylesheetReachabilityRelation[] {
   return (
@@ -232,8 +232,8 @@ export function getReachabilityRelations(input: {
 
 export function getSourceFileIdForContext(
   contextRecord: StylesheetReachabilityRelation["contexts"][number],
-  indexes: ProjectAnalysisIndexes,
-): ProjectAnalysisId | undefined {
+  indexes: ProjectEvidenceBuilderIndexes,
+): ProjectEvidenceId | undefined {
   const context = contextRecord.context;
   if (
     context.kind === "source-file" ||
@@ -249,8 +249,8 @@ export function getSourceFileIdForContext(
 
 export function getComponentIdForContext(
   contextRecord: StylesheetReachabilityRelation["contexts"][number],
-  indexes: ProjectAnalysisIndexes,
-): ProjectAnalysisId | undefined {
+  indexes: ProjectEvidenceBuilderIndexes,
+): ProjectEvidenceId | undefined {
   const context = contextRecord.context;
   if (
     (context.kind === "component" ||
@@ -296,70 +296,10 @@ export function getDeclarationSignature(declarations: DeclarationForSignature[])
     .join("|");
 }
 
-export function createEmptyIndexes(): ProjectAnalysisIndexes {
-  return {
-    sourceFilesById: new Map(),
-    stylesheetsById: new Map(),
-    classReferencesById: new Map(),
-    staticallySkippedClassReferencesById: new Map(),
-    classDefinitionsById: new Map(),
-    classContextsById: new Map(),
-    selectorQueriesById: new Map(),
-    selectorBranchesById: new Map(),
-    classOwnershipById: new Map(),
-    componentsById: new Map(),
-    unsupportedClassReferencesById: new Map(),
-    cssModuleImportsById: new Map(),
-    cssModuleAliasesById: new Map(),
-    cssModuleDestructuredBindingsById: new Map(),
-    cssModuleMemberReferencesById: new Map(),
-    cssModuleReferenceDiagnosticsById: new Map(),
-    sourceFileIdByPath: new Map(),
-    stylesheetIdByPath: new Map(),
-    componentIdByFilePathAndName: new Map(),
-    componentIdByComponentKey: new Map(),
-    definitionsByClassName: new Map(),
-    definitionsByStylesheetId: new Map(),
-    contextsByClassName: new Map(),
-    contextsByStylesheetId: new Map(),
-    referencesByClassName: new Map(),
-    staticallySkippedReferencesByClassName: new Map(),
-    referencesBySourceFileId: new Map(),
-    reachableStylesheetsBySourceFileId: new Map(),
-    reachableStylesheetsByComponentId: new Map(),
-    selectorQueriesByStylesheetId: new Map(),
-    selectorBranchesByStylesheetId: new Map(),
-    selectorBranchesByQueryId: new Map(),
-    selectorBranchesByRuleKey: new Map(),
-    classOwnershipByClassDefinitionId: new Map(),
-    classOwnershipByStylesheetId: new Map(),
-    classOwnershipByOwnerComponentId: new Map(),
-    classOwnershipByConsumerComponentId: new Map(),
-    referenceMatchesById: new Map(),
-    matchesByReferenceId: new Map(),
-    referenceMatchesByReferenceAndClassName: new Map(),
-    providerSatisfactionsById: new Map(),
-    providerSatisfactionsByReferenceId: new Map(),
-    providerSatisfactionsByReferenceAndClassName: new Map(),
-    selectorMatchesById: new Map(),
-    selectorMatchesByQueryId: new Map(),
-    cssModuleMemberMatchesById: new Map(),
-    cssModuleImportsBySourceFileId: new Map(),
-    cssModuleImportsByStylesheetId: new Map(),
-    cssModuleAliasesByImportId: new Map(),
-    cssModuleDestructuredBindingsByImportId: new Map(),
-    cssModuleMemberReferencesByImportId: new Map(),
-    cssModuleMemberReferencesByStylesheetAndClassName: new Map(),
-    cssModuleMemberMatchesByReferenceId: new Map(),
-    cssModuleMemberMatchesByDefinitionId: new Map(),
-    cssModuleReferenceDiagnosticsByImportId: new Map(),
-  };
-}
-
 export function createClassDefinitionId(
-  stylesheetId: ProjectAnalysisId,
+  stylesheetId: ProjectEvidenceId,
   definition: ClassDefinitionAnalysis["sourceDefinition"],
-): ProjectAnalysisId {
+): ProjectEvidenceId {
   return [
     "class-definition",
     stylesheetId,
@@ -374,9 +314,9 @@ export function createClassDefinitionId(
 }
 
 export function createClassContextId(
-  stylesheetId: ProjectAnalysisId,
+  stylesheetId: ProjectEvidenceId,
   context: ClassContextAnalysis["sourceContext"],
-): ProjectAnalysisId {
+): ProjectEvidenceId {
   return [
     "class-context",
     stylesheetId,
@@ -393,7 +333,7 @@ export function createClassContextId(
 export function createSelectorQueryId(
   selectorQueryResult: SelectorQueryResult,
   index: number,
-): ProjectAnalysisId {
+): ProjectEvidenceId {
   const anchor =
     selectorQueryResult.source.kind === "css-source"
       ? selectorQueryResult.source.selectorAnchor
@@ -407,7 +347,7 @@ export function createSelectorBranchId(
   selectorQuery: SelectorQueryAnalysis,
   branchIndex: number,
   index: number,
-): ProjectAnalysisId {
+): ProjectEvidenceId {
   const anchor = selectorQuery.location;
   return anchor
     ? createAnchorId("selector-branch", anchor, branchIndex)
@@ -427,7 +367,7 @@ export function createAnchorId(
   kind: string,
   anchor: SourceAnchor,
   index: number,
-): ProjectAnalysisId {
+): ProjectEvidenceId {
   const normalizedAnchor = normalizeAnchor(anchor);
   return [
     kind,
@@ -438,15 +378,15 @@ export function createAnchorId(
   ].join(":");
 }
 
-export function createPathId(kind: string, filePath: string): ProjectAnalysisId {
+export function createPathId(kind: string, filePath: string): ProjectEvidenceId {
   return `${kind}:${normalizeProjectPath(filePath)}`;
 }
 
-export function createComponentId(filePath: string, componentName: string): ProjectAnalysisId {
+export function createComponentId(filePath: string, componentName: string): ProjectEvidenceId {
   return `component:${filePath}:${componentName}`;
 }
 
-export function createComponentIdFromKey(componentKey: string): ProjectAnalysisId {
+export function createComponentIdFromKey(componentKey: string): ProjectEvidenceId {
   return `component:${stableHash(componentKey)}`;
 }
 
@@ -455,19 +395,19 @@ export function createComponentKey(filePath: string, componentName: string): str
 }
 
 export function createReachabilityContextKey(
-  stylesheetId: ProjectAnalysisId,
+  stylesheetId: ProjectEvidenceId,
   kind: "source" | "component",
-  id: ProjectAnalysisId,
+  id: ProjectEvidenceId,
 ): string {
   return `${stylesheetId}:${kind}:${id}`;
 }
 
-export function createReferenceClassKey(referenceId: ProjectAnalysisId, className: string): string {
+export function createReferenceClassKey(referenceId: ProjectEvidenceId, className: string): string {
   return `${referenceId}:${className}`;
 }
 
 export function createStylesheetClassKey(
-  stylesheetId: ProjectAnalysisId,
+  stylesheetId: ProjectEvidenceId,
   className: string,
 ): string {
   return `${stylesheetId}:${className}`;
@@ -477,7 +417,7 @@ export function createCssModuleImportId(input: {
   sourceFilePath: string;
   stylesheetFilePath: string;
   localName: string;
-}): ProjectAnalysisId {
+}): ProjectEvidenceId {
   return [
     "css-module-import",
     normalizeProjectPath(input.sourceFilePath),
@@ -488,9 +428,9 @@ export function createCssModuleImportId(input: {
 
 export function createCssModuleMemberReferenceId(
   location: SourceAnchor,
-  importId: ProjectAnalysisId,
+  importId: ProjectEvidenceId,
   memberName: string,
-): ProjectAnalysisId {
+): ProjectEvidenceId {
   return [
     "css-module-member-reference",
     importId,
@@ -502,9 +442,9 @@ export function createCssModuleMemberReferenceId(
 
 export function createCssModuleAliasId(
   location: SourceAnchor,
-  importId: ProjectAnalysisId,
+  importId: ProjectEvidenceId,
   aliasName: string,
-): ProjectAnalysisId {
+): ProjectEvidenceId {
   return ["css-module-alias", importId, aliasName, location.startLine, location.startColumn].join(
     ":",
   );
@@ -512,10 +452,10 @@ export function createCssModuleAliasId(
 
 export function createCssModuleDestructuredBindingId(
   location: SourceAnchor,
-  importId: ProjectAnalysisId,
+  importId: ProjectEvidenceId,
   memberName: string,
   bindingName: string,
-): ProjectAnalysisId {
+): ProjectEvidenceId {
   return [
     "css-module-destructured-binding",
     importId,
@@ -528,8 +468,8 @@ export function createCssModuleDestructuredBindingId(
 
 export function createCssModuleDiagnosticId(
   location: SourceAnchor,
-  importId: ProjectAnalysisId,
-): ProjectAnalysisId {
+  importId: ProjectEvidenceId,
+): ProjectEvidenceId {
   return [
     "css-module-reference-diagnostic",
     importId,

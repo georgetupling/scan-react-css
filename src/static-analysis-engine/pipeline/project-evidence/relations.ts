@@ -1,8 +1,5 @@
 import { buildCssModuleMemberMatches } from "./entities/cssModules.js";
-import type {
-  ProjectAnalysisBuildInput,
-  ProjectAnalysisIndexes,
-} from "../project-analysis/index.js";
+import type { ProjectEvidenceBuildInput, ProjectEvidenceBuilderIndexes } from "./analysisTypes.js";
 import { buildComponentRenders, buildModuleImports } from "./relations/moduleAndComponent.js";
 import {
   buildProviderClassSatisfactions,
@@ -13,9 +10,9 @@ import { buildStylesheetReachability } from "./relations/stylesheetReachability.
 import type { ProjectEvidenceEntities, ProjectEvidenceRelations } from "./types.js";
 
 export function buildProjectEvidenceRelations(input: {
-  projectInput: ProjectAnalysisBuildInput;
+  projectInput: ProjectEvidenceBuildInput;
   entities: ProjectEvidenceEntities;
-  indexes: ProjectAnalysisIndexes;
+  indexes: ProjectEvidenceBuilderIndexes;
   includeTraces: boolean;
 }): ProjectEvidenceRelations {
   const stylesheetReachability = buildStylesheetReachability(

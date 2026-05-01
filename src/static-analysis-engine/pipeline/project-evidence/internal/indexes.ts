@@ -1,87 +1,22 @@
 import type {
   ClassContextAnalysis,
   ClassDefinitionAnalysis,
-  ClassOwnershipAnalysis,
   ClassReferenceAnalysis,
-  ClassReferenceMatchRelation,
   ComponentAnalysis,
   CssModuleAliasAnalysis,
   CssModuleDestructuredBindingAnalysis,
   CssModuleImportAnalysis,
-  CssModuleMemberMatchRelation,
   CssModuleMemberReferenceAnalysis,
   CssModuleReferenceDiagnosticAnalysis,
-  ProjectAnalysisIndexes,
-  ProviderClassSatisfactionRelation,
+  ProjectEvidenceBuilderIndexes,
   SelectorBranchAnalysis,
-  SelectorMatchRelation,
   SelectorQueryAnalysis,
   SourceFileAnalysis,
   StaticallySkippedClassReferenceAnalysis,
   StylesheetAnalysis,
   UnsupportedClassReferenceAnalysis,
-} from "../types.js";
-import {
-  pushMapValue,
-  sortIndexValues,
-  createReferenceClassKey,
-  createStylesheetClassKey,
-} from "./shared.js";
-
-export function indexRelations(input: {
-  referenceMatches: ClassReferenceMatchRelation[];
-  providerClassSatisfactions: ProviderClassSatisfactionRelation[];
-  selectorMatches: SelectorMatchRelation[];
-  cssModuleMemberMatches: CssModuleMemberMatchRelation[];
-  indexes: ProjectAnalysisIndexes;
-}): void {
-  for (const match of input.referenceMatches) {
-    input.indexes.referenceMatchesById.set(match.id, match);
-    pushMapValue(input.indexes.matchesByReferenceId, match.referenceId, match.id);
-    pushMapValue(
-      input.indexes.referenceMatchesByReferenceAndClassName,
-      createReferenceClassKey(match.referenceId, match.className),
-      match.id,
-    );
-  }
-  for (const satisfaction of input.providerClassSatisfactions) {
-    input.indexes.providerSatisfactionsById.set(satisfaction.id, satisfaction);
-    pushMapValue(input.indexes.matchesByReferenceId, satisfaction.referenceId, satisfaction.id);
-    pushMapValue(
-      input.indexes.providerSatisfactionsByReferenceId,
-      satisfaction.referenceId,
-      satisfaction.id,
-    );
-    pushMapValue(
-      input.indexes.providerSatisfactionsByReferenceAndClassName,
-      createReferenceClassKey(satisfaction.referenceId, satisfaction.className),
-      satisfaction.id,
-    );
-  }
-  for (const match of input.selectorMatches) {
-    input.indexes.selectorMatchesById.set(match.id, match);
-    pushMapValue(input.indexes.selectorMatchesByQueryId, match.selectorQueryId, match.id);
-  }
-  for (const match of input.cssModuleMemberMatches) {
-    input.indexes.cssModuleMemberMatchesById.set(match.id, match);
-    pushMapValue(input.indexes.cssModuleMemberMatchesByReferenceId, match.referenceId, match.id);
-    if (match.definitionId) {
-      pushMapValue(
-        input.indexes.cssModuleMemberMatchesByDefinitionId,
-        match.definitionId,
-        match.id,
-      );
-    }
-  }
-
-  sortIndexValues(input.indexes.matchesByReferenceId);
-  sortIndexValues(input.indexes.referenceMatchesByReferenceAndClassName);
-  sortIndexValues(input.indexes.providerSatisfactionsByReferenceId);
-  sortIndexValues(input.indexes.providerSatisfactionsByReferenceAndClassName);
-  sortIndexValues(input.indexes.selectorMatchesByQueryId);
-  sortIndexValues(input.indexes.cssModuleMemberMatchesByReferenceId);
-  sortIndexValues(input.indexes.cssModuleMemberMatchesByDefinitionId);
-}
+} from "../analysisTypes.js";
+import { pushMapValue, sortIndexValues, createStylesheetClassKey } from "./shared.js";
 
 export function indexEntities(input: {
   sourceFiles: SourceFileAnalysis[];
@@ -99,7 +34,7 @@ export function indexEntities(input: {
   cssModuleDestructuredBindings: CssModuleDestructuredBindingAnalysis[];
   cssModuleMemberReferences: CssModuleMemberReferenceAnalysis[];
   cssModuleReferenceDiagnostics: CssModuleReferenceDiagnosticAnalysis[];
-  indexes: ProjectAnalysisIndexes;
+  indexes: ProjectEvidenceBuilderIndexes;
 }): void {
   for (const sourceFile of input.sourceFiles) {
     input.indexes.sourceFilesById.set(sourceFile.id, sourceFile);
@@ -207,32 +142,7 @@ export function indexEntities(input: {
   sortIndexValues(input.indexes.cssModuleReferenceDiagnosticsByImportId);
 }
 
-export function indexClassOwnership(
-  ownershipRecords: ClassOwnershipAnalysis[],
-  indexes: ProjectAnalysisIndexes,
-): void {
-  for (const ownership of ownershipRecords) {
-    indexes.classOwnershipById.set(ownership.id, ownership);
-    indexes.classOwnershipByClassDefinitionId.set(ownership.classDefinitionId, ownership.id);
-    pushMapValue(indexes.classOwnershipByStylesheetId, ownership.stylesheetId, ownership.id);
-
-    for (const candidate of ownership.ownerCandidates) {
-      if (candidate.kind === "component" && candidate.id) {
-        pushMapValue(indexes.classOwnershipByOwnerComponentId, candidate.id, ownership.id);
-      }
-    }
-
-    for (const consumerComponentId of ownership.consumerSummary.consumerComponentIds) {
-      pushMapValue(indexes.classOwnershipByConsumerComponentId, consumerComponentId, ownership.id);
-    }
-  }
-
-  sortIndexValues(indexes.classOwnershipByStylesheetId);
-  sortIndexValues(indexes.classOwnershipByOwnerComponentId);
-  sortIndexValues(indexes.classOwnershipByConsumerComponentId);
-}
-
-export function createEmptyIndexes(): ProjectAnalysisIndexes {
+export function createEmptyIndexes(): ProjectEvidenceBuilderIndexes {
   return {
     sourceFilesById: new Map(),
     stylesheetsById: new Map(),
@@ -242,7 +152,6 @@ export function createEmptyIndexes(): ProjectAnalysisIndexes {
     classContextsById: new Map(),
     selectorQueriesById: new Map(),
     selectorBranchesById: new Map(),
-    classOwnershipById: new Map(),
     componentsById: new Map(),
     unsupportedClassReferencesById: new Map(),
     cssModuleImportsById: new Map(),
@@ -267,27 +176,12 @@ export function createEmptyIndexes(): ProjectAnalysisIndexes {
     selectorBranchesByStylesheetId: new Map(),
     selectorBranchesByQueryId: new Map(),
     selectorBranchesByRuleKey: new Map(),
-    classOwnershipByClassDefinitionId: new Map(),
-    classOwnershipByStylesheetId: new Map(),
-    classOwnershipByOwnerComponentId: new Map(),
-    classOwnershipByConsumerComponentId: new Map(),
-    referenceMatchesById: new Map(),
-    matchesByReferenceId: new Map(),
-    referenceMatchesByReferenceAndClassName: new Map(),
-    providerSatisfactionsById: new Map(),
-    providerSatisfactionsByReferenceId: new Map(),
-    providerSatisfactionsByReferenceAndClassName: new Map(),
-    selectorMatchesById: new Map(),
-    selectorMatchesByQueryId: new Map(),
-    cssModuleMemberMatchesById: new Map(),
     cssModuleImportsBySourceFileId: new Map(),
     cssModuleImportsByStylesheetId: new Map(),
     cssModuleAliasesByImportId: new Map(),
     cssModuleDestructuredBindingsByImportId: new Map(),
     cssModuleMemberReferencesByImportId: new Map(),
     cssModuleMemberReferencesByStylesheetAndClassName: new Map(),
-    cssModuleMemberMatchesByReferenceId: new Map(),
-    cssModuleMemberMatchesByDefinitionId: new Map(),
     cssModuleReferenceDiagnosticsByImportId: new Map(),
   };
 }
