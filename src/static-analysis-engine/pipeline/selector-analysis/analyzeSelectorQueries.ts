@@ -10,11 +10,13 @@ import type {
   SelectorReachabilityEvidence,
 } from "./types.js";
 import type { RenderModel, RenderPathSegment } from "../render-structure/types.js";
+import type {
+  SelectorBranchMatch,
+  SelectorBranchReachability,
+} from "../selector-reachability/types.js";
+import { selectorBranchSourceKey } from "../selector-reachability/index.js";
 import { buildSelectorQueryResult } from "./resultUtils.js";
-import { analyzeAncestorDescendantConstraint } from "./adapters/ancestorDescendant.js";
-import { analyzeParentChildConstraint } from "./adapters/parentChild.js";
-import { analyzeSameNodeClassConjunction } from "./adapters/sameNodeConjunction.js";
-import { analyzeSiblingConstraint } from "./adapters/sibling.js";
+import { attachMatchedReachability } from "./reachabilityResultUtils.js";
 
 type AvailableContextRecord = StylesheetReachabilityContextRecord & {
   availability: "definite" | "possible";
@@ -109,47 +111,305 @@ function analyzeSelectorQuery(input: {
     });
   }
 
-  if (constraint.kind === "same-node-class-conjunction") {
-    return analyzeSameNodeClassConjunction({
-      selectorQuery: input.selectorQuery,
-      constraint,
-      analysisTargets,
-      renderModelIndex: input.renderModelIndex,
-      selectorReachability: input.selectorReachability,
-      includeTraces: input.includeTraces,
-    });
-  }
-
-  if (constraint.kind === "parent-child") {
-    return analyzeParentChildConstraint({
-      selectorQuery: input.selectorQuery,
-      constraint,
-      analysisTargets,
-      renderModelIndex: input.renderModelIndex,
-      selectorReachability: input.selectorReachability,
-      includeTraces: input.includeTraces,
-    });
-  }
-
-  if (constraint.kind === "sibling") {
-    return analyzeSiblingConstraint({
-      selectorQuery: input.selectorQuery,
-      constraint,
-      analysisTargets,
-      renderModelIndex: input.renderModelIndex,
-      selectorReachability: input.selectorReachability,
-      includeTraces: input.includeTraces,
-    });
-  }
-
-  return analyzeAncestorDescendantConstraint({
+  return analyzeSelectorReachabilityBranch({
     selectorQuery: input.selectorQuery,
-    constraint,
     analysisTargets,
-    renderModelIndex: input.renderModelIndex,
     selectorReachability: input.selectorReachability,
     includeTraces: input.includeTraces,
   });
+}
+
+function analyzeSelectorReachabilityBranch(input: {
+  selectorQuery: ParsedSelectorQuery;
+  analysisTargets: SelectorAnalysisTarget[];
+  selectorReachability?: SelectorReachabilityEvidence;
+  includeTraces: boolean;
+}): SelectorQueryResult {
+  const includeTraces = input.includeTraces ?? true;
+  const anchor =
+    input.selectorQuery.source.kind === "css-source"
+      ? input.selectorQuery.source.selectorAnchor
+      : undefined;
+  const branch = getSelectorReachabilityBranch(input);
+
+  if (!branch) {
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
+      outcome: "possible-match",
+      status: "unsupported",
+      reasons: ["selector reachability evidence is unavailable for this selector query"],
+      certainty: "unknown",
+      dimensions: {
+        structure: "unsupported",
+      },
+      traces: includeTraces
+        ? [
+            {
+              traceId: "selector-reachability:missing-branch",
+              category: "selector-match",
+              summary: "selector reachability evidence is unavailable for this selector query",
+              anchor,
+              children: input.selectorQuery.parseTraces,
+              metadata: {
+                selectorText: input.selectorQuery.selectorText,
+              },
+            },
+          ]
+        : [],
+      includeTraces,
+    });
+  }
+
+  if (branch.status === "unsupported") {
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
+      outcome: "possible-match",
+      status: "unsupported",
+      reasons: ["selector branch contains unsupported selector semantics"],
+      certainty: "unknown",
+      dimensions: {
+        structure: "unsupported",
+      },
+      traces: includeTraces
+        ? [
+            {
+              traceId: "selector-reachability:unsupported",
+              category: "selector-match",
+              summary: "Stage 6 could not resolve this selector branch",
+              anchor,
+              children: branch.traces,
+              metadata: {
+                selectorBranchNodeId: branch.selectorBranchNodeId,
+              },
+            },
+          ]
+        : [],
+      includeTraces,
+    });
+  }
+
+  const scopedMatches = getScopedSelectorBranchMatches({
+    branch,
+    selectorReachability: input.selectorReachability,
+    analysisTargets: input.analysisTargets,
+  });
+  const matchedTargets = getMatchedTargets({
+    matches: scopedMatches,
+    analysisTargets: input.analysisTargets,
+  });
+  const matchSummary = summarizeMatches(scopedMatches, matchedTargets);
+
+  if (matchSummary.hasDefiniteMatch) {
+    return attachMatchedReachability({
+      selectorQuery: input.selectorQuery,
+      matchedTargets,
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
+        outcome: "match",
+        status: "resolved",
+        reasons: [buildMatchReason(input.selectorQuery, "definite")],
+        certainty: "definite",
+        dimensions: { structure: "definite" },
+        traces: includeTraces
+          ? [
+              {
+                traceId: "selector-reachability:definite",
+                category: "selector-match",
+                summary: buildMatchReason(input.selectorQuery, "definite"),
+                anchor,
+                children: branch.traces,
+                metadata: {
+                  selectorBranchNodeId: branch.selectorBranchNodeId,
+                  matchCount: scopedMatches.length,
+                },
+              },
+            ]
+          : [],
+        includeTraces,
+      }),
+      includeTraces,
+    });
+  }
+
+  if (matchSummary.hasPossibleMatch) {
+    return attachMatchedReachability({
+      selectorQuery: input.selectorQuery,
+      matchedTargets,
+      result: buildSelectorQueryResult({
+        selectorQuery: input.selectorQuery,
+        outcome: "possible-match",
+        status: "resolved",
+        reasons: [buildMatchReason(input.selectorQuery, "possible")],
+        certainty: "possible",
+        dimensions: { structure: "possible" },
+        traces: includeTraces
+          ? [
+              {
+                traceId: "selector-reachability:possible",
+                category: "selector-match",
+                summary: buildMatchReason(input.selectorQuery, "possible"),
+                anchor,
+                children: branch.traces,
+                metadata: {
+                  selectorBranchNodeId: branch.selectorBranchNodeId,
+                  matchCount: scopedMatches.length,
+                },
+              },
+            ]
+          : [],
+        includeTraces,
+      }),
+      includeTraces,
+    });
+  }
+
+  if (matchSummary.hasUnknownContextMatch) {
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
+      outcome: "possible-match",
+      status: "unsupported",
+      reasons: ["selector can only match through unknown render or class context"],
+      certainty: "unknown",
+      dimensions: { structure: "unsupported" },
+      traces: includeTraces
+        ? [
+            {
+              traceId: "selector-reachability:unknown-context",
+              category: "selector-match",
+              summary: "Stage 6 found this selector can only match through unknown context",
+              anchor,
+              children: branch.traces,
+              metadata: {
+                selectorBranchNodeId: branch.selectorBranchNodeId,
+                matchCount: scopedMatches.length,
+              },
+            },
+          ]
+        : [],
+      includeTraces,
+    });
+  }
+
+  return buildSelectorQueryResult({
+    selectorQuery: input.selectorQuery,
+    outcome: "no-match-under-bounded-analysis",
+    status: "resolved",
+    reasons: [buildNoMatchReason(input.selectorQuery, branch, scopedMatches.length)],
+    certainty: "definite",
+    dimensions: { structure: "not-found-under-bounded-analysis" },
+    traces: includeTraces
+      ? [
+          {
+            traceId: "selector-reachability:no-match",
+            category: "selector-match",
+            summary: buildNoMatchReason(input.selectorQuery, branch, scopedMatches.length),
+            anchor,
+            children: branch.traces,
+            metadata: {
+              selectorBranchNodeId: branch.selectorBranchNodeId,
+              globalMatchCount: branch.matchIds.length,
+              scopedMatchCount: scopedMatches.length,
+            },
+          },
+        ]
+      : [],
+    includeTraces,
+  });
+}
+
+function getSelectorReachabilityBranch(input: {
+  selectorQuery: ParsedSelectorQuery;
+  selectorReachability?: SelectorReachabilityEvidence;
+}): SelectorBranchReachability | undefined {
+  if (!input.selectorReachability || input.selectorQuery.source.kind !== "css-source") {
+    return undefined;
+  }
+
+  return input.selectorReachability.indexes.branchReachabilityBySourceKey.get(
+    selectorBranchSourceKey({
+      ruleKey: input.selectorQuery.source.ruleKey,
+      branchIndex: input.selectorQuery.source.branchIndex,
+      selectorText: input.selectorQuery.selectorText,
+      location: input.selectorQuery.source.selectorAnchor,
+    }),
+  );
+}
+
+function getScopedSelectorBranchMatches(input: {
+  branch: SelectorBranchReachability;
+  selectorReachability?: SelectorReachabilityEvidence;
+  analysisTargets: SelectorAnalysisTarget[];
+}): SelectorBranchMatch[] {
+  if (!input.selectorReachability) {
+    return [];
+  }
+
+  const scopedElementIds = new Set(
+    input.analysisTargets.flatMap((analysisTarget) => analysisTarget.elementIds),
+  );
+  return input.branch.matchIds
+    .map((matchId) => input.selectorReachability?.indexes.matchById.get(matchId))
+    .filter((match): match is SelectorBranchMatch => Boolean(match))
+    .filter((match) => scopedElementIds.has(match.subjectElementId));
+}
+
+function getMatchedTargets(input: {
+  matches: SelectorBranchMatch[];
+  analysisTargets: SelectorAnalysisTarget[];
+}): SelectorAnalysisTarget[] {
+  const targetsById = new Map<string, SelectorAnalysisTarget>();
+  for (const match of input.matches) {
+    for (const target of input.analysisTargets) {
+      if (target.elementIds.includes(match.subjectElementId)) {
+        targetsById.set(target.targetId, target);
+      }
+    }
+  }
+
+  return [...targetsById.values()].sort((left, right) =>
+    left.targetId.localeCompare(right.targetId),
+  );
+}
+
+function summarizeMatches(
+  matches: SelectorBranchMatch[],
+  matchedTargets: SelectorAnalysisTarget[],
+): {
+  hasDefiniteMatch: boolean;
+  hasPossibleMatch: boolean;
+  hasUnknownContextMatch: boolean;
+} {
+  return {
+    hasDefiniteMatch:
+      matches.some((match) => match.certainty === "definite") &&
+      matchedTargets.some((target) => target.reachabilityAvailability === "definite"),
+    hasPossibleMatch:
+      matches.some((match) => match.certainty === "possible") ||
+      (matches.some((match) => match.certainty === "definite") &&
+        matchedTargets.some((target) => target.reachabilityAvailability === "possible")),
+    hasUnknownContextMatch: matches.some((match) => match.certainty === "unknown-context"),
+  };
+}
+
+function buildMatchReason(
+  selectorQuery: ParsedSelectorQuery,
+  certainty: "definite" | "possible",
+): string {
+  return certainty === "definite"
+    ? `Stage 6 found a rendered selector match for "${selectorQuery.selectorText}"`
+    : `Stage 6 found a possible rendered selector match for "${selectorQuery.selectorText}"`;
+}
+
+function buildNoMatchReason(
+  selectorQuery: ParsedSelectorQuery,
+  branch: SelectorBranchReachability,
+  scopedMatchCount: number,
+): string {
+  if (branch.matchIds.length > 0 && scopedMatchCount === 0) {
+    return `Stage 6 found selector matches for "${selectorQuery.selectorText}", but not in stylesheet-reachable render contexts`;
+  }
+
+  return `Stage 6 found no rendered selector match for "${selectorQuery.selectorText}"`;
 }
 
 function buildSelectorRenderModelIndex(renderModel: RenderModel): SelectorRenderModelIndex {
