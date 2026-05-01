@@ -1,5 +1,15 @@
-import type { AnalysisTrace } from "../../static-analysis-engine/index.js";
+import type {
+  AnalysisTrace,
+  SelectorBranchReachability,
+} from "../../static-analysis-engine/index.js";
 import type { RuleContext, RuleDefinition, UnresolvedFinding } from "../types.js";
+import {
+  buildReachabilitySelectorEvidence,
+  getProjectSelectorBranchForReachability,
+  getSelectorReachabilityBranches,
+  isReachabilityMatched,
+  type ProjectSelectorBranch,
+} from "./selectorReachabilityRuleUtils.js";
 
 export const unusedCompoundSelectorBranchRule: RuleDefinition = {
   id: "unused-compound-selector-branch",
@@ -10,70 +20,72 @@ export const unusedCompoundSelectorBranchRule: RuleDefinition = {
 
 function runUnusedCompoundSelectorBranchRule(context: RuleContext): UnresolvedFinding[] {
   const findings: UnresolvedFinding[] = [];
+  const branchesByRuleKey = new Map<string, SelectorBranchReachability[]>();
 
-  for (const branchIds of context.analysis.indexes.selectorBranchesByRuleKey.values()) {
-    const branches = branchIds
-      .map((branchId) => context.analysis.indexes.selectorBranchesById.get(branchId))
-      .filter((branch): branch is NonNullable<typeof branch> => Boolean(branch));
+  for (const branch of getSelectorReachabilityBranches(context)) {
+    const branches = branchesByRuleKey.get(branch.ruleKey) ?? [];
+    branches.push(branch);
+    branchesByRuleKey.set(branch.ruleKey, branches);
+  }
 
+  for (const branches of branchesByRuleKey.values()) {
     if (branches.length < 2) {
       continue;
     }
 
-    const usefulBranches = branches.filter(
-      (branch) => branch.outcome === "match" || branch.outcome === "possible-match",
-    );
+    const usefulBranches = branches.filter(isReachabilityMatched);
     if (usefulBranches.length === 0) {
       continue;
     }
 
     for (const branch of branches) {
-      if (
-        branch.status !== "resolved" ||
-        branch.outcome !== "no-match-under-bounded-analysis" ||
-        branch.constraint?.kind === "unsupported"
-      ) {
+      if (branch.status !== "not-matchable" || branch.requirement.kind === "unsupported") {
         continue;
       }
 
+      const projectBranch = getProjectSelectorBranchForReachability(context, branch);
+      const projectUsefulBranches = usefulBranches
+        .map((usefulBranch) => getProjectSelectorBranchForReachability(context, usefulBranch))
+        .filter((candidate): candidate is ProjectSelectorBranch => Boolean(candidate));
+
       findings.push({
-        id: `unused-compound-selector-branch:${branch.id}`,
+        id: `unused-compound-selector-branch:${projectBranch?.id ?? branch.selectorBranchNodeId}`,
         ruleId: "unused-compound-selector-branch",
         confidence: branch.confidence,
-        message: `Selector branch "${branch.selectorText}" appears unused while another branch in "${branch.selectorListText}" can match.`,
-        subject: {
-          kind: "selector-branch",
-          id: branch.id,
-        },
+        message: `Selector branch "${branch.branchText}" appears unused while another branch in "${branch.selectorListText}" can match.`,
+        subject: projectBranch
+          ? {
+              kind: "selector-branch",
+              id: projectBranch.id,
+            }
+          : {
+              kind: "selector-branch",
+              id: branch.selectorBranchNodeId,
+            },
         location: branch.location,
-        evidence: [
-          ...(branch.stylesheetId
-            ? [
-                {
-                  kind: "stylesheet" as const,
-                  id: branch.stylesheetId,
-                },
-              ]
-            : []),
-          ...usefulBranches.map((usefulBranch) => ({
-            kind: "selector-branch" as const,
-            id: usefulBranch.id,
-          })),
-        ],
+        evidence: buildReachabilitySelectorEvidence({
+          context,
+          projectBranch,
+          extraBranches: projectUsefulBranches,
+        }),
         traces:
           context.includeTraces === false
             ? []
             : buildUnusedBranchTraces({
                 branch,
+                projectBranch,
                 usefulBranches,
+                projectUsefulBranches,
               }),
         data: {
-          selectorText: branch.selectorText,
+          selectorText: branch.branchText,
           selectorListText: branch.selectorListText,
           branchIndex: branch.branchIndex,
           branchCount: branch.branchCount,
-          matchingBranchIds: usefulBranches.map((usefulBranch) => usefulBranch.id),
-          reasons: branch.sourceQuery.sourceResult.reasons,
+          matchingBranchIds: projectUsefulBranches.map((usefulBranch) => usefulBranch.id),
+          selectorReachabilityStatus: branch.status,
+          selectorBranchNodeId: branch.selectorBranchNodeId,
+          reasons: projectBranch?.sourceQuery.sourceResult.reasons ?? [],
         },
       });
     }
@@ -83,36 +95,42 @@ function runUnusedCompoundSelectorBranchRule(context: RuleContext): UnresolvedFi
 }
 
 function buildUnusedBranchTraces(input: {
-  branch: RuleContext["analysis"]["entities"]["selectorBranches"][number];
-  usefulBranches: RuleContext["analysis"]["entities"]["selectorBranches"];
+  branch: SelectorBranchReachability;
+  projectBranch?: ProjectSelectorBranch;
+  usefulBranches: SelectorBranchReachability[];
+  projectUsefulBranches: ProjectSelectorBranch[];
 }): AnalysisTrace[] {
   return [
     {
-      traceId: `rule-evaluation:unused-compound-selector-branch:${input.branch.id}`,
+      traceId: `rule-evaluation:unused-compound-selector-branch:${input.projectBranch?.id ?? input.branch.selectorBranchNodeId}`,
       category: "rule-evaluation",
-      summary: `selector branch "${input.branch.selectorText}" had no bounded match, but another branch in the selector list did`,
+      summary: `selector branch "${input.branch.branchText}" had no bounded match, but another branch in the selector list did`,
       anchor: input.branch.location,
       children: [
-        ...input.branch.traces,
-        ...input.usefulBranches.flatMap((branch) => branch.traces),
+        ...(input.projectBranch?.traces ?? []),
+        ...input.projectUsefulBranches.flatMap((branch) => branch.traces),
         {
-          traceId: `rule-evaluation:unused-compound-selector-branch:${input.branch.id}:sibling-branch-check`,
+          traceId: `rule-evaluation:unused-compound-selector-branch:${input.projectBranch?.id ?? input.branch.selectorBranchNodeId}:sibling-branch-check`,
           category: "rule-evaluation",
           summary: "at least one sibling selector branch had a bounded match or possible match",
           anchor: input.branch.location,
           children: [],
           metadata: {
-            selectorText: input.branch.selectorText,
+            selectorText: input.branch.branchText,
             selectorListText: input.branch.selectorListText,
-            matchingBranchIds: input.usefulBranches.map((branch) => branch.id),
+            matchingBranchIds: input.projectUsefulBranches.map((branch) => branch.id),
+            matchingSelectorReachabilityBranchIds: input.usefulBranches.map(
+              (branch) => branch.selectorBranchNodeId,
+            ),
           },
         },
       ],
       metadata: {
         ruleId: "unused-compound-selector-branch",
-        selectorBranchId: input.branch.id,
-        selectorQueryId: input.branch.selectorQueryId,
-        selectorText: input.branch.selectorText,
+        selectorBranchId: input.projectBranch?.id,
+        selectorReachabilityBranchId: input.branch.selectorBranchNodeId,
+        selectorQueryId: input.projectBranch?.selectorQueryId,
+        selectorText: input.branch.branchText,
       },
     },
   ];
