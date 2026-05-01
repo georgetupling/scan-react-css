@@ -341,6 +341,118 @@ test("ownership inference builds stylesheet ownership evidence from Stage 7A imp
   );
 });
 
+test("ownership inference preserves Stage 6 selector context evidence", () => {
+  const selectorLocation = { filePath: "src/Button.css", startLine: 3, startColumn: 1 };
+  const selectorReachability = selectorReachabilityWithBranch({
+    selectorBranchNodeId: "selector-branch-node:panel",
+    ruleKey: "rule:panel",
+    branchText: ".button .panel",
+    location: selectorLocation,
+    requiredClassNames: ["button", "panel"],
+    matchIds: ["selector-match:panel"],
+    status: "definitely-matchable",
+    requirement: {
+      kind: "ancestor-descendant",
+      ancestorClassName: "button",
+      subjectClassName: "panel",
+      normalizedSteps: [],
+      parseNotes: [],
+      traces: [],
+    },
+  });
+  const result = buildOwnershipInference({
+    projectEvidence: buildProjectEvidence({
+      entities: {
+        stylesheets: [stylesheet({ id: "style:button", filePath: "src/Button.css" })],
+        components: [
+          component({
+            id: "component:button",
+            filePath: "src/Button.tsx",
+            componentName: "Button",
+          }),
+        ],
+        classDefinitions: [
+          classDefinition({
+            id: "definition:panel",
+            stylesheetId: "style:button",
+            className: "panel",
+            selectorText: ".button .panel",
+            line: 3,
+            contextClassNames: ["button"],
+          }),
+        ],
+        classReferences: [
+          classReference({
+            id: "reference:panel",
+            sourceFileId: "source:button",
+            componentId: "component:button",
+            className: "panel",
+          }),
+        ],
+        selectorBranches: [
+          selectorBranch({
+            id: "project-selector-branch:panel",
+            stylesheetId: "style:button",
+            selectorText: ".button .panel",
+            ruleKey: "rule:panel",
+            location: selectorLocation,
+          }),
+        ],
+      },
+      relations: {
+        referenceMatches: [
+          referenceMatch({
+            id: "match:panel",
+            referenceId: "reference:panel",
+            definitionId: "definition:panel",
+            className: "panel",
+            referenceClassKind: "definite",
+            reachability: "definite",
+          }),
+        ],
+      },
+    }),
+    selectorReachability,
+    options: {
+      includeTraces: false,
+    },
+    compatibility: {
+      classOwnership: [
+        legacyClassOwnership({
+          id: "class-ownership:definition:panel",
+          classDefinitionId: "definition:panel",
+          stylesheetId: "style:button",
+          className: "panel",
+          evidenceKind: "single-importing-component",
+          ownerComponentId: "component:button",
+          reasons: ["single-importing-component", "sibling-basename-convention"],
+          confidence: "high",
+        }),
+      ],
+    },
+  });
+
+  assert.deepEqual(result.definitionConsumers[0].selectorBranchNodeIds, [
+    "selector-branch-node:panel",
+  ]);
+  assert.deepEqual(result.definitionConsumers[0].selectorMatchIds, ["selector-match:panel"]);
+  assert.equal(result.definitionConsumers[0].consumptionKind, "selector-context");
+
+  const ownership = result.classOwnership[0];
+  const classificationIds = result.indexes.classificationIdsByTargetId.get("definition:panel");
+  assert.deepEqual(
+    classificationIds?.map((id) => result.indexes.classificationById.get(id)?.classification),
+    ["primitive-override"],
+  );
+  assert.ok(
+    ownership.ownerCandidateIds.some((candidateId) =>
+      result.indexes.ownerCandidateById
+        .get(candidateId)
+        ?.reasons.includes("selector-context-owner"),
+    ),
+  );
+});
+
 function legacyClassOwnership(input) {
   return {
     id: input.id,
@@ -373,6 +485,59 @@ function legacyClassOwnership(input) {
     evidenceKind: input.evidenceKind,
     confidence: input.confidence,
     traces: [],
+  };
+}
+
+function classDefinition(input) {
+  return {
+    id: input.id,
+    stylesheetId: input.stylesheetId,
+    className: input.className,
+    selectorText: input.selectorText,
+    selectorKind: input.contextClassNames.length > 0 ? "contextual" : "simple-root",
+    line: input.line,
+    atRuleContext: [],
+    declarationProperties: [],
+    declarationSignature: "",
+    isCssModule: false,
+    sourceDefinition: {
+      className: input.className,
+      selector: input.selectorText,
+      selectorBranch: {
+        raw: input.selectorText,
+        matchKind: input.contextClassNames.length > 0 ? "contextual" : "standalone",
+        subjectClassNames: [input.className],
+        requiredClassNames: [...input.contextClassNames, input.className],
+        contextClassNames: input.contextClassNames,
+        negativeClassNames: [],
+        hasCombinators: input.contextClassNames.length > 0,
+        hasSubjectModifiers: false,
+        hasUnknownSemantics: false,
+      },
+      declarations: [],
+      declarationDetails: [],
+      line: input.line,
+      atRuleContext: [],
+    },
+  };
+}
+
+function selectorBranch(input) {
+  return {
+    id: input.id,
+    selectorQueryId: `selector-query:${input.id}`,
+    stylesheetId: input.stylesheetId,
+    selectorText: input.selectorText,
+    selectorListText: input.selectorText,
+    branchIndex: 0,
+    branchCount: 1,
+    ruleKey: input.ruleKey,
+    location: input.location,
+    outcome: "matchable",
+    status: "supported",
+    confidence: "high",
+    traces: [],
+    sourceQuery: {},
   };
 }
 
@@ -412,6 +577,78 @@ function moduleImport(input) {
     resolvedFilePath: input.resolvedFilePath,
     specifier: input.specifier,
     importKind: "css",
+  };
+}
+
+function selectorReachabilityWithBranch(input) {
+  const key = [
+    input.ruleKey,
+    0,
+    input.branchText,
+    [
+      input.location.filePath,
+      input.location.startLine,
+      input.location.startColumn,
+      input.location.endLine ?? "",
+      input.location.endColumn ?? "",
+    ].join(":"),
+  ].join(":");
+  const branch = {
+    selectorBranchNodeId: input.selectorBranchNodeId,
+    selectorNodeId: "selector-node:panel",
+    stylesheetNodeId: "stylesheet-node:button",
+    branchText: input.branchText,
+    selectorListText: input.branchText,
+    branchIndex: 0,
+    branchCount: 1,
+    ruleKey: input.ruleKey,
+    requirement: input.requirement,
+    subject: {
+      requiredClassNames: input.requiredClassNames,
+      unsupportedParts: [],
+    },
+    status: input.status,
+    confidence: "high",
+    matchIds: input.matchIds,
+    diagnosticIds: [],
+    location: input.location,
+    traces: [],
+  };
+  const match = {
+    id: input.matchIds[0],
+    selectorBranchNodeId: input.selectorBranchNodeId,
+    subjectElementId: "element:panel",
+    elementMatchIds: ["element-match:panel"],
+    supportingEmissionSiteIds: ["emission:panel"],
+    requiredClassNames: input.requiredClassNames,
+    matchedClassNames: input.requiredClassNames,
+    renderPathIds: ["render-path:panel"],
+    placementConditionIds: [],
+    certainty: "definite",
+    confidence: "high",
+    traces: [],
+  };
+  return {
+    ...emptySelectorReachability(),
+    meta: {
+      generatedAtStage: "selector-reachability",
+      selectorBranchCount: 1,
+      elementMatchCount: 0,
+      branchMatchCount: 1,
+      diagnosticCount: 0,
+    },
+    selectorBranches: [branch],
+    branchMatches: [match],
+    indexes: {
+      ...emptySelectorReachability().indexes,
+      branchReachabilityBySelectorBranchNodeId: new Map([[input.selectorBranchNodeId, branch]]),
+      branchReachabilityBySourceKey: new Map([[key, branch]]),
+      matchById: new Map([[match.id, match]]),
+      matchIdsBySelectorBranchNodeId: new Map([[input.selectorBranchNodeId, input.matchIds]]),
+      matchIdsByClassName: new Map(
+        input.requiredClassNames.map((className) => [className, input.matchIds]),
+      ),
+    },
   };
 }
 

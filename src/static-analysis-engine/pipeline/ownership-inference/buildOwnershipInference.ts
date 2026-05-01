@@ -1,6 +1,7 @@
 import { buildIndexes } from "./indexes.js";
 import { ownershipEvidenceFromClassOwnershipAnalysis } from "./projectAnalysisAdapter.js";
 import { applyConsumerSummariesToClassOwnership, buildDefinitionConsumers } from "./consumers.js";
+import { applySelectorContextEvidence } from "./selectorContext.js";
 import { buildStylesheetOwnership } from "./stylesheets.js";
 import { buildClassOwnership } from "../project-analysis/relations/classOwnership.js";
 import type { ProjectEvidenceAssemblyResult } from "../project-evidence/index.js";
@@ -53,12 +54,22 @@ export function buildOwnershipInference(input: OwnershipInferenceInput): Ownersh
     projectEvidence: input.projectEvidence,
     options: input.options,
   });
-  const ownerCandidates = [
+  const ownerCandidatesBeforeSelectorContext = [
     ...ownershipEvidence.ownerCandidates,
     ...stylesheetEvidence.ownerCandidates,
   ].sort((left, right) => left.id.localeCompare(right.id));
+  const selectorContextEvidence = applySelectorContextEvidence({
+    projectEvidence: input.projectEvidence,
+    selectorReachability: input.selectorReachability,
+    classOwnership,
+    definitionConsumers,
+    ownerCandidates: ownerCandidatesBeforeSelectorContext,
+    classifications: stylesheetEvidence.classifications,
+    includeTraces: input.options?.includeTraces ?? true,
+  });
   const stylesheetOwnership = stylesheetEvidence.stylesheetOwnership;
-  const classifications = stylesheetEvidence.classifications;
+  const ownerCandidates = selectorContextEvidence.ownerCandidates;
+  const classifications = selectorContextEvidence.classifications;
   const diagnostics: OwnershipInferenceResult["diagnostics"] = [];
 
   return {
@@ -71,15 +82,15 @@ export function buildOwnershipInference(input: OwnershipInferenceInput): Ownersh
       classificationCount: classifications.length,
       diagnosticCount: diagnostics.length,
     },
-    classOwnership,
-    definitionConsumers,
+    classOwnership: selectorContextEvidence.classOwnership,
+    definitionConsumers: selectorContextEvidence.definitionConsumers,
     ownerCandidates,
     stylesheetOwnership,
     classifications,
     diagnostics,
     indexes: buildIndexes({
-      classOwnership,
-      definitionConsumers,
+      classOwnership: selectorContextEvidence.classOwnership,
+      definitionConsumers: selectorContextEvidence.definitionConsumers,
       ownerCandidates,
       stylesheetOwnership,
       classifications,
