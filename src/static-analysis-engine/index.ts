@@ -64,6 +64,15 @@ export {
   buildSelectorReachability,
   selectorBranchSourceKey,
 } from "./pipeline/selector-reachability/index.js";
+export {
+  buildOwnershipInference,
+  classDefinitionConsumerEvidenceId,
+  classOwnershipEvidenceId,
+  ownershipInferenceDiagnosticId,
+  styleClassificationEvidenceId,
+  styleOwnerCandidateId,
+  stylesheetOwnershipEvidenceId,
+} from "./pipeline/ownership-inference/index.js";
 export { buildReachabilitySummary } from "./pipeline/reachability/index.js";
 export {
   buildProjectAnalysis,
@@ -301,3 +310,30 @@ export type {
   SelectorReachabilityStatus,
   SelectorSubjectRequirement,
 } from "./pipeline/selector-reachability/index.js";
+export type {
+  ClassDefinitionConsumerEvidence,
+  ClassOwnershipEvidence,
+  OwnershipCandidateId,
+  OwnershipCandidateOwnerKind,
+  OwnershipCandidateReason,
+  OwnershipCandidateTargetKind,
+  OwnershipClassification,
+  OwnershipClassificationId,
+  OwnershipClassificationTargetKind,
+  OwnershipConsumptionKind,
+  OwnershipConsumerAvailability,
+  OwnershipDiagnosticTargetKind,
+  OwnershipEvidenceId,
+  OwnershipEvidenceKind,
+  OwnershipInferenceDiagnostic,
+  OwnershipInferenceDiagnosticCode,
+  OwnershipInferenceDiagnosticId,
+  OwnershipInferenceIndexes,
+  OwnershipInferenceInput,
+  OwnershipInferenceMeta,
+  OwnershipInferenceResult,
+  StyleClassificationEvidence,
+  StyleOwnerCandidate,
+  StylesheetOwnershipBroadness,
+  StylesheetOwnershipEvidence,
+} from "./pipeline/ownership-inference/index.js";
