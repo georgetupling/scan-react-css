@@ -1,12 +1,6 @@
 import type { ResolvedScannerConfig } from "../../../config/index.js";
 import type { ProjectFileRecord, ScanDiagnostic } from "../../../project/types.js";
 
-export type ProjectSnapshotStageRunner = <T>(
-  stage: string,
-  message: string,
-  run: () => T | Promise<T>,
-) => Promise<T>;
-
 export type ProjectFileDiscoveryResult = {
   rootDir: string;
   sourceFiles: ProjectFileRecord[];

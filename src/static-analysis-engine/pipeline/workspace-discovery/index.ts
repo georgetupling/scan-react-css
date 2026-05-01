@@ -19,7 +19,6 @@ export type {
   ProjectResourceEdge,
   ProjectSnapshot,
   ProjectSnapshotFiles,
-  ProjectSnapshotStageRunner,
   ProjectSourceFile,
   ProjectStylesheetFile,
   SourceImportEdge,

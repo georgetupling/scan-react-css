@@ -18,11 +18,16 @@ export async function runAnalysisPipeline(input: {
   includeTraces?: boolean;
 }): Promise<StaticAnalysisEngineProjectResult> {
   const progress = createAnalysisProgressReporter(input.onProgress);
-  const snapshot = await buildProjectSnapshot({
-    scanInput: input.scanInput,
-    rootDir: input.scanInput.rootDir,
-    runStage: (stage, message, run) => runAsyncAnalysisStage(progress, stage, message, run),
-  });
+  const snapshot = await runAsyncAnalysisStage(
+    progress,
+    "workspace-discovery",
+    "Building workspace discovery",
+    () =>
+      buildProjectSnapshot({
+        scanInput: input.scanInput,
+        rootDir: input.scanInput.rootDir,
+      }),
+  );
   const includeTraces = input.includeTraces ?? true;
   const frontends = runAnalysisStage(
     progress,

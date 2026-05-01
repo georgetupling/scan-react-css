@@ -13,78 +13,59 @@ import { loadPackageCssImports } from "./packages/loadPackageCssImports.js";
 import { fetchRemoteCssSources } from "./remote/fetchRemoteCssSources.js";
 import { collectSourceImports } from "./source/collectSourceImports.js";
 import { collectStylesheetImports } from "./stylesheets/collectStylesheetImports.js";
-import type { ProjectConfigFile, ProjectSnapshot, ProjectSnapshotStageRunner } from "./types.js";
+import type { ProjectConfigFile, ProjectSnapshot } from "./types.js";
 
 export async function buildProjectSnapshot(input: {
   scanInput: ScanProjectInput;
   rootDir?: string;
-  runStage: ProjectSnapshotStageRunner;
 }): Promise<ProjectSnapshot> {
   const rootDir = resolveRootDir(input.rootDir ?? input.scanInput.rootDir);
   const diagnostics: ScanDiagnostic[] = [];
-  const config = await input.runStage("load-config", "Loading config", () =>
-    loadScannerConfig({
-      rootDir,
-      configBaseDir: input.scanInput.configBaseDir,
-      configPath: input.scanInput.configPath,
-      diagnostics,
-    }),
-  );
-  const discovered = await input.runStage("discover-files", "Discovering project files", () =>
-    discoverProjectFileRecords({
-      ...input.scanInput,
-      rootDir,
-      discovery: config.discovery,
-    }),
-  );
+  const config = await loadScannerConfig({
+    rootDir,
+    configBaseDir: input.scanInput.configBaseDir,
+    configPath: input.scanInput.configPath,
+    diagnostics,
+  });
+  const discovered = await discoverProjectFileRecords({
+    ...input.scanInput,
+    rootDir,
+    discovery: config.discovery,
+  });
   diagnostics.push(...discovered.diagnostics);
 
-  const [sourceFiles, cssFiles, htmlFiles] = await input.runStage(
-    "load-files",
-    "Loading project files",
-    () =>
-      Promise.all([
-        readSourceFiles(discovered.sourceFiles, diagnostics),
-        readCssFiles(discovered.cssFiles, diagnostics, "project"),
-        readHtmlFiles(discovered.htmlFiles, diagnostics),
-      ]),
-  );
+  const [sourceFiles, cssFiles, htmlFiles] = await Promise.all([
+    readSourceFiles(discovered.sourceFiles, diagnostics),
+    readCssFiles(discovered.cssFiles, diagnostics, "project"),
+    readHtmlFiles(discovered.htmlFiles, diagnostics),
+  ]);
   const { htmlStylesheetLinks, htmlScriptSources } = collectHtmlResources({
     rootDir: discovered.rootDir,
     htmlFiles,
     diagnostics,
   });
-  const linkedCssFiles = await input.runStage("load-html-css", "Loading HTML-linked CSS", () =>
-    readCssFiles(
-      collectLinkedCssFiles({
-        rootDir: discovered.rootDir,
-        cssFiles: discovered.cssFiles,
-        htmlStylesheetLinks,
-      }),
-      diagnostics,
-      "html-linked",
-    ),
+  const linkedCssFiles = await readCssFiles(
+    collectLinkedCssFiles({
+      rootDir: discovered.rootDir,
+      cssFiles: discovered.cssFiles,
+      htmlStylesheetLinks,
+    }),
+    diagnostics,
+    "html-linked",
   );
-  const packageCssImports = await input.runStage(
-    "load-package-css",
-    "Loading package CSS imports",
-    () =>
-      loadPackageCssImports({
-        rootDir: discovered.rootDir,
-        sourceFiles,
-        cssSources: toCssSources([...cssFiles, ...linkedCssFiles]),
-        diagnostics,
-      }),
-  );
+  const packageCssImports = await loadPackageCssImports({
+    rootDir: discovered.rootDir,
+    sourceFiles,
+    cssSources: toCssSources([...cssFiles, ...linkedCssFiles]),
+    diagnostics,
+  });
   const packageStylesheets = toStylesheetFiles(packageCssImports.cssSources, "package");
   const remoteCssSources = config.externalCss.fetchRemote
-    ? await input.runStage("fetch-remote-css", "Fetching remote CSS", () =>
-        fetchRemoteCssSources({
-          htmlStylesheetLinks,
-          remoteTimeoutMs: config.externalCss.remoteTimeoutMs,
-          diagnostics,
-        }),
-      )
+    ? await fetchRemoteCssSources({
+        htmlStylesheetLinks,
+        remoteTimeoutMs: config.externalCss.remoteTimeoutMs,
+        diagnostics,
+      })
     : [];
   const remoteStylesheets = toStylesheetFiles(remoteCssSources, "remote");
   const stylesheets = mergeStylesheets([

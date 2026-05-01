@@ -49,9 +49,9 @@ test("scanProject reports scan progress events", async () => {
     assert.ok(
       events.some(
         (event) =>
-          event.stage === "discover-files" &&
+          event.stage === "workspace-discovery" &&
           event.status === "started" &&
-          event.message === "Discovering project files",
+          event.message === "Building workspace discovery",
       ),
     );
     assert.ok(
