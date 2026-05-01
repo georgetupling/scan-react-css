@@ -1,5 +1,4 @@
 import {
-  emissionSiteId,
   renderedComponentBoundaryId,
   renderedComponentId,
   renderedElementId,
@@ -7,9 +6,8 @@ import {
   renderRegionId,
 } from "../ids.js";
 import type {
-  RenderGraphProjection,
   EmissionSite,
-  EmissionTokenProvenance,
+  RenderGraphProjection,
   RenderPath,
   RenderPathSegment,
   RenderRegion,
@@ -19,6 +17,13 @@ import type {
   RenderedComponentBoundary,
   RenderedElement,
 } from "../types.js";
+import { buildNativeEmissionSites } from "./emissions.js";
+import {
+  buildChildRenderSitesByParentRenderSiteId,
+  buildRootRenderSitesByComponentNodeId,
+  buildTemplatesByRenderSiteId,
+} from "./lookups.js";
+import { compareAnchors, normalizeAnchor, normalizeProjectPath, uniqueSorted } from "./common.js";
 
 type NativeRenderStructureProjection = {
   components: RenderedComponent[];
@@ -38,10 +43,8 @@ export function buildNativeRenderStructure(
   const components: RenderedComponent[] = [];
   const componentBoundaries: RenderedComponentBoundary[] = [];
   const elements: RenderedElement[] = [];
-  const emissionSites: EmissionSite[] = [];
   const renderPaths: RenderPath[] = [];
   const renderRegions: RenderRegion[] = [];
-  const diagnostics: RenderStructureDiagnostic[] = [];
 
   const renderSitesById = new Map(
     input.graph.nodes.renderSites.map((site) => [site.id, site] as const),
@@ -50,7 +53,6 @@ export function buildNativeRenderStructure(
   const childRenderSitesByParentRenderSiteId = buildChildRenderSitesByParentRenderSiteId(input);
   const rootRenderSitesByComponentNodeId = buildRootRenderSitesByComponentNodeId(input);
   const elementIdCounts = new Map<string, number>();
-  const emissionIdCounts = new Map<string, number>();
   const elementsById = new Map<string, RenderedElement>();
   const rootBoundaryIdByComponentNodeId = new Map<string, string>();
 
@@ -165,156 +167,20 @@ export function buildNativeRenderStructure(
     });
   }
 
-  const expressionIdBySiteNodeId =
-    input.symbolicEvaluation.evaluatedExpressions.indexes.classExpressionIdBySiteNodeId;
-  const expressionById = input.symbolicEvaluation.evaluatedExpressions.indexes.classExpressionById;
-  const elementIdsByTemplateNodeId = buildElementIdsByTemplateNodeId(elements);
-  const elementIdsByRenderSiteNodeId = buildElementIdsByRenderSiteNodeId(elements);
-  const renderPathById = new Map(renderPaths.map((path) => [path.id, path] as const));
-  const classSites = [...input.graph.nodes.classExpressionSites].sort(
-    (left, right) =>
-      compareAnchors(left.location, right.location) || left.id.localeCompare(right.id),
-  );
-
-  for (const classSite of classSites) {
-    const expressionId = expressionIdBySiteNodeId.get(classSite.id);
-    if (!expressionId) {
-      diagnostics.push(
-        buildDiagnostic({
-          code: "missing-symbolic-class-expression",
-          message: "class expression site has no symbolic evaluation expression",
-          classSite,
-        }),
-      );
-      continue;
-    }
-
-    const expression = expressionById.get(expressionId);
-    if (!expression) {
-      diagnostics.push(
-        buildDiagnostic({
-          code: "missing-symbolic-class-expression",
-          message: "symbolic evaluation expression could not be resolved by id",
-          classSite,
-          evaluatedExpressionId: expressionId,
-        }),
-      );
-      continue;
-    }
-
-    const element = resolveEmittedElement({
-      expression,
-      classSite,
-      elementIdsByTemplateNodeId,
-      elementIdsByRenderSiteNodeId,
-      elementsById,
-    });
-    const boundaryId =
-      element?.parentBoundaryId ??
-      resolveBoundaryIdForClassSite(classSite, rootBoundaryIdByComponentNodeId);
-
-    if (!boundaryId) {
-      diagnostics.push(
-        buildDiagnostic({
-          code: "unmodeled-class-expression-site",
-          message:
-            "class expression site could not be mapped to an emitted element or component boundary",
-          classSite,
-          evaluatedExpressionId: expression.id,
-        }),
-      );
-      continue;
-    }
-
-    const basePath = element
-      ? renderPathById.get(element.renderPathId)
-      : findBoundaryRenderPath(boundaryId, renderPaths);
-    if (!basePath) {
-      diagnostics.push(
-        buildDiagnostic({
-          code: "dangling-render-model-reference",
-          message: "class expression site resolved to a missing render path",
-          classSite,
-          evaluatedExpressionId: expression.id,
-          boundaryId,
-          ...(element ? { elementId: element.id } : {}),
-        }),
-      );
-      continue;
-    }
-
-    const siteKey = `${classSite.id}:${element?.id ?? boundaryId}`;
-    const emissionId = createEmissionSiteId({
-      classExpressionId: expression.id,
-      key: siteKey,
-      counts: emissionIdCounts,
-    });
-    const emissionPathId = renderPathId({ terminalKind: "emission-site", terminalId: emissionId });
-    const emittedByComponentNodeId =
-      expression.emittingComponentNodeId ?? classSite.emittingComponentNodeId;
-    const placementComponentNodeId =
-      expression.placementComponentNodeId ?? classSite.placementComponentNodeId;
-    const tokenProvenance = buildTokenProvenanceFromExpressionTokens({
-      expression,
-      emittedByComponentNodeId,
-    });
-    const unsupported = [...expression.unsupported].sort((left, right) =>
-      left.id.localeCompare(right.id),
-    );
-    const confidence =
-      unsupported.length > 0 || expression.certainty.kind !== "exact" ? "medium" : "high";
-
-    const emissionSite: EmissionSite = {
-      id: emissionId,
-      emissionKind: "rendered-element-class",
-      ...(element ? { elementId: element.id } : {}),
-      boundaryId,
-      classExpressionId: expression.id,
-      classExpressionSiteNodeId: expression.classExpressionSiteNodeId,
-      sourceExpressionIds: [expression.id],
-      sourceLocation: normalizeAnchor(expression.location),
-      ...(element ? { emittedElementLocation: normalizeAnchor(element.sourceLocation) } : {}),
-      ...(emittedByComponentNodeId ? { emittingComponentNodeId: emittedByComponentNodeId } : {}),
-      ...(placementComponentNodeId ? { placementComponentNodeId } : {}),
-      tokenProvenance,
-      tokens: [...expression.tokens].sort(compareTokens),
-      emissionVariants: [...expression.emissionVariants].sort((left, right) =>
-        left.id.localeCompare(right.id),
-      ),
-      externalContributions: [...expression.externalContributions].sort((left, right) =>
-        left.id.localeCompare(right.id),
-      ),
-      cssModuleContributions: [...expression.cssModuleContributions].sort((left, right) =>
-        left.id.localeCompare(right.id),
-      ),
-      unsupported,
-      confidence,
-      renderPathId: emissionPathId,
-      placementConditionIds: [],
-      traces: [...expression.traces],
-    };
-
-    emissionSites.push(emissionSite);
-    if (element) {
-      element.emissionSiteIds = uniqueSorted([...element.emissionSiteIds, emissionSite.id]);
-    }
-    renderPaths.push({
-      id: emissionPathId,
-      rootComponentNodeId: basePath.rootComponentNodeId,
-      terminalKind: "emission-site",
-      terminalId: emissionSite.id,
-      segments: [...basePath.segments],
-      placementConditionIds: [],
-      certainty: basePath.certainty,
-      traces: [...expression.traces],
-    });
-  }
+  const emissionResult = buildNativeEmissionSites({
+    renderInput: input,
+    elements,
+    renderPaths,
+    rootBoundaryIdByComponentNodeId,
+  });
 
   return {
     components,
     componentBoundaries,
     elements: elements.sort((left, right) => left.id.localeCompare(right.id)),
-    emissionSites: emissionSites.sort((left, right) => left.id.localeCompare(right.id)),
+    emissionSites: emissionResult.emissionSites.sort((left, right) =>
+      left.id.localeCompare(right.id),
+    ),
     renderPaths: renderPaths.sort((left, right) => left.id.localeCompare(right.id)),
     placementConditions: [],
     renderRegions,
@@ -339,7 +205,7 @@ export function buildNativeRenderStructure(
         ),
       edges: [],
     },
-    diagnostics: diagnostics.sort(
+    diagnostics: emissionResult.diagnostics.sort(
       (left, right) =>
         left.code.localeCompare(right.code) ||
         (left.filePath ?? "").localeCompare(right.filePath ?? "") ||
@@ -452,7 +318,6 @@ function expandIntrinsicElementsForRenderSite(input: {
         });
       }
 
-      // Multiple intrinsic templates for one render site are uncommon; preserve deterministic traversal.
       if (templateIndex < intrinsicTemplates.length - 1) {
         continue;
       }
@@ -460,7 +325,6 @@ function expandIntrinsicElementsForRenderSite(input: {
     return;
   }
 
-  // Fragments and non-element render sites pass through and continue expansion for child sites.
   for (const [childIndex, childRenderSiteId] of childRenderSiteIds.entries()) {
     const childRenderSite = input.input.graph.indexes.nodesById.get(childRenderSiteId);
     if (!childRenderSite || childRenderSite.kind !== "render-site") {
@@ -474,94 +338,6 @@ function expandIntrinsicElementsForRenderSite(input: {
   }
 }
 
-function buildTemplatesByRenderSiteId(
-  input: RenderStructureInput,
-): Map<string, RenderStructureInput["graph"]["nodes"]["elementTemplates"]> {
-  const templatesByRenderSiteId = new Map<
-    string,
-    RenderStructureInput["graph"]["nodes"]["elementTemplates"]
-  >();
-  for (const template of input.graph.nodes.elementTemplates) {
-    const existing = templatesByRenderSiteId.get(template.renderSiteNodeId) ?? [];
-    existing.push(template);
-    templatesByRenderSiteId.set(template.renderSiteNodeId, existing);
-  }
-  for (const [renderSiteId, templates] of templatesByRenderSiteId.entries()) {
-    templatesByRenderSiteId.set(
-      renderSiteId,
-      [...templates].sort(
-        (left, right) =>
-          compareAnchors(left.location, right.location) ||
-          left.templateKind.localeCompare(right.templateKind) ||
-          left.id.localeCompare(right.id),
-      ),
-    );
-  }
-  return templatesByRenderSiteId;
-}
-
-function buildChildRenderSitesByParentRenderSiteId(
-  input: RenderStructureInput,
-): Map<string, string[]> {
-  const result = new Map<string, string[]>();
-  for (const site of input.graph.nodes.renderSites) {
-    if (!site.parentRenderSiteNodeId) {
-      continue;
-    }
-    const existing = result.get(site.parentRenderSiteNodeId) ?? [];
-    existing.push(site.id);
-    result.set(site.parentRenderSiteNodeId, existing);
-  }
-  for (const [parentId, childIds] of result.entries()) {
-    result.set(
-      parentId,
-      [...childIds].sort((leftId, rightId) => {
-        const left = input.graph.indexes.nodesById.get(leftId);
-        const right = input.graph.indexes.nodesById.get(rightId);
-        if (!left || left.kind !== "render-site" || !right || right.kind !== "render-site") {
-          return leftId.localeCompare(rightId);
-        }
-        return (
-          compareAnchors(left.location, right.location) ||
-          left.renderSiteKind.localeCompare(right.renderSiteKind) ||
-          left.id.localeCompare(right.id)
-        );
-      }),
-    );
-  }
-  return result;
-}
-
-function buildRootRenderSitesByComponentNodeId(input: RenderStructureInput): Map<string, string[]> {
-  const result = new Map<string, string[]>();
-  for (const site of input.graph.nodes.renderSites) {
-    if (
-      site.renderSiteKind !== "component-root" ||
-      !site.emittingComponentNodeId ||
-      site.parentRenderSiteNodeId
-    ) {
-      continue;
-    }
-    const existing = result.get(site.emittingComponentNodeId) ?? [];
-    existing.push(site.id);
-    result.set(site.emittingComponentNodeId, existing);
-  }
-  for (const [componentNodeId, rootSiteIds] of result.entries()) {
-    result.set(
-      componentNodeId,
-      [...rootSiteIds].sort((leftId, rightId) => {
-        const left = input.graph.indexes.nodesById.get(leftId);
-        const right = input.graph.indexes.nodesById.get(rightId);
-        if (!left || left.kind !== "render-site" || !right || right.kind !== "render-site") {
-          return leftId.localeCompare(rightId);
-        }
-        return compareAnchors(left.location, right.location) || left.id.localeCompare(right.id);
-      }),
-    );
-  }
-  return result;
-}
-
 function createRenderedElementId(input: {
   boundaryId: string;
   templateNodeId: string;
@@ -572,160 +348,10 @@ function createRenderedElementId(input: {
   const index = input.counts.get(key) ?? 0;
   input.counts.set(key, index + 1);
   return renderedElementId({
-    key: key,
+    key,
     tagName: input.tagName,
     index,
   });
-}
-
-function createEmissionSiteId(input: {
-  classExpressionId: string;
-  key: string;
-  counts: Map<string, number>;
-}): string {
-  const countKey = `${input.classExpressionId}:${input.key}`;
-  const index = input.counts.get(countKey) ?? 0;
-  input.counts.set(countKey, index + 1);
-  return emissionSiteId({
-    classExpressionId: input.classExpressionId,
-    key: input.key,
-    index,
-  });
-}
-
-function buildElementIdsByTemplateNodeId(elements: RenderedElement[]): Map<string, string[]> {
-  const map = new Map<string, string[]>();
-  for (const element of elements) {
-    if (!element.elementTemplateNodeId) {
-      continue;
-    }
-    const existing = map.get(element.elementTemplateNodeId) ?? [];
-    existing.push(element.id);
-    map.set(element.elementTemplateNodeId, existing);
-  }
-  return map;
-}
-
-function buildElementIdsByRenderSiteNodeId(elements: RenderedElement[]): Map<string, string[]> {
-  const map = new Map<string, string[]>();
-  for (const element of elements) {
-    if (!element.renderSiteNodeId) {
-      continue;
-    }
-    const existing = map.get(element.renderSiteNodeId) ?? [];
-    existing.push(element.id);
-    map.set(element.renderSiteNodeId, existing);
-  }
-  return map;
-}
-
-function resolveEmittedElement(input: {
-  expression: RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number];
-  classSite: RenderStructureInput["graph"]["nodes"]["classExpressionSites"][number];
-  elementIdsByTemplateNodeId: Map<string, string[]>;
-  elementIdsByRenderSiteNodeId: Map<string, string[]>;
-  elementsById: Map<string, RenderedElement>;
-}): RenderedElement | undefined {
-  const byTemplate =
-    input.expression.elementTemplateNodeId ?? input.classSite.elementTemplateNodeId;
-  if (byTemplate) {
-    const id = input.elementIdsByTemplateNodeId.get(byTemplate)?.[0];
-    if (id) {
-      return input.elementsById.get(id);
-    }
-  }
-
-  const byRenderSite = input.expression.renderSiteNodeId ?? input.classSite.renderSiteNodeId;
-  if (byRenderSite) {
-    const id = input.elementIdsByRenderSiteNodeId.get(byRenderSite)?.[0];
-    if (id) {
-      return input.elementsById.get(id);
-    }
-  }
-
-  return undefined;
-}
-
-function resolveBoundaryIdForClassSite(
-  classSite: RenderStructureInput["graph"]["nodes"]["classExpressionSites"][number],
-  rootBoundaryIdByComponentNodeId: Map<string, string>,
-): string | undefined {
-  return classSite.emittingComponentNodeId
-    ? rootBoundaryIdByComponentNodeId.get(classSite.emittingComponentNodeId)
-    : undefined;
-}
-
-function findBoundaryRenderPath(
-  boundaryId: string,
-  renderPaths: RenderPath[],
-): RenderPath | undefined {
-  return renderPaths.find(
-    (path) => path.terminalKind === "component-boundary" && path.terminalId === boundaryId,
-  );
-}
-
-function buildTokenProvenanceFromExpressionTokens(input: {
-  expression: RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number];
-  emittedByComponentNodeId?: string;
-}): EmissionTokenProvenance[] {
-  return [...input.expression.tokens].sort(compareTokens).map((token) => ({
-    token: token.token,
-    tokenKind: token.tokenKind,
-    presence: token.presence,
-    sourceExpressionId: input.expression.id,
-    sourceClassExpressionSiteNodeId: input.expression.classExpressionSiteNodeId,
-    ...(token.sourceAnchor ? { sourceLocation: normalizeAnchor(token.sourceAnchor) } : {}),
-    ...(input.emittedByComponentNodeId
-      ? { emittedByComponentNodeId: input.emittedByComponentNodeId }
-      : {}),
-    conditionId: token.conditionId,
-    confidence: token.confidence,
-  }));
-}
-
-function compareTokens(
-  left: RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number]["tokens"][number],
-  right: RenderStructureInput["symbolicEvaluation"]["evaluatedExpressions"]["classExpressions"][number]["tokens"][number],
-): number {
-  return (
-    left.token.localeCompare(right.token) ||
-    left.tokenKind.localeCompare(right.tokenKind) ||
-    left.presence.localeCompare(right.presence) ||
-    left.id.localeCompare(right.id)
-  );
-}
-
-function buildDiagnostic(input: {
-  code: RenderStructureDiagnostic["code"];
-  message: string;
-  classSite: RenderStructureInput["graph"]["nodes"]["classExpressionSites"][number];
-  evaluatedExpressionId?: string;
-  boundaryId?: string;
-  elementId?: string;
-}): RenderStructureDiagnostic {
-  const location = normalizeAnchor(input.classSite.location);
-  return {
-    stage: "render-structure",
-    severity: "warning",
-    code: input.code,
-    message: input.message,
-    filePath: normalizeProjectPath(input.classSite.filePath),
-    location,
-    classExpressionSiteNodeId: input.classSite.id,
-    ...(input.evaluatedExpressionId ? { evaluatedExpressionId: input.evaluatedExpressionId } : {}),
-    ...(input.boundaryId ? { boundaryId: input.boundaryId } : {}),
-    ...(input.elementId ? { elementId: input.elementId } : {}),
-    provenance: [
-      {
-        stage: "render-structure",
-        filePath: normalizeProjectPath(input.classSite.filePath),
-        anchor: location,
-        upstreamId: input.classSite.id,
-        summary: input.message,
-      },
-    ],
-    traces: [],
-  };
 }
 
 function compareComponentNodes(
@@ -738,34 +364,4 @@ function compareComponentNodes(
     left.componentName.localeCompare(right.componentName) ||
     compareAnchors(left.location, right.location)
   );
-}
-
-function compareAnchors(
-  left: RenderStructureInput["graph"]["nodes"]["components"][number]["location"],
-  right: RenderStructureInput["graph"]["nodes"]["components"][number]["location"],
-): number {
-  return (
-    normalizeProjectPath(left.filePath).localeCompare(normalizeProjectPath(right.filePath)) ||
-    left.startLine - right.startLine ||
-    left.startColumn - right.startColumn ||
-    (left.endLine ?? 0) - (right.endLine ?? 0) ||
-    (left.endColumn ?? 0) - (right.endColumn ?? 0)
-  );
-}
-
-function normalizeAnchor(
-  anchor: RenderStructureInput["graph"]["nodes"]["components"][number]["location"],
-): RenderStructureInput["graph"]["nodes"]["components"][number]["location"] {
-  return {
-    ...anchor,
-    filePath: normalizeProjectPath(anchor.filePath),
-  };
-}
-
-function normalizeProjectPath(filePath: string): string {
-  return filePath.replace(/\\/g, "/");
-}
-
-function uniqueSorted(values: string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
