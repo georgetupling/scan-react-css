@@ -2,6 +2,7 @@ import type { ReachabilitySummary } from "../../pipeline/reachability/index.js";
 import { graphToSelectorEntries, type FactGraphResult } from "../../pipeline/fact-graph/index.js";
 import type { CssFrontendFacts } from "../../pipeline/language-frontends/index.js";
 import type { RenderModel } from "../../pipeline/render-structure/index.js";
+import type { SelectorReachabilityResult } from "../../pipeline/selector-reachability/index.js";
 import {
   analyzeSelectorQueries,
   buildParsedSelectorQueries,
@@ -17,6 +18,7 @@ export function runSelectorAnalysisStage(input: {
   selectorCssSources?: SelectorSourceInput[];
   renderModel: RenderModel;
   reachabilitySummary: ReachabilitySummary;
+  selectorReachability?: SelectorReachabilityResult;
   includeTraces?: boolean;
 }): SelectorAnalysisStageResult {
   const parsedSelectorQueries = buildParsedSelectorQueries(
@@ -37,6 +39,7 @@ export function runSelectorAnalysisStage(input: {
       selectorQueries: parsedSelectorQueries,
       renderModel: input.renderModel,
       reachabilitySummary: input.reachabilitySummary,
+      selectorReachability: input.selectorReachability,
       includeTraces: input.includeTraces,
     }),
   };

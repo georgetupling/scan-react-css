@@ -33,6 +33,7 @@ import { runProjectAnalysisStage } from "./stages/projectAnalysisStage.js";
 import { runReachabilityStage } from "./stages/reachabilityStage.js";
 import { runRenderStructureStage } from "./stages/renderStructureStage.js";
 import { runSelectorAnalysisStage } from "./stages/selectorAnalysisStage.js";
+import { runSelectorReachabilityStage } from "./stages/selectorReachabilityStage.js";
 import { runSymbolResolutionStage } from "./stages/symbolResolutionStage.js";
 import { runSymbolicEvaluationStage } from "./stages/symbolicEvaluationStage.js";
 
@@ -246,6 +247,12 @@ export function analyzeProjectSourceTexts(input: {
         includeTraces,
       }),
   );
+  const selectorReachabilityStage = runAnalysisStage(
+    progress,
+    "selector-reachability",
+    "Building selector reachability evidence",
+    () => runSelectorReachabilityStage(renderStructureStage),
+  );
   const selectorAnalysisStage = runAnalysisStage(
     progress,
     "selector-analysis",
@@ -258,6 +265,7 @@ export function analyzeProjectSourceTexts(input: {
         selectorCssSources: input.selectorCssSources ?? [],
         renderModel: renderStructureStage.renderModel,
         reachabilitySummary: reachabilityStage.reachabilitySummary,
+        selectorReachability: selectorReachabilityStage.selectorReachability,
         includeTraces,
       }),
   );

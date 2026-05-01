@@ -8,6 +8,7 @@ import type { ModuleFacts } from "../../pipeline/module-facts/index.js";
 import type { LanguageFrontendsResult } from "../../pipeline/language-frontends/index.js";
 import type { FactGraphResult } from "../../pipeline/fact-graph/index.js";
 import type { SelectorQueryResult } from "../../pipeline/selector-analysis/index.js";
+import type { SelectorReachabilityResult } from "../../pipeline/selector-reachability/index.js";
 import type { ProjectBindingResolution } from "../../pipeline/symbol-resolution/index.js";
 import type { SymbolicEvaluationResult } from "../../pipeline/symbolic-evaluation/index.js";
 import type { RenderStructureResult } from "../../pipeline/render-structure/index.js";
@@ -41,6 +42,10 @@ export type ExternalCssStageResult = {
 
 export type ReachabilityStageResult = {
   reachabilitySummary: ReachabilitySummary;
+};
+
+export type SelectorReachabilityStageResult = {
+  selectorReachability: SelectorReachabilityResult;
 };
 
 export type SelectorAnalysisStageResult = {

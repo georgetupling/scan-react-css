@@ -10,6 +10,7 @@ import type {
   StylesheetReachabilityContextRecord,
 } from "../reachability/types.js";
 import type { RenderModel } from "../render-structure/types.js";
+import type { SelectorReachabilityResult } from "../selector-reachability/index.js";
 
 export type SemanticOutcome = "match" | "possible-match" | "no-match-under-bounded-analysis";
 
@@ -171,3 +172,5 @@ export type SelectorRenderModelIndex = {
   componentKeyByNodeId: Map<string, string>;
   componentNodeIdByComponentKey: Map<string, string>;
 };
+
+export type SelectorReachabilityEvidence = SelectorReachabilityResult;

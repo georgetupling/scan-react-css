@@ -1,0 +1,117 @@
+import type { AnalysisConfidence, AnalysisTrace } from "../../types/analysis.js";
+import type { SourceAnchor } from "../../types/core.js";
+import type { FactNodeId } from "../fact-graph/index.js";
+import type {
+  EmissionSiteId,
+  PlacementConditionId,
+  RenderPathId,
+  RenderedElementId,
+} from "../render-structure/index.js";
+
+export type SelectorReachabilityDiagnosticId = string;
+export type SelectorBranchMatchId = string;
+export type SelectorElementMatchId = string;
+
+export type SelectorReachabilityResult = {
+  meta: SelectorReachabilityMeta;
+  selectorBranches: SelectorBranchReachability[];
+  elementMatches: SelectorElementMatch[];
+  branchMatches: SelectorBranchMatch[];
+  diagnostics: SelectorReachabilityDiagnostic[];
+  indexes: SelectorReachabilityIndexes;
+};
+
+export type SelectorReachabilityMeta = {
+  generatedAtStage: "selector-reachability";
+  selectorBranchCount: number;
+  elementMatchCount: number;
+  branchMatchCount: number;
+  diagnosticCount: number;
+};
+
+export type SelectorReachabilityStatus =
+  | "definitely-matchable"
+  | "possibly-matchable"
+  | "only-matches-in-unknown-context"
+  | "not-matchable"
+  | "unsupported";
+
+export type SelectorMatchCertainty = "definite" | "possible" | "unknown-context" | "impossible";
+
+export type SelectorBranchReachability = {
+  selectorBranchNodeId: FactNodeId;
+  selectorNodeId: FactNodeId;
+  ruleDefinitionNodeId?: FactNodeId;
+  stylesheetNodeId?: FactNodeId;
+  branchText: string;
+  selectorListText: string;
+  branchIndex: number;
+  branchCount: number;
+  ruleKey: string;
+  subject: SelectorSubjectRequirement;
+  status: SelectorReachabilityStatus;
+  confidence: AnalysisConfidence;
+  matchIds: SelectorBranchMatchId[];
+  diagnosticIds: SelectorReachabilityDiagnosticId[];
+  location?: SourceAnchor;
+  traces: AnalysisTrace[];
+};
+
+export type SelectorSubjectRequirement = {
+  requiredClassNames: string[];
+  unsupportedParts: UnsupportedSelectorPart[];
+};
+
+export type UnsupportedSelectorPart = {
+  reason: string;
+  location?: SourceAnchor;
+};
+
+export type SelectorBranchMatch = {
+  id: SelectorBranchMatchId;
+  selectorBranchNodeId: FactNodeId;
+  subjectElementId: RenderedElementId;
+  elementMatchIds: SelectorElementMatchId[];
+  supportingEmissionSiteIds: EmissionSiteId[];
+  requiredClassNames: string[];
+  matchedClassNames: string[];
+  renderPathIds: RenderPathId[];
+  placementConditionIds: PlacementConditionId[];
+  certainty: SelectorMatchCertainty;
+  confidence: AnalysisConfidence;
+  traces: AnalysisTrace[];
+};
+
+export type SelectorElementMatch = {
+  id: SelectorElementMatchId;
+  selectorBranchNodeId: FactNodeId;
+  elementId: RenderedElementId;
+  requirement: SelectorSubjectRequirement;
+  matchedClassNames: string[];
+  supportingEmissionSiteIds: EmissionSiteId[];
+  certainty: SelectorMatchCertainty;
+  confidence: AnalysisConfidence;
+};
+
+export type SelectorReachabilityDiagnostic = {
+  id: SelectorReachabilityDiagnosticId;
+  selectorBranchNodeId: FactNodeId;
+  severity: "debug" | "warning";
+  code: "unsupported-selector-branch";
+  message: string;
+  location?: SourceAnchor;
+  traces: AnalysisTrace[];
+};
+
+export type SelectorReachabilityIndexes = {
+  branchReachabilityBySelectorBranchNodeId: Map<FactNodeId, SelectorBranchReachability>;
+  branchReachabilityBySourceKey: Map<string, SelectorBranchReachability>;
+  matchById: Map<SelectorBranchMatchId, SelectorBranchMatch>;
+  elementMatchById: Map<SelectorElementMatchId, SelectorElementMatch>;
+  matchIdsBySelectorBranchNodeId: Map<FactNodeId, SelectorBranchMatchId[]>;
+  matchIdsByElementId: Map<RenderedElementId, SelectorBranchMatchId[]>;
+  matchIdsByClassName: Map<string, SelectorBranchMatchId[]>;
+  branchIdsByRequiredClassName: Map<string, FactNodeId[]>;
+  branchIdsByStylesheetNodeId: Map<FactNodeId, FactNodeId[]>;
+  diagnosticIdsBySelectorBranchNodeId: Map<FactNodeId, SelectorReachabilityDiagnosticId[]>;
+};

@@ -60,6 +60,7 @@ export {
   analyzeSelectorQueries,
   extractSelectorQueriesFromCssText,
 } from "./pipeline/selector-analysis/index.js";
+export { buildSelectorReachability } from "./pipeline/selector-reachability/index.js";
 export { buildReachabilitySummary } from "./pipeline/reachability/index.js";
 export {
   buildProjectAnalysis,
@@ -283,3 +284,13 @@ export type {
   SelectorQueryResult,
   SemanticOutcome,
 } from "./pipeline/selector-analysis/index.js";
+export type {
+  SelectorBranchMatch,
+  SelectorBranchReachability,
+  SelectorElementMatch,
+  SelectorMatchCertainty,
+  SelectorReachabilityDiagnostic,
+  SelectorReachabilityResult,
+  SelectorReachabilityStatus,
+  SelectorSubjectRequirement,
+} from "./pipeline/selector-reachability/index.js";

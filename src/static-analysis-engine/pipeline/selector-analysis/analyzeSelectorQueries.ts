@@ -7,6 +7,7 @@ import type {
   SelectorAnalysisTarget,
   SelectorRenderModelIndex,
   SelectorQueryResult,
+  SelectorReachabilityEvidence,
 } from "./types.js";
 import type { RenderModel, RenderPathSegment } from "../render-structure/types.js";
 import { buildSelectorQueryResult } from "./resultUtils.js";
@@ -35,6 +36,7 @@ export function analyzeSelectorQueries(input: {
   selectorQueries: ParsedSelectorQuery[];
   renderModel: RenderModel;
   reachabilitySummary?: ReachabilitySummary;
+  selectorReachability?: SelectorReachabilityEvidence;
   includeTraces?: boolean;
 }): SelectorQueryResult[] {
   const includeTraces = input.includeTraces ?? true;
@@ -46,6 +48,7 @@ export function analyzeSelectorQueries(input: {
       selectorQuery,
       renderModelIndex,
       reachabilitySummary: input.reachabilitySummary,
+      selectorReachability: input.selectorReachability,
       reachabilityTargetCache,
       includeTraces,
     }),
@@ -56,6 +59,7 @@ function analyzeSelectorQuery(input: {
   selectorQuery: ParsedSelectorQuery;
   renderModelIndex: SelectorRenderModelIndex;
   reachabilitySummary?: ReachabilitySummary;
+  selectorReachability?: SelectorReachabilityEvidence;
   reachabilityTargetCache: Map<string, SelectorAnalysisTarget[]>;
   includeTraces: boolean;
 }): SelectorQueryResult {
@@ -111,6 +115,7 @@ function analyzeSelectorQuery(input: {
       constraint,
       analysisTargets,
       renderModelIndex: input.renderModelIndex,
+      selectorReachability: input.selectorReachability,
       includeTraces: input.includeTraces,
     });
   }
