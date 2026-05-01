@@ -7,13 +7,13 @@ import type {
 } from "../types.js";
 import { buildSelectorQueryResult } from "../resultUtils.js";
 import { attachMatchedReachability } from "../reachabilityResultUtils.js";
-import { selectorBranchSourceKey } from "../../selector-reachability/index.js";
 import {
   evaluateElementClassRequirement,
   getScopedElements,
   mergeStructuralEvaluations,
   type StructuralEvaluation,
 } from "./renderModelEvaluation.js";
+import { evaluateSelectorReachabilityEvidence } from "./selectorReachabilityEvaluation.js";
 
 type SameNodeConstraint = Extract<
   ParsedSelectorQuery["constraint"],
@@ -189,50 +189,21 @@ function evaluateAgainstSelectorReachability(input: {
   selectorReachability?: SelectorReachabilityEvidence;
   includeTraces?: boolean;
 }): SelectorQueryResult | undefined {
-  if (!input.selectorReachability || input.selectorQuery.source.kind !== "css-source") {
-    return undefined;
-  }
-
-  const sourceKey = selectorBranchSourceKey({
-    ruleKey: input.selectorQuery.source.ruleKey,
-    branchIndex: input.selectorQuery.source.branchIndex,
-    selectorText: input.selectorQuery.selectorText,
-    location: input.selectorQuery.source.selectorAnchor,
-  });
-  const branch = input.selectorReachability.indexes.branchReachabilityBySourceKey.get(sourceKey);
-  if (!branch) {
+  const evaluation = evaluateSelectorReachabilityEvidence(input);
+  if (!evaluation) {
     return undefined;
   }
 
   const includeTraces = input.includeTraces ?? true;
-  const scopedElementIds = new Map<string, SelectorAnalysisTarget[]>();
-  for (const target of input.analysisTargets) {
-    for (const elementId of target.elementIds) {
-      const targets = scopedElementIds.get(elementId) ?? [];
-      targets.push(target);
-      scopedElementIds.set(elementId, targets);
-    }
-  }
+  const anchor =
+    input.selectorQuery.source.kind === "css-source"
+      ? input.selectorQuery.source.selectorAnchor
+      : undefined;
 
-  const matches = branch.matchIds
-    .map((matchId) => input.selectorReachability?.indexes.matchById.get(matchId))
-    .filter((match): match is NonNullable<typeof match> => Boolean(match))
-    .filter((match) => scopedElementIds.has(match.subjectElementId));
-  const matchedTargets = uniqueTargets(
-    matches.flatMap((match) => scopedElementIds.get(match.subjectElementId) ?? []),
-  );
-  const hasDefiniteMatch = matches.some((match) => match.certainty === "definite");
-  const hasPossibleMatch = matches.some(
-    (match) => match.certainty === "possible" || match.certainty === "unknown-context",
-  );
-
-  if (
-    hasDefiniteMatch &&
-    matchedTargets.some((target) => target.reachabilityAvailability === "definite")
-  ) {
+  if (evaluation.hasDefiniteMatch) {
     return attachMatchedReachability({
       selectorQuery: input.selectorQuery,
-      matchedTargets,
+      matchedTargets: evaluation.matchedTargets,
       result: buildSelectorQueryResult({
         selectorQuery: input.selectorQuery,
         outcome: "match",
@@ -248,10 +219,10 @@ function evaluateAgainstSelectorReachability(input: {
                 traceId: "selector-reachability:same-node:definite",
                 category: "selector-match",
                 summary: `Stage 6 found a rendered element with all required classes: ${input.constraint.classNames.join(", ")}`,
-                anchor: input.selectorQuery.source.selectorAnchor,
+                anchor,
                 children: [],
                 metadata: {
-                  selectorBranchNodeId: branch.selectorBranchNodeId,
+                  selectorBranchNodeId: evaluation.branch.selectorBranchNodeId,
                 },
               },
             ]
@@ -262,10 +233,10 @@ function evaluateAgainstSelectorReachability(input: {
     });
   }
 
-  if (hasPossibleMatch || matchedTargets.length > 0) {
+  if (evaluation.hasPossibleMatch) {
     return attachMatchedReachability({
       selectorQuery: input.selectorQuery,
-      matchedTargets,
+      matchedTargets: evaluation.matchedTargets,
       result: buildSelectorQueryResult({
         selectorQuery: input.selectorQuery,
         outcome: "possible-match",
@@ -281,10 +252,10 @@ function evaluateAgainstSelectorReachability(input: {
                 traceId: "selector-reachability:same-node:possible",
                 category: "selector-match",
                 summary: `Stage 6 found a possible rendered element with all required classes: ${input.constraint.classNames.join(", ")}`,
-                anchor: input.selectorQuery.source.selectorAnchor,
+                anchor,
                 children: [],
                 metadata: {
-                  selectorBranchNodeId: branch.selectorBranchNodeId,
+                  selectorBranchNodeId: evaluation.branch.selectorBranchNodeId,
                 },
               },
             ]
@@ -295,7 +266,36 @@ function evaluateAgainstSelectorReachability(input: {
     });
   }
 
-  if (branch.status === "unsupported") {
+  if (evaluation.hasUnknownContextMatch) {
+    return buildSelectorQueryResult({
+      selectorQuery: input.selectorQuery,
+      outcome: "possible-match",
+      status: "unsupported",
+      reasons: [
+        "encountered unsupported dynamic class construction while checking same-node class conjunction",
+      ],
+      certainty: "unknown",
+      dimensions: { structure: "unsupported" },
+      traces: includeTraces
+        ? [
+            {
+              traceId: "selector-reachability:same-node:unsupported",
+              category: "selector-match",
+              summary:
+                "Stage 6 found this same-node selector can only match through unknown class context",
+              anchor,
+              children: [],
+              metadata: {
+                selectorBranchNodeId: evaluation.branch.selectorBranchNodeId,
+              },
+            },
+          ]
+        : [],
+      includeTraces,
+    });
+  }
+
+  if (evaluation.branch.status === "unsupported") {
     return buildSelectorQueryResult({
       selectorQuery: input.selectorQuery,
       outcome: "possible-match",
@@ -309,10 +309,10 @@ function evaluateAgainstSelectorReachability(input: {
               traceId: "selector-reachability:same-node:unsupported",
               category: "selector-match",
               summary: "Stage 6 could not resolve this selector branch",
-              anchor: input.selectorQuery.source.selectorAnchor,
+              anchor,
               children: [],
               metadata: {
-                selectorBranchNodeId: branch.selectorBranchNodeId,
+                selectorBranchNodeId: evaluation.branch.selectorBranchNodeId,
               },
             },
           ]
@@ -336,10 +336,10 @@ function evaluateAgainstSelectorReachability(input: {
             traceId: "selector-reachability:same-node:no-match",
             category: "selector-match",
             summary: `Stage 6 found no rendered element with all required classes: ${input.constraint.classNames.join(", ")}`,
-            anchor: input.selectorQuery.source.selectorAnchor,
+            anchor,
             children: [],
             metadata: {
-              selectorBranchNodeId: branch.selectorBranchNodeId,
+              selectorBranchNodeId: evaluation.branch.selectorBranchNodeId,
             },
           },
         ]
@@ -366,12 +366,4 @@ function evaluateTargetAgainstEmissionSites(input: {
       }),
     ),
   );
-}
-
-function uniqueTargets(targets: SelectorAnalysisTarget[]): SelectorAnalysisTarget[] {
-  const byId = new Map<string, SelectorAnalysisTarget>();
-  for (const target of targets) {
-    byId.set(target.targetId, target);
-  }
-  return [...byId.values()].sort((left, right) => left.targetId.localeCompare(right.targetId));
 }

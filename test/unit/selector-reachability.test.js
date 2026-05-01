@@ -145,6 +145,35 @@ test("selector reachability matches general sibling selectors by later sibling o
   assert.equal(branch.matchIds.length, 1);
 });
 
+test("selector reachability marks type-qualified selector branches unsupported", async () => {
+  const renderStructure = await buildRenderStructureFixture({
+    sourceText: 'export function App() { return <h2 className="title" />; }\n',
+    cssText: "h2.title { color: blue; }\n",
+  });
+
+  const result = buildSelectorReachability(renderStructure);
+  const branch = findBranch(result, "h2.title");
+
+  assert.equal(branch.status, "unsupported");
+  assert.deepEqual(branch.matchIds, []);
+  assert.equal(branch.diagnosticIds.length, 1);
+});
+
+test("selector reachability marks multi-class structural sides unsupported", async () => {
+  const renderStructure = await buildRenderStructureFixture({
+    sourceText:
+      'export function App() { return <article className="card highlighted"><h2 className="title" /></article>; }\n',
+    cssText: ".card.highlighted > .title { color: blue; }\n",
+  });
+
+  const result = buildSelectorReachability(renderStructure);
+  const branch = findBranch(result, ".card.highlighted > .title");
+
+  assert.equal(branch.status, "unsupported");
+  assert.deepEqual(branch.matchIds, []);
+  assert.equal(branch.diagnosticIds.length, 1);
+});
+
 async function buildRenderStructureFixture(input) {
   const project = await new TestProjectBuilder()
     .withSourceFile("src/App.tsx", input.sourceText)
