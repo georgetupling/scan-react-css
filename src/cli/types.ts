@@ -1,13 +1,12 @@
 import type { RuleSeverity } from "../rules/index.js";
 
-export type CliVerbosity = "low" | "medium" | "high";
-
 export type CliArgs = {
   rootDir?: string;
   configPath?: string;
   focusPaths: string[];
   outputMinSeverity: RuleSeverity;
-  verbosity: CliVerbosity;
+  verbose: boolean;
+  trace: boolean;
   outputFile?: string;
   overwriteOutput: boolean;
   ignoreClassNames: string[];

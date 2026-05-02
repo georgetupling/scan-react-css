@@ -275,15 +275,18 @@ test("CLI groups human-readable findings by file and prints summary last", async
     .build();
 
   try {
-    const error = await captureRejectedCliRun([project.rootDir]);
+    const error = await captureRejectedCliRun([project.rootDir], { cwd: project.rootDir });
     const output = error.stdout;
 
     assert.equal(error.code, 1);
     assert.match(output, /scan-react-css scan/);
-    assert.ok(output.includes("src/App.css\n  [warn] unused-css-class at src/App.css:1"));
-    assert.ok(output.includes("src/App.tsx\n  [error] missing-css-class at src/App.tsx:2"));
-    assert.match(output, /src\/App\.css[\s\S]*\n\nsrc\/App\.tsx/);
-    assert.ok(output.indexOf("Summary\n") > output.indexOf("src/App.tsx\n"));
+    assert.match(output, /App\.css \([^)]+src[\\/]App\.css\)\n {2}\[warn\] unused-css-class/);
+    assert.match(output, /App\.tsx \([^)]+src[\\/]App\.tsx\)\n {2}\[error\] missing-css-class/);
+    assert.match(
+      output,
+      /App\.css \([^)]+src[\\/]App\.css\)[\s\S]*\n\nApp\.tsx \([^)]+src[\\/]App\.tsx\)/,
+    );
+    assert.ok(output.indexOf("Summary\n") > output.indexOf("App.tsx ("));
     assert.ok(output.includes("Summary\n  Source files: 1"));
     assert.equal(output.includes("\u001b["), false);
   } finally {
@@ -291,7 +294,7 @@ test("CLI groups human-readable findings by file and prints summary last", async
   }
 });
 
-test("CLI supports low verbosity finding table output", async () => {
+test("CLI supports verbose finding blocks", async () => {
   const project = await new TestProjectBuilder()
     .withSourceFile(
       "src/App.tsx",
@@ -300,33 +303,12 @@ test("CLI supports low verbosity finding table output", async () => {
     .build();
 
   try {
-    const error = await captureRejectedCliRun([project.rootDir, "--verbosity", "low"]);
-    const output = error.stdout;
-
-    assert.equal(error.code, 1);
-    assert.match(output, /Findings\nseverity\s+rule\s+confidence\s+location\s+message/);
-    assert.match(output, /error\s+missing-css-class\s+high\s+src\/App\.tsx:1/);
-    assert.doesNotMatch(output, /src\/App\.tsx\n {2}\[error\] missing-css-class/);
-  } finally {
-    await project.cleanup();
-  }
-});
-
-test("CLI supports high verbosity finding blocks", async () => {
-  const project = await new TestProjectBuilder()
-    .withSourceFile(
-      "src/App.tsx",
-      'export function App() { return <main className="missing">Hello</main>; }\n',
-    )
-    .build();
-
-  try {
-    const error = await captureRejectedCliRun([project.rootDir, "--verbosity", "high"]);
+    const error = await captureRejectedCliRun([project.rootDir, "--verbose"]);
     const output = error.stdout;
 
     assert.equal(error.code, 1);
     assert.match(output, /Finding 1: error missing-css-class/);
-    assert.match(output, /Location: src\/App\.tsx:1/);
+    assert.match(output, /Location: .*App\.tsx:1/);
     assert.match(output, /Confidence: high/);
     assert.match(output, /Subject: class-reference/);
     assert.match(output, /Details:\n {4}className: missing/);
@@ -336,23 +318,85 @@ test("CLI supports high verbosity finding blocks", async () => {
   }
 });
 
-test("CLI accepts verbosity with JSON but warns that it has no effect", async () => {
+test("CLI uses reporting.verbose from config for text output", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      reporting: {
+        verbose: true,
+      },
+    })
+    .withSourceFile(
+      "src/App.tsx",
+      'export function App() { return <main className="missing">Hello</main>; }\n',
+    )
+    .build();
+
+  try {
+    const error = await captureRejectedCliRun([project.rootDir], { cwd: project.rootDir });
+    const output = error.stdout;
+
+    assert.equal(error.code, 1);
+    assert.match(output, /Finding 1: error missing-css-class/);
+    assert.match(output, /Location: .*App\.tsx:1/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI includes traces in JSON only when --trace is set", async () => {
   const project = await new TestProjectBuilder().build();
 
   try {
-    const outputPath = project.filePath("report.json");
-    const { stderr } = await runCli([
-      project.rootDir,
-      "--json",
-      "--verbosity",
-      "high",
-      "--output-file",
-      outputPath,
-    ]);
-    const output = await readJsonFile(outputPath);
+    const withoutTracePath = project.filePath("report-without-trace.json");
+    await runCli([project.rootDir, "--json", "--output-file", withoutTracePath]);
+    const withoutTrace = await readJsonFile(withoutTracePath);
+
+    assert.equal(withoutTrace.rootDir, project.rootDir);
+    assert.ok(withoutTrace.findings.every((finding) => finding.traces === undefined));
+
+    const withTracePath = project.filePath("report-with-trace.json");
+    await runCli([project.rootDir, "--json", "--trace", "--output-file", withTracePath]);
+    const withTrace = await readJsonFile(withTracePath);
+
+    assert.equal(withTrace.rootDir, project.rootDir);
+    assert.ok(withTrace.findings.every((finding) => Array.isArray(finding.traces)));
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("CLI supports config-driven JSON reporting options", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      rules: {
+        "dynamic-class-reference": "info",
+      },
+      reporting: {
+        json: true,
+        trace: true,
+        outputDirectory: "configured-reports",
+        overwriteOutput: true,
+      },
+    })
+    .withSourceFile(
+      "src/App.tsx",
+      "export function App(props) { return <main className={props.className}>Hello</main>; }\n",
+    )
+    .build();
+
+  try {
+    const configuredPath = project.filePath("configured-reports/report-fixed.json");
+    await mkdir(path.dirname(configuredPath), { recursive: true });
+    await writeFile(configuredPath, "stale\n", "utf8");
+
+    const { stdout } = await runCli(["--output-file", configuredPath], { cwd: project.rootDir });
+    const output = await readJsonFile(configuredPath);
 
     assert.equal(output.rootDir, project.rootDir);
-    assert.match(stderr, /Warning: --verbosity has no effect with --json\./);
+    assert.equal(output.findings.length, 1);
+    assert.equal(output.findings[0].ruleId, "dynamic-class-reference");
+    assert.ok(Array.isArray(output.findings[0].traces));
+    assert.match(stdout, /JSON report written to /);
   } finally {
     await project.cleanup();
   }
@@ -493,8 +537,8 @@ test("CLI output-min-severity filters text output without changing failure statu
   }
 });
 
-test("CLI rejects removed debug and trace flags", async () => {
-  for (const flag of ["--debug", "--trace"]) {
+test("CLI rejects removed debug flag", async () => {
+  for (const flag of ["--debug"]) {
     const error = await captureRejectedCliRun([".", flag]);
 
     assert.equal(error.code, 2);
@@ -529,11 +573,11 @@ test("CLI rejects historical options that are recognized but not yet restored", 
   }
 });
 
-test("CLI rejects invalid verbosity values", async () => {
-  const error = await captureRejectedCliRun([".", "--verbosity", "chatty"]);
+test("CLI rejects --trace without JSON mode", async () => {
+  const error = await captureRejectedCliRun([".", "--trace"]);
 
   assert.equal(error.code, 2);
-  assert.match(error.stderr, /--verbosity must be one of "low", "medium", or "high"\./);
+  assert.match(error.stderr, /--trace requires JSON output\./);
   assert.equal(error.stdout, "");
 });
 
@@ -545,7 +589,7 @@ test("CLI rejects output-file options without JSON mode", async () => {
     const error = await captureRejectedCliRun(args);
 
     assert.equal(error.code, 2);
-    assert.match(error.stderr, /--output-file and --overwrite-output require --json\./);
+    assert.match(error.stderr, /--output-file and --overwrite-output require JSON output\./);
     assert.equal(error.stdout, "");
   }
 });

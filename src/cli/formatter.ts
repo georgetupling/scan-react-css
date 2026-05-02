@@ -1,8 +1,8 @@
+import path from "node:path";
 import type { ScanDiagnostic, ScanProjectResult } from "../project/index.js";
 import { countFindingsByRule, countFindingsBySeverity } from "../project/summaryCounts.js";
 import type { Finding, RuleSeverity } from "../rules/index.js";
 import { severityMeetsThreshold } from "../rules/severity.js";
-import type { CliVerbosity } from "./types.js";
 
 export function formatTextReport(input: {
   result: ScanProjectResult;
@@ -10,13 +10,13 @@ export function formatTextReport(input: {
   findings: Finding[];
   focusPaths: string[];
   includeTimings: boolean;
-  verbosity: CliVerbosity;
+  verbose: boolean;
   useColor: boolean;
 }): string {
   const sections = [
     formatTextHeader(input.result, input.focusPaths),
     ...formatDiagnosticSections(input.diagnostics, input.useColor),
-    ...formatFindingSections(input.findings, input.useColor, input.verbosity),
+    ...formatFindingSections(input.findings, input.useColor, input.verbose, input.result.rootDir),
     ...(input.includeTimings ? formatTimingSections(input.result) : []),
     formatTextSummary(input.result, input.findings.length),
   ];
@@ -27,6 +27,7 @@ export function formatTextReport(input: {
 export function formatJsonResult(
   result: ScanProjectResult,
   outputMinSeverity: RuleSeverity,
+  includeTraces: boolean,
 ): object {
   const diagnostics = filterDiagnostics(result.diagnostics, outputMinSeverity);
   const findings = filterFindings(result.findings, outputMinSeverity);
@@ -39,7 +40,7 @@ export function formatJsonResult(
       rules: result.config.rules,
     },
     diagnostics,
-    findings: findings.map(withoutFindingTraces),
+    findings: includeTraces ? findings : findings.map(withoutFindingTraces),
     summary: withOutputCounts(result.summary, diagnostics, findings),
     ...(result.performance ? { performance: result.performance } : {}),
     failed: result.failed,
@@ -150,27 +151,24 @@ function formatDiagnosticSections(diagnostics: ScanDiagnostic[], useColor: boole
 function formatFindingSections(
   findings: Finding[],
   useColor: boolean,
-  verbosity: CliVerbosity,
+  verbose: boolean,
+  rootDir: string,
 ): string[] {
   if (findings.length === 0) {
     return ["Findings\n  No findings."];
   }
 
-  if (verbosity === "low") {
-    return [formatLowVerbosityFindings(findings, useColor)];
-  }
-
-  if (verbosity === "high") {
-    return formatHighVerbosityFindings(findings, useColor);
+  if (verbose) {
+    return formatHighVerbosityFindings(findings, useColor, rootDir);
   }
 
   const grouped = groupBy(findings, getFindingGroupKey, compareFindingGroupKeys);
   return grouped.map(([heading, group]) => {
-    const lines = [heading];
+    const lines = [formatFindingGroupHeading(heading, rootDir)];
     for (const finding of group.sort(compareFindings)) {
       const severity = colorSeverity(finding.severity, useColor);
-      const location = formatFindingLocation(finding);
-      const target = location ? ` at ${location}` : "";
+      const location = formatFindingLocation(finding, rootDir);
+      const target = location && finding.location?.filePath !== heading ? ` at ${location}` : "";
       lines.push(`  [${severity}] ${finding.ruleId}${target}`);
       lines.push(`          ${finding.message}`);
       const hint = getFindingHint(finding);
@@ -183,36 +181,14 @@ function formatFindingSections(
   });
 }
 
-function formatLowVerbosityFindings(findings: Finding[], useColor: boolean): string {
-  const rows = findings.sort(compareFindings).map((finding) => {
-    const severity = colorSeverity(finding.severity, useColor);
-    const location = formatFindingLocation(finding) ?? "-";
-    return [
-      padCell(severity, 8),
-      padCell(finding.ruleId, 42),
-      padCell(finding.confidence, 10),
-      padCell(location, 24),
-      finding.message,
-    ].join("  ");
-  });
-
-  return [
-    "Findings",
-    [
-      padCell("severity", 8),
-      padCell("rule", 42),
-      padCell("confidence", 10),
-      padCell("location", 24),
-      "message",
-    ].join("  "),
-    ...rows,
-  ].join("\n");
-}
-
-function formatHighVerbosityFindings(findings: Finding[], useColor: boolean): string[] {
+function formatHighVerbosityFindings(
+  findings: Finding[],
+  useColor: boolean,
+  rootDir: string,
+): string[] {
   return findings.sort(compareFindings).map((finding, index) => {
     const severity = colorSeverity(finding.severity, useColor);
-    const location = formatFindingLocation(finding) ?? "-";
+    const location = formatFindingLocation(finding, rootDir) ?? "-";
     const lines = [
       `Finding ${index + 1}: ${severity} ${finding.ruleId}`,
       `  Location: ${location}`,
@@ -222,6 +198,14 @@ function formatHighVerbosityFindings(findings: Finding[], useColor: boolean): st
       `    ${finding.message}`,
     ];
 
+    const references = collectInlineReferenceEntries(finding, rootDir);
+    if (references.length > 0) {
+      lines.push("  Refs:");
+      for (const line of formatReferenceEntryLines(references)) {
+        lines.push(line);
+      }
+    }
+
     const detailLines = formatFindingDataLines(finding.data);
     if (detailLines.length > 0) {
       lines.push("  Details:", ...detailLines.map((line) => `    ${line}`));
@@ -230,16 +214,19 @@ function formatHighVerbosityFindings(findings: Finding[], useColor: boolean): st
     if (finding.evidence.length > 0) {
       lines.push(
         "  Evidence:",
-        ...finding.evidence.map((entry) => `    - ${entry.kind} ${formatEntityId(entry.id)}`),
+        ...finding.evidence.flatMap((entry) => {
+          const detailLines = [`    - ${entry.kind} ${entry.id}`];
+          const derivedPath = extractPathFromEntityId(entry.id);
+          if (derivedPath) {
+            detailLines.push(`      at ${toAbsolutePath(derivedPath, rootDir)}`);
+          }
+          return detailLines;
+        }),
       );
     }
 
     return lines.join("\n");
   });
-}
-
-function padCell(value: string, width: number): string {
-  return value.length >= width ? value : value.padEnd(width, " ");
 }
 
 function formatFindingDataLines(data: Finding["data"]): string[] {
@@ -306,6 +293,155 @@ function formatEntityId(entityId: string): string {
   return path ? `${entityId} (${path})` : entityId;
 }
 
+function collectInlineReferenceEntries(
+  finding: Finding,
+  rootDir: string,
+): Array<{ label: string; anchor: string }> {
+  const references: Array<{ label: string; anchor: string }> = [];
+  const className = readStringRecordValue(finding.data, "className");
+  if (className && finding.location) {
+    references.push({
+      label: `class "${className}"`,
+      anchor: formatAnchor(finding.location, rootDir),
+    });
+  }
+
+  for (const component of readComponentLocationRecords(finding.data)) {
+    references.push({
+      label: `component ${component.componentName}`,
+      anchor: formatAnchor(component, rootDir),
+    });
+  }
+
+  return uniqueReferencePairs(references);
+}
+
+function readStringRecordValue(value: Finding["data"], key: string): string | undefined {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const candidate = value[key];
+  return typeof candidate === "string" ? candidate : undefined;
+}
+
+function readComponentLocationRecords(
+  value: Finding["data"],
+): Array<{ componentName: string; filePath: string; startLine: number; startColumn: number }> {
+  if (!value || typeof value !== "object") {
+    return [];
+  }
+
+  return [
+    ...readComponentLocationsArray(value["componentLocations"]),
+    ...readComponentLocationsArray(value["outsideConsumerComponentLocations"]),
+    ...readComponentLocationsArray(
+      value["ownerComponentLocation"] === undefined ? [] : [value["ownerComponentLocation"]],
+    ),
+  ];
+}
+
+function readComponentLocationsArray(
+  value: unknown,
+): Array<{ componentName: string; filePath: string; startLine: number; startColumn: number }> {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  const records: Array<{
+    componentName: string;
+    filePath: string;
+    startLine: number;
+    startColumn: number;
+  }> = [];
+
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") {
+      continue;
+    }
+
+    const componentName = readObjectStringField(entry, "componentName");
+    const filePath = readObjectStringField(entry, "filePath");
+    const startLine = readObjectNumberField(entry, "startLine");
+    const startColumn = readObjectNumberField(entry, "startColumn");
+    if (!componentName || !filePath || startLine === undefined || startColumn === undefined) {
+      continue;
+    }
+
+    records.push({
+      componentName,
+      filePath,
+      startLine,
+      startColumn,
+    });
+  }
+
+  return records;
+}
+
+function readObjectStringField(value: object, key: string): string | undefined {
+  const record = value as Record<string, unknown>;
+  const candidate = record[key];
+  return typeof candidate === "string" ? candidate : undefined;
+}
+
+function readObjectNumberField(value: object, key: string): number | undefined {
+  const record = value as Record<string, unknown>;
+  const candidate = record[key];
+  return typeof candidate === "number" ? candidate : undefined;
+}
+
+function uniqueReferencePairs(
+  values: Array<{ label: string; anchor: string }>,
+): Array<{ label: string; anchor: string }> {
+  const seen = new Set<string>();
+  const result: Array<{ label: string; anchor: string }> = [];
+  for (const value of values) {
+    const key = `${value.label}::${value.anchor}`;
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    result.push(value);
+  }
+
+  return result;
+}
+
+function formatReferenceEntryLines(values: Array<{ label: string; anchor: string }>): string[] {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const labelCounts = new Map<string, number>();
+  for (const value of values) {
+    labelCounts.set(value.label, (labelCounts.get(value.label) ?? 0) + 1);
+  }
+
+  const lines: string[] = [];
+  for (const value of values) {
+    const isAmbiguous = (labelCounts.get(value.label) ?? 0) > 1;
+    if (!isAmbiguous) {
+      lines.push(`    - ${value.label}`);
+      lines.push(`      at ${value.anchor}`);
+      continue;
+    }
+
+    lines.push(`    - ${value.label} (${value.anchor})`);
+  }
+
+  return lines;
+}
+
+function formatAnchor(
+  anchor: { filePath: string; startLine: number; startColumn: number },
+  rootDir: string,
+): string {
+  const absolutePath = toAbsolutePath(anchor.filePath, rootDir);
+  return `${absolutePath}:${anchor.startLine}:${anchor.startColumn}`;
+}
+
 function formatTextSummary(result: ScanProjectResult, visibleFindingCount: number): string {
   return [
     "Summary",
@@ -321,10 +457,18 @@ function formatTextSummary(result: ScanProjectResult, visibleFindingCount: numbe
   ].join("\n");
 }
 
-function formatFindingLocation(finding: Finding): string | undefined {
-  return finding.location
-    ? `${finding.location.filePath}:${finding.location.startLine}`
-    : undefined;
+function formatFindingLocation(finding: Finding, rootDir: string): string | undefined {
+  if (!finding.location) {
+    return undefined;
+  }
+
+  const absolutePath = toAbsolutePath(finding.location.filePath, rootDir);
+  const shortLabel = `${path.basename(finding.location.filePath)}:${finding.location.startLine}`;
+  return `${shortLabel} (${absolutePath}:${finding.location.startLine})`;
+}
+
+function toAbsolutePath(filePath: string, rootDir: string): string {
+  return path.isAbsolute(filePath) ? filePath : path.resolve(rootDir, filePath);
 }
 
 function getFindingGroupKey(finding: Finding): string {
@@ -371,6 +515,15 @@ function compareDiagnosticLocations(left: string, right: string): number {
   }
 
   return left.localeCompare(right);
+}
+
+function formatFindingGroupHeading(groupKey: string, rootDir: string): string {
+  if (groupKey === "Findings") {
+    return groupKey;
+  }
+
+  const absolutePath = toAbsolutePath(groupKey, rootDir);
+  return `${path.basename(groupKey)} (${absolutePath})`;
 }
 
 function compareRuleSeverities(left: RuleSeverity, right: RuleSeverity): number {

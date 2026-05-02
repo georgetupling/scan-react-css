@@ -197,6 +197,12 @@ function buildSharedWithoutOwnerFinding(group: SharedWithoutOwnerFindingGroup): 
       componentIds: consumerComponents.map((component) => component.id),
       componentNames: consumerComponents.map((component) => component.componentName),
       componentFilePaths: consumerComponents.map((component) => component.filePath),
+      componentLocations: consumerComponents.map((component) => ({
+        componentName: component.componentName,
+        filePath: component.location.filePath,
+        startLine: component.location.startLine,
+        startColumn: component.location.startColumn,
+      })),
       stylesheetId: group.stylesheetId,
       stylesheetFilePath: group.stylesheetFilePath,
       consumerComponentCount: consumerComponents.length,

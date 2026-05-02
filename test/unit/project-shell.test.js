@@ -1014,6 +1014,61 @@ test("scanProject suppresses findings by ignored file path", async () => {
   }
 });
 
+test("scanProject accepts reporting config", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      reporting: {
+        verbose: true,
+        json: true,
+        trace: true,
+        outputDirectory: "reports",
+        overwriteOutput: true,
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.equal(result.failed, false);
+    assert.deepEqual(result.config.reporting, {
+      verbose: true,
+      json: true,
+      trace: true,
+      outputDirectory: "reports",
+      overwriteOutput: true,
+    });
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("scanProject fails on invalid reporting config", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      reporting: {
+        trace: "yes",
+      },
+    })
+    .withSourceFile("src/App.tsx", "export function App() { return null; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({
+      rootDir: project.rootDir,
+    });
+
+    assert.equal(result.failed, true);
+    assert.equal(result.diagnostics[0].code, "config.invalid-reporting-trace");
+    assert.match(result.diagnostics[0].message, /reporting\.trace must be a boolean/);
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("scanProject accepts external CSS provider config and appends built-ins", async () => {
   const project = await new TestProjectBuilder()
     .withConfig({

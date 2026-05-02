@@ -8,15 +8,23 @@ import { formatJsonResult } from "./formatter.js";
 export async function writeJsonReport(input: {
   result: ScanProjectResult;
   outputFile?: string;
+  outputDirectory?: string;
   overwriteOutput: boolean;
   outputMinSeverity: RuleSeverity;
+  includeTraces: boolean;
 }): Promise<string> {
-  const requestedPath = path.resolve(input.outputFile ?? getDefaultJsonReportPath());
+  const requestedPath = path.resolve(
+    input.outputFile ?? getDefaultJsonReportPath(input.outputDirectory),
+  );
   const outputPath = input.overwriteOutput
     ? requestedPath
     : await findAvailableOutputPath(requestedPath);
   const outputDirectory = path.dirname(outputPath);
-  const json = `${JSON.stringify(formatJsonResult(input.result, input.outputMinSeverity), null, 2)}\n`;
+  const json = `${JSON.stringify(
+    formatJsonResult(input.result, input.outputMinSeverity, input.includeTraces),
+    null,
+    2,
+  )}\n`;
 
   try {
     await mkdir(outputDirectory, { recursive: true });
@@ -34,8 +42,11 @@ export async function writeJsonReport(input: {
   return outputPath;
 }
 
-function getDefaultJsonReportPath(date = new Date()): string {
-  return path.join("scan-react-css-reports", `report-${formatReportTimestamp(date)}.json`);
+function getDefaultJsonReportPath(
+  outputDirectory = "scan-react-css-reports",
+  date = new Date(),
+): string {
+  return path.join(outputDirectory, `report-${formatReportTimestamp(date)}.json`);
 }
 
 function formatReportTimestamp(date: Date): string {

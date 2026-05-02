@@ -46,7 +46,7 @@ npx scan-react-css --json
 ## CLI
 
 ```bash
-scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--ignore-class class-or-glob] [--ignore-path path-or-glob] [--json] [--output-file path] [--overwrite-output] [--output-min-severity severity] [--verbosity low|medium|high] [--timings]
+scan-react-css [rootDir] [--config path] [--focus path-or-glob] [--ignore-class class-or-glob] [--ignore-path path-or-glob] [--json] [--trace] [--output-file path] [--overwrite-output] [--output-min-severity severity] [--verbose] [--timings]
 ```
 
 Supported flags:
@@ -56,12 +56,15 @@ Supported flags:
 - `--ignore-class`
 - `--ignore-path`
 - `--json`
-- `--output-file` (requires `--json`)
-- `--overwrite-output` (requires `--json`)
+- `--trace` (JSON mode only; includes finding traces in JSON report only)
+- `--output-file` (JSON mode only)
+- `--overwrite-output` (JSON mode only)
 - `--output-min-severity` (`debug|info|warn|error`)
-- `--verbosity` (`low|medium|high`, text mode only)
+- `--verbose` (text mode only; enables detailed finding blocks)
 - `--timings`
 - `--help`
+
+`--json`, `--trace`, and overwrite behavior can also be set from config via `reporting`.
 
 ## JSON Reports
 
@@ -112,6 +115,11 @@ Important rules:
 | `discovery.exclude[]`                   | non-empty glob patterns                 | `[]`               | Additional source discovery exclusions.                                |
 | `ignore.classNames[]`                   | non-empty class names/globs             | `[]`               | Suppresses matching findings after analysis.                           |
 | `ignore.filePaths[]`                    | non-empty project-relative path globs   | `[]`               | Suppresses findings involving matching files.                          |
+| `reporting.verbose`                     | `true \| false`                         | `false`            | Enables verbose text reporting by default.                             |
+| `reporting.json`                        | `true \| false`                         | `false`            | Emits JSON reports by default without requiring `--json`.              |
+| `reporting.trace`                       | `true \| false`                         | `false`            | Includes finding traces in JSON reports by default.                    |
+| `reporting.outputDirectory`             | non-empty string                        | `n/a`              | Default directory used for timestamped JSON reports.                   |
+| `reporting.overwriteOutput`             | `true \| false`                         | `false`            | Overwrites JSON output files by default instead of suffixing.          |
 
 Minimal example:
 
@@ -128,6 +136,13 @@ Minimal example:
   "ownership": {
     "sharingPolicy": "balanced",
     "sharedCss": ["src/styles/**/*.css"]
+  },
+  "reporting": {
+    "verbose": false,
+    "json": false,
+    "trace": false,
+    "outputDirectory": "scan-react-css-reports",
+    "overwriteOutput": false
   }
 }
 ```

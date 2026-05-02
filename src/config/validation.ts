@@ -24,6 +24,7 @@ const TOP_LEVEL_CONFIG_KEYS = new Set([
   "ownership",
   "discovery",
   "ignore",
+  "reporting",
 ]);
 const CSS_MODULES_CONFIG_KEYS = new Set(["localsConvention"]);
 const EXTERNAL_CSS_CONFIG_KEYS = new Set(["fetchRemote", "globals", "remoteTimeoutMs"]);
@@ -35,6 +36,13 @@ const OWNERSHIP_SHARING_POLICIES = new Set<OwnershipConfig["sharingPolicy"]>([
 ]);
 const DISCOVERY_CONFIG_KEYS = new Set(["sourceRoots", "exclude"]);
 const IGNORE_CONFIG_KEYS = new Set(["classNames", "filePaths"]);
+const REPORTING_CONFIG_KEYS = new Set([
+  "verbose",
+  "json",
+  "trace",
+  "outputDirectory",
+  "overwriteOutput",
+]);
 const EXTERNAL_CSS_GLOBAL_CONFIG_KEYS = new Set([
   "provider",
   "match",
@@ -138,6 +146,13 @@ export const DEFAULT_SCANNER_CONFIG: ScannerConfig = {
     classNames: [],
     filePaths: [],
   },
+  reporting: {
+    verbose: false,
+    json: false,
+    trace: false,
+    outputDirectory: undefined,
+    overwriteOutput: false,
+  },
 };
 
 export function parseConfig(
@@ -190,6 +205,7 @@ export function parseConfig(
     ownership: parseOwnership(parsed.ownership, filePath, diagnostics),
     discovery: parseDiscovery(parsed.discovery, filePath, diagnostics),
     ignore: parseIgnore(parsed.ignore, filePath, diagnostics),
+    reporting: parseReporting(parsed.reporting, filePath, diagnostics),
   };
 }
 
@@ -202,6 +218,7 @@ export function cloneScannerConfig(config: ScannerConfig): ScannerConfig {
     ownership: cloneOwnershipConfig(config.ownership),
     discovery: cloneDiscoveryConfig(config.discovery),
     ignore: cloneIgnoreConfig(config.ignore),
+    reporting: cloneReportingConfig(config.reporting),
   };
 }
 
@@ -558,6 +575,78 @@ function parseDiscovery(
   };
 }
 
+function parseReporting(
+  value: unknown,
+  filePath: string,
+  diagnostics: ScanDiagnostic[],
+): ScannerConfig["reporting"] {
+  if (value === undefined) {
+    return cloneReportingConfig(DEFAULT_SCANNER_CONFIG.reporting);
+  }
+
+  if (!isRecord(value)) {
+    diagnostics.push({
+      code: "config.invalid-reporting",
+      severity: "error",
+      phase: "config",
+      filePath,
+      message: "reporting must be an object",
+    });
+    return cloneReportingConfig(DEFAULT_SCANNER_CONFIG.reporting);
+  }
+
+  reportUnknownKeys({
+    value,
+    allowedKeys: REPORTING_CONFIG_KEYS,
+    filePath,
+    diagnostics,
+    objectName: "reporting",
+    code: "config.unknown-reporting-key",
+  });
+
+  return {
+    verbose: parseOptionalBoolean({
+      value: value.verbose,
+      fallback: DEFAULT_SCANNER_CONFIG.reporting.verbose,
+      filePath,
+      diagnostics,
+      code: "config.invalid-reporting-verbose",
+      message: "reporting.verbose must be a boolean",
+    }),
+    json: parseOptionalBoolean({
+      value: value.json,
+      fallback: DEFAULT_SCANNER_CONFIG.reporting.json,
+      filePath,
+      diagnostics,
+      code: "config.invalid-reporting-json",
+      message: "reporting.json must be a boolean",
+    }),
+    trace: parseOptionalBoolean({
+      value: value.trace,
+      fallback: DEFAULT_SCANNER_CONFIG.reporting.trace,
+      filePath,
+      diagnostics,
+      code: "config.invalid-reporting-trace",
+      message: "reporting.trace must be a boolean",
+    }),
+    outputDirectory: parseOptionalNonEmptyString({
+      value: value.outputDirectory,
+      filePath,
+      diagnostics,
+      code: "config.invalid-reporting-output-directory",
+      message: "reporting.outputDirectory must be a non-empty string",
+    }),
+    overwriteOutput: parseOptionalBoolean({
+      value: value.overwriteOutput,
+      fallback: DEFAULT_SCANNER_CONFIG.reporting.overwriteOutput,
+      filePath,
+      diagnostics,
+      code: "config.invalid-reporting-overwrite-output",
+      message: "reporting.overwriteOutput must be a boolean",
+    }),
+  };
+}
+
 function parseExternalCssGlobals(
   value: unknown,
   filePath: string,
@@ -790,6 +879,31 @@ function parseOptionalPositiveNumber(input: {
   return input.fallback;
 }
 
+function parseOptionalNonEmptyString(input: {
+  value: unknown;
+  filePath: string;
+  diagnostics: ScanDiagnostic[];
+  code: string;
+  message: string;
+}): string | undefined {
+  if (input.value === undefined) {
+    return undefined;
+  }
+
+  if (typeof input.value === "string" && input.value.trim().length > 0) {
+    return input.value;
+  }
+
+  input.diagnostics.push({
+    code: input.code,
+    severity: "error",
+    phase: "config",
+    filePath: input.filePath,
+    message: input.message,
+  });
+  return undefined;
+}
+
 function cloneExternalCssConfig(
   config: ScannerConfig["externalCss"],
 ): ScannerConfig["externalCss"] {
@@ -818,6 +932,16 @@ function cloneIgnoreConfig(config: ScannerConfig["ignore"]): ScannerConfig["igno
   return {
     classNames: [...config.classNames],
     filePaths: [...config.filePaths],
+  };
+}
+
+function cloneReportingConfig(config: ScannerConfig["reporting"]): ScannerConfig["reporting"] {
+  return {
+    verbose: config.verbose,
+    json: config.json,
+    trace: config.trace,
+    outputDirectory: config.outputDirectory,
+    overwriteOutput: config.overwriteOutput,
   };
 }
 

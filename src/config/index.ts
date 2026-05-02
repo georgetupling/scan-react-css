@@ -7,6 +7,7 @@ export type {
   DiscoveryConfig,
   IgnoreConfig,
   OwnershipConfig,
+  ReportingConfig,
   ResolvedScannerConfig,
   RuleConfigSeverity,
   ScannerConfig,

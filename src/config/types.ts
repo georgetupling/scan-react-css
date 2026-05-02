@@ -36,6 +36,14 @@ export type IgnoreConfig = {
   filePaths: string[];
 };
 
+export type ReportingConfig = {
+  verbose: boolean;
+  json: boolean;
+  trace: boolean;
+  outputDirectory?: string;
+  overwriteOutput: boolean;
+};
+
 export type ScannerConfig = {
   failOnSeverity: RuleSeverity;
   rules: Record<string, RuleConfigSeverity>;
@@ -44,6 +52,7 @@ export type ScannerConfig = {
   ownership: OwnershipConfig;
   discovery: DiscoveryConfig;
   ignore: IgnoreConfig;
+  reporting: ReportingConfig;
 };
 
 export type ResolvedScannerConfig = ScannerConfig & {

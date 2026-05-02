@@ -22,6 +22,7 @@ export async function runCli(rawArgs: string[]): Promise<void> {
 
   let result: ScanProjectResult;
   try {
+    const includeTraces = true;
     result = await scanProject({
       rootDir: args.rootDir,
       configBaseDir: process.cwd(),
@@ -32,16 +33,31 @@ export async function runCli(rawArgs: string[]): Promise<void> {
       },
       onProgress: progressRenderer.onProgress,
       collectPerformance: args.timings,
-      includeTraces: false,
+      includeTraces,
     });
   } finally {
     progressRenderer.stop();
   }
 
   const focusedResult = applyFocusFilter(result, args.focusPaths);
+  const useJson = args.json || focusedResult.config.reporting.json;
+  const includeJsonTraces = args.trace || focusedResult.config.reporting.trace;
+  const overwriteOutput = args.overwriteOutput || focusedResult.config.reporting.overwriteOutput;
 
-  if (args.json) {
-    await printJsonReport(focusedResult, args);
+  if (!useJson && (args.trace || args.outputFile || args.overwriteOutput)) {
+    printCliUsageError(
+      args.trace
+        ? "--trace requires JSON output. Enable --json or set reporting.json=true in scan-react-css.json."
+        : "--output-file and --overwrite-output require JSON output. Enable --json or set reporting.json=true in scan-react-css.json.",
+    );
+  }
+
+  if (useJson) {
+    await printJsonReport(focusedResult, {
+      ...args,
+      trace: includeJsonTraces,
+      overwriteOutput,
+    });
   } else {
     printTextReport(focusedResult, args);
   }
@@ -54,26 +70,29 @@ function parseCliArgs(rawArgs: string[]): CliArgs {
     return parseArgs(rawArgs);
   } catch (error) {
     if (error instanceof CliUsageError) {
-      console.error(error.message);
-      console.error("");
-      printHelp(process.stderr);
-      process.exit(2);
+      printCliUsageError(error.message);
     }
 
     throw error;
   }
 }
 
+function printCliUsageError(message: string): never {
+  console.error(message);
+  console.error("");
+  printHelp(process.stderr);
+  process.exit(2);
+}
+
 async function printJsonReport(result: ScanProjectResult, args: CliArgs): Promise<void> {
   try {
-    if (args.verbosity !== "medium") {
-      console.warn("Warning: --verbosity has no effect with --json.");
-    }
     const outputPath = await writeJsonReport({
       result,
       outputFile: args.outputFile,
+      outputDirectory: result.config.reporting.outputDirectory,
       overwriteOutput: args.overwriteOutput,
       outputMinSeverity: args.outputMinSeverity,
+      includeTraces: args.trace,
     });
     console.log(`JSON report written to ${outputPath}`);
     console.log(`Failed: ${result.failed ? "yes" : "no"}`);
@@ -87,6 +106,7 @@ function printTextReport(result: ScanProjectResult, args: CliArgs): void {
   const visibleDiagnostics = filterDiagnostics(result.diagnostics, args.outputMinSeverity);
   const visibleFindings = filterFindings(result.findings, args.outputMinSeverity);
 
+  const verbose = args.verbose || result.config.reporting.verbose;
   console.log(
     formatTextReport({
       result,
@@ -94,7 +114,7 @@ function printTextReport(result: ScanProjectResult, args: CliArgs): void {
       findings: visibleFindings,
       focusPaths: args.focusPaths,
       includeTimings: args.timings,
-      verbosity: args.verbosity,
+      verbose,
       useColor: shouldUseColor(process.stdout),
     }),
   );
