@@ -60,6 +60,11 @@ The phase names above are not cosmetic: tests and outputs depend on this staged 
 - `ownership-inference`: infer ownership candidates/classifications and class/stylesheet ownership evidence.
 - `run-rules`: generate final findings from evidence and config.
 
+Orchestration boundary:
+
+- `src/static-analysis-engine/entry/scan.ts` must stay orchestration-only.
+- Do not add stage-specific derivation logic in `scan.ts`; put it in the owning stage module and pass stage inputs through the pipeline call.
+
 See `docs/design/architecture.md` for detailed contracts.
 
 ## Config Contract (Current)

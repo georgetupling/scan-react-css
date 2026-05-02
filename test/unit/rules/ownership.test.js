@@ -1110,6 +1110,231 @@ test("style-shared-without-shared-owner strict mode treats root index.html linke
   }
 });
 
+test("style-shared-without-shared-owner strict mode treats transitive root index.html linked CSS as intentionally shared", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharingPolicy: "strict",
+      },
+    })
+    .withFile(
+      "index.html",
+      [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        '  <link rel="stylesheet" href="/src/styles/root.css" />',
+        "</head>",
+        "<body></body>",
+        "</html>",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Button.tsx",
+      'export function Button() { return <button className="root-shell">Save</button>; }\n',
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      'export function Card() { return <article className="root-shell">Again</article>; }\n',
+    )
+    .withCssFile("src/styles/root.css", '@import "./layers/shared.css";\n')
+    .withCssFile("src/styles/layers/shared.css", ".root-shell { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-shared-without-shared-owner strict mode treats CSS imported from root HTML module entry as intentionally shared", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharingPolicy: "strict",
+      },
+    })
+    .withFile(
+      "index.html",
+      [
+        "<!doctype html>",
+        "<html>",
+        "<head></head>",
+        "<body>",
+        '  <script type="module" src="/src/main.tsx"></script>',
+        "</body>",
+        "</html>",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/main.tsx",
+      ['import "./index.css";', 'export { App } from "./App";', ""].join("\n"),
+    )
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        "export function App() {",
+        '  return <section className="root-script-shell"><Button /><Card /></section>;',
+        "}",
+        'function Button() { return <button className="root-script-shell">Save</button>; }',
+        'function Card() { return <article className="root-script-shell">Again</article>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/index.css", ".root-script-shell { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-shared-without-shared-owner balanced mode treats CSS imported from root HTML module entry as intentionally shared", async () => {
+  const project = await new TestProjectBuilder()
+    .withFile(
+      "index.html",
+      [
+        "<!doctype html>",
+        "<html>",
+        "<head></head>",
+        "<body>",
+        '  <script type="module" src="/src/main.tsx"></script>',
+        "</body>",
+        "</html>",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/main.tsx",
+      ['import "./index.css";', 'export { App } from "./App";', ""].join("\n"),
+    )
+    .withSourceFile(
+      "src/App.tsx",
+      [
+        "export function App() {",
+        '  return <section className="root-script-shell"><Button /><Card /></section>;',
+        "}",
+        'function Button() { return <button className="root-script-shell">Save</button>; }',
+        'function Card() { return <article className="root-script-shell">Again</article>; }',
+        "",
+      ].join("\n"),
+    )
+    .withCssFile("src/index.css", ".root-script-shell { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-shared-without-shared-owner strict mode uses the only HTML file as entry", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharingPolicy: "strict",
+      },
+    })
+    .withFile(
+      "public/shell.html",
+      [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        '  <link rel="stylesheet" href="../src/styles/only-html.css" />',
+        "</head>",
+        "<body></body>",
+        "</html>",
+        "",
+      ].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Button.tsx",
+      'export function Button() { return <button className="only-shell">Save</button>; }\n',
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      'export function Card() { return <article className="only-shell">Again</article>; }\n',
+    )
+    .withCssFile("src/styles/only-html.css", ".only-shell { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+    assert.deepEqual(
+      result.findings.filter((finding) => finding.ruleId === "style-shared-without-shared-owner"),
+      [],
+    );
+  } finally {
+    await project.cleanup();
+  }
+});
+
+test("style-shared-without-shared-owner strict mode ignores HTML-linked CSS when multiple HTML files have no obvious entry name", async () => {
+  const project = await new TestProjectBuilder()
+    .withConfig({
+      ownership: {
+        sharingPolicy: "strict",
+      },
+    })
+    .withFile(
+      "public/shell-a.html",
+      [
+        "<!doctype html>",
+        "<html>",
+        "<head>",
+        '  <link rel="stylesheet" href="../src/styles/non-entry.css" />',
+        "</head>",
+        "<body></body>",
+        "</html>",
+        "",
+      ].join("\n"),
+    )
+    .withFile(
+      "public/shell-b.html",
+      ["<!doctype html>", "<html>", "<body></body>", "</html>", ""].join("\n"),
+    )
+    .withSourceFile(
+      "src/components/Button.tsx",
+      'export function Button() { return <button className="non-entry-shell">Save</button>; }\n',
+    )
+    .withSourceFile(
+      "src/components/Card.tsx",
+      'export function Card() { return <article className="non-entry-shell">Again</article>; }\n',
+    )
+    .withCssFile("src/styles/non-entry.css", ".non-entry-shell { display: block; }\n")
+    .build();
+
+  try {
+    const result = await scanProject({ rootDir: project.rootDir });
+    const findings = result.findings.filter(
+      (finding) => finding.ruleId === "style-shared-without-shared-owner",
+    );
+    assert.equal(findings.length, 1);
+    assert.equal(findings[0].data?.className, "non-entry-shell");
+  } finally {
+    await project.cleanup();
+  }
+});
+
 test("single-component-style-not-colocated does not report configured shared CSS", async () => {
   const project = await new TestProjectBuilder()
     .withConfig({

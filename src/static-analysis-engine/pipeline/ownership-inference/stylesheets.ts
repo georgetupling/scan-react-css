@@ -545,6 +545,7 @@ function evaluateIntentionallySharedByPolicy(input: {
 
   return (
     evidenceKinds.has("configured-shared-css") ||
+    evidenceKinds.has("html-entry-linked") ||
     evidenceKinds.has("broad-stylesheet-segment") ||
     evidenceKinds.has("generic-family-stylesheet") ||
     (hasDirectoryEvidence && allConsumersInAllowedDirectoryScope)

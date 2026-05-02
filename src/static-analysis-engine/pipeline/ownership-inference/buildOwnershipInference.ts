@@ -2,14 +2,17 @@ import { buildIndexes } from "./indexes.js";
 import { buildClassOwnershipEvidence } from "./classOwnership.js";
 import { buildDefinitionConsumers } from "./consumers.js";
 import { applySelectorContextEvidence } from "./selectorContext.js";
+import { collectRootHtmlEntryLinkedStylesheetPaths } from "./rootHtmlLinkedStylesheets.js";
 import { buildStylesheetOwnership } from "./stylesheets.js";
 import type { ProjectEvidenceAssemblyResult } from "../project-evidence/index.js";
 import type { SelectorReachabilityResult } from "../selector-reachability/index.js";
+import type { ProjectSnapshot } from "../workspace-discovery/index.js";
 import type { OwnershipInferenceResult } from "./types.js";
 
 export type OwnershipInferenceInput = {
   projectEvidence: ProjectEvidenceAssemblyResult;
   selectorReachability: SelectorReachabilityResult;
+  snapshot?: ProjectSnapshot;
   options?: OwnershipInferenceOptions;
 };
 
@@ -21,13 +24,19 @@ export type OwnershipInferenceOptions = {
 };
 
 export function buildOwnershipInference(input: OwnershipInferenceInput): OwnershipInferenceResult {
+  const rootHtmlEntryLinkedStylesheetPaths =
+    input.options?.rootHtmlEntryLinkedStylesheetPaths ??
+    (input.snapshot ? collectRootHtmlEntryLinkedStylesheetPaths(input.snapshot) : []);
   const definitionConsumers = buildDefinitionConsumers({
     projectEvidence: input.projectEvidence,
     selectorReachability: input.selectorReachability,
   });
   const stylesheetEvidence = buildStylesheetOwnership({
     projectEvidence: input.projectEvidence,
-    options: input.options,
+    options: {
+      ...input.options,
+      rootHtmlEntryLinkedStylesheetPaths,
+    },
   });
   const classOwnershipEvidence = buildClassOwnershipEvidence({
     projectEvidence: input.projectEvidence,
