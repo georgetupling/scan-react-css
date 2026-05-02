@@ -3,6 +3,7 @@ import type {
   ClassOwnershipEvidence,
   OwnershipCandidateId,
   OwnershipEvidenceId,
+  OwnershipClassificationId,
   OwnershipInferenceDiagnostic,
   OwnershipInferenceDiagnosticId,
   OwnershipInferenceIndexes,
@@ -31,18 +32,21 @@ export function buildIndexes(input: {
   const ownerCandidateIdsByStylesheetId = new Map<string, OwnershipCandidateId[]>();
   const stylesheetOwnershipById = new Map<OwnershipEvidenceId, StylesheetOwnershipEvidence>();
   const stylesheetOwnershipByStylesheetId = new Map<string, StylesheetOwnershipEvidence>();
-  const stylesheetIntentionalSharedKindsByStylesheetId = new Map<string, string[]>();
+  const stylesheetIntentionalSharedKindsByStylesheetId: OwnershipInferenceIndexes["stylesheetIntentionalSharedKindsByStylesheetId"] =
+    new Map();
   const consumerDirectoryRelationsByStylesheetId = new Map<string, string[]>();
   const consumerDirectoryRelationsByComponentId = new Map<string, string[]>();
   const consumerDirectoryRelationByKey = new Map<
     string,
     StylesheetOwnershipEvidence["consumerDirectoryRelations"][number]
   >();
-  const intentionallySharedStylesheetIds = new Set<string>();
-  const classificationById = new Map<string, StyleClassificationEvidence>();
-  const classificationIdsByTargetId = new Map<string, string[]>();
+  const intentionallySharedStylesheetIds: OwnershipInferenceIndexes["intentionallySharedStylesheetIds"] =
+    new Set();
+  const classificationById = new Map<OwnershipClassificationId, StyleClassificationEvidence>();
+  const classificationIdsByTargetId: OwnershipInferenceIndexes["classificationIdsByTargetId"] =
+    new Map();
   const diagnosticById = new Map<OwnershipInferenceDiagnosticId, OwnershipInferenceDiagnostic>();
-  const diagnosticsByTargetId = new Map<string, OwnershipInferenceDiagnosticId[]>();
+  const diagnosticsByTargetId: OwnershipInferenceIndexes["diagnosticsByTargetId"] = new Map();
 
   for (const ownership of input.classOwnership) {
     classOwnershipById.set(ownership.id, ownership);
@@ -129,10 +133,8 @@ export function buildIndexes(input: {
     consumerDirectoryRelationsByComponentId,
   ].forEach(sortMapValues);
 
-  const resolvedConsumerDirectoryRelationsByStylesheetId = new Map<
-    string,
-    StylesheetOwnershipEvidence["consumerDirectoryRelations"]
-  >();
+  const resolvedConsumerDirectoryRelationsByStylesheetId: OwnershipInferenceIndexes["consumerDirectoryRelationsByStylesheetId"] =
+    new Map();
   for (const [stylesheetId, relationKeys] of consumerDirectoryRelationsByStylesheetId.entries()) {
     resolvedConsumerDirectoryRelationsByStylesheetId.set(
       stylesheetId,
@@ -147,10 +149,8 @@ export function buildIndexes(input: {
     );
   }
 
-  const resolvedConsumerDirectoryRelationsByComponentId = new Map<
-    string,
-    StylesheetOwnershipEvidence["consumerDirectoryRelations"]
-  >();
+  const resolvedConsumerDirectoryRelationsByComponentId: OwnershipInferenceIndexes["consumerDirectoryRelationsByComponentId"] =
+    new Map();
   for (const [componentId, relationKeys] of consumerDirectoryRelationsByComponentId.entries()) {
     resolvedConsumerDirectoryRelationsByComponentId.set(
       componentId,
@@ -195,11 +195,8 @@ function pushMapValue<Key, Value>(map: Map<Key, Value[]>, key: Key, value: Value
   map.set(key, values);
 }
 
-function sortMapValues(map: Map<string, string[]>): void {
+function sortMapValues<Key extends string, Value extends string>(map: Map<Key, Value[]>): void {
   for (const [key, values] of map.entries()) {
-    map.set(
-      key,
-      [...new Set(values)].sort((left, right) => left.localeCompare(right)),
-    );
+    map.set(key, [...new Set(values)].sort((left, right) => left.localeCompare(right)) as Value[]);
   }
 }
